@@ -243,6 +243,7 @@ const DEFAULT_FEATURES = {
   grokSelectedPromptId: LOCALIZED_GROK_DEFAULTS.grokSelectedPromptId,
   grokTemporaryChat: true,
   grokEnterToReply: false,
+  authorReplyPrompt: '',
   aiProvider: 'x-grok',
   aiOpenAIPlatform: 'openai',
   aiBaseUrl: 'https://api.openai.com/v1',
@@ -1415,6 +1416,7 @@ window.addEventListener('message', (event) => {
         grokSelectedPromptId: DEFAULT_FEATURES.grokSelectedPromptId,
         grokTemporaryChat: DEFAULT_FEATURES.grokTemporaryChat,
         grokEnterToReply: DEFAULT_FEATURES.grokEnterToReply,
+        authorReplyPrompt: DEFAULT_FEATURES.authorReplyPrompt,
         aiProvider: DEFAULT_FEATURES.aiProvider,
         aiOpenAIPlatform: DEFAULT_FEATURES.aiOpenAIPlatform,
         aiBaseUrl: DEFAULT_FEATURES.aiBaseUrl,
@@ -1437,6 +1439,7 @@ window.addEventListener('message', (event) => {
             aiModel: syncItems.aiModel || DEFAULT_FEATURES.aiModel,
             aiReplyCount: syncItems.aiReplyCount || DEFAULT_FEATURES.aiReplyCount,
             aiLanguage: syncItems.aiLanguage || DEFAULT_FEATURES.aiLanguage,
+            authorReplyPrompt: syncItems.authorReplyPrompt || '',
             capturedTxId: localItems.xvmGrokCapturedTxId,
           }, '*');
         });
@@ -1527,7 +1530,7 @@ safeChromeCall(() => {
       window.postMessage({ type: 'XVM_THEME_UPDATE', pref }, '*');
     }
     const aiTouched = changes.aiProvider || changes.aiOpenAIPlatform || changes.aiBaseUrl || changes.aiModel || changes.aiReplyCount || changes.aiLanguage;
-    const grokTouched = changes.grokCommentPrompt || changes.grokPromptTemplates || changes.grokSelectedPromptId || changes.grokTemporaryChat || changes.grokEnterToReply || changes.language || aiTouched;
+    const grokTouched = changes.grokCommentPrompt || changes.grokPromptTemplates || changes.grokSelectedPromptId || changes.grokTemporaryChat || changes.grokEnterToReply || changes.authorReplyPrompt || changes.language || aiTouched;
     const bookmarkTimelineInjectTouched = changes.featureBookmarkTimelineInject || changes.bookmarkTimelineInjectFolderIds || changes.bookmarkTimelineInjectEvery;
     if (!changes.trending && !changes.viral && !changes.featureVelocityLeaderboard && !changes.featureCopyAsMarkdown && !changes.featureStarChart && !changes.featureBookmarkFolders && !bookmarkTimelineInjectTouched && !changes.showBookmarkCount && !changes.leaderboardEdgeHideEnabled && !changes.badgeStyle && !changes.leaderboardCount && !changes.leaderboardColumns && !changes.language && !grokTouched) return;
 
@@ -1550,6 +1553,7 @@ safeChromeCall(() => {
           grokSelectedPromptId: DEFAULT_FEATURES.grokSelectedPromptId,
           grokTemporaryChat: DEFAULT_FEATURES.grokTemporaryChat,
           grokEnterToReply: DEFAULT_FEATURES.grokEnterToReply,
+        authorReplyPrompt: DEFAULT_FEATURES.authorReplyPrompt,
           aiProvider: DEFAULT_FEATURES.aiProvider,
           aiOpenAIPlatform: DEFAULT_FEATURES.aiOpenAIPlatform,
           aiBaseUrl: DEFAULT_FEATURES.aiBaseUrl,
@@ -1571,6 +1575,7 @@ safeChromeCall(() => {
             aiModel: items.aiModel || DEFAULT_FEATURES.aiModel,
             aiReplyCount: items.aiReplyCount || DEFAULT_FEATURES.aiReplyCount,
             aiLanguage: items.aiLanguage || DEFAULT_FEATURES.aiLanguage,
+            authorReplyPrompt: items.authorReplyPrompt || '',
           }, '*');
         });
       }

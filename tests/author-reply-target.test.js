@@ -56,4 +56,11 @@ describe('author reply target', () => {
     expect(api.isOwnThread(input)).toBe(false);
     expect(api.authorReplyStatusIds(input)).toEqual([]);
   });
+
+  it('fills the composer that appeared after the click, not the main post box', () => {
+    const main = { id: 'main', closest: () => null };
+    const dialogBox = { id: 'dialog', closest: () => ({ role: 'dialog' }) };
+    expect(api.pickNewReplyEditor([main], [main, dialogBox])).toBe(dialogBox);
+    expect(api.pickNewReplyEditor([main], [main])).toBeNull();
+  });
 });

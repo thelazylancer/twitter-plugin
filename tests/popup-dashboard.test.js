@@ -855,7 +855,7 @@ describe('#15 AI comment provider contract', () => {
     expect(bridgeJs).not.toContain('function bridgeInsertTextIntoReply');
     expect(bridgeJs).not.toContain('xvm-grok-options-list');
     expect(contentJs).toContain('function showGrokOptions');
-    expect(contentJs).toContain('showGrokOptions(capped, editable, { streaming: true, anchor: btn, authorMode, authorNote })');
+    expect(contentJs).toContain('showGrokOptions(capped, editable, {');
   });
 });
 

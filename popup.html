@@ -929,6 +929,18 @@
           <button type="button" id="grok-prompt-reset" class="adv-btn" data-i18n="btnResetTemplates">Restore default templates</button>
         </div>
       </div>
+
+      <div class="panel-card grok-template">
+        <div class="tpl-head">
+          <h3 data-i18n="authorReplyTitle">AI 主页回评</h3>
+          <span id="author-reply-status" class="tpl-status" aria-live="polite" data-i18n="grokTplSaved">Saved</span>
+        </div>
+        <div class="ft-desc" data-i18n="authorReplyDesc">只用于你自己帖子下的回评。生成时会把主贴和当前评论填进 [推文内容]。</div>
+        <label class="field" for="author-reply-prompt"><textarea id="author-reply-prompt" spellcheck="false"></textarea></label>
+        <div class="actions compact">
+          <button type="button" id="author-reply-reset" class="adv-btn" data-i18n="authorReplyReset">恢复默认回评提示词</button>
+        </div>
+      </div>
     </section>
 
     <!-- ============ Tab: Marks ============ -->

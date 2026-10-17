@@ -615,6 +615,9 @@
   "freshnessFreshColor": { "message": "色" },
   "freshnessWarmMinutes": { "message": "30分以内" },
   "freshnessWarmColor": { "message": "色" },
+  "authorReplyTitle": { "message": "AI ホーム返信" },
+  "authorReplyDesc": { "message": "自分の投稿への返信だけに使います。生成時に元投稿と現在のコメントが [推文内容] に入ります。" },
+  "authorReplyReset": { "message": "返信プロンプトを初期化" },
   "unfollowedTitle": { "message": "未フォロー" },
   "unfollowedDesc": { "message": "返信だけに、フォローしていない人のフォロー数とフォロワー数を表示します。追加リクエストはしません。" }
 }

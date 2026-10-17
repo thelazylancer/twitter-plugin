@@ -364,6 +364,7 @@ function normalizeGrokPromptText(prompt) {
 
 let grokPromptTemplate = DEFAULT_GROK_COMMENT_PROMPT;
 let grokPromptTemplates = DEFAULT_GROK_PROMPT_TEMPLATES.map((tpl) => ({ ...tpl }));
+let authorReplyPrompt = '';
 let grokSelectedTemplateId = 'default';
 let grokTemporaryChat = true;
 let grokEnterToReply = false;
@@ -402,6 +403,9 @@ window.addEventListener('message', (event) => {
   }
   if (typeof event.data.enterToReply === 'boolean') {
     grokEnterToReply = event.data.enterToReply;
+  }
+  if (typeof event.data.authorReplyPrompt === 'string') {
+    authorReplyPrompt = event.data.authorReplyPrompt;
   }
   if (['x-grok', 'ollama', 'openai-compatible'].includes(event.data.aiProvider)) {
     aiProvider = event.data.aiProvider;
@@ -4080,6 +4084,11 @@ const AUTHOR_REPLY_PROMPT = `[推文内容]
 - 跟当前评论使用的语言走
 - 每条只包含可直接发布的回复正文，用代码块包裹。`;
 
+function currentAuthorReplyPrompt() {
+  const custom = String(authorReplyPrompt || '').trim();
+  return custom || AUTHOR_REPLY_PROMPT;
+}
+
 function readArticleOwnText(article) {
   if (!article) return '';
   const node = Array.from(article.querySelectorAll('[data-testid="tweetText"]'))
@@ -4763,7 +4772,12 @@ function showGrokOptions(comments, editable, opts = {}) {
     btn.textContent = comment;
     btn.title = '填充到回复框';
     btn.addEventListener('click', () => {
-      insertTextIntoReply(editable, comment);
+      const target = opts.resolveEditor?.() || editable;
+      if (!target) {
+        showGrokErrorToast('没有找到回评弹窗，未填入主贴');
+        return;
+      }
+      insertTextIntoReply(target, comment);
       closeGrokOptions();
       showToast('已填充评论');
     });
@@ -4990,16 +5004,28 @@ async function handleGrokGenerate(btn, editable, promptTemplate = null, authorJo
   const epoch = ++grokGenEpoch;
   try {
     const tpl = promptTemplate || (authorMode
-      ? { id: 'author-reply', name: '回评', prompt: AUTHOR_REPLY_PROMPT }
+      ? { id: 'author-reply', name: '回评', prompt: currentAuthorReplyPrompt() }
       : getSelectedGrokPromptTemplate());
     // Returning false from onProgress tells the reader to abort the stream.
     const onProgress = (running) => {
       if (epoch !== grokGenEpoch) return false;
       const capped = Array.isArray(running) ? running.slice(0, aiReplyCount) : running;
-      showGrokOptions(capped, editable, { streaming: true, anchor: btn, authorMode, authorNote });
+      showGrokOptions(capped, editable, {
+        streaming: true,
+        anchor: btn,
+        authorMode,
+        authorNote,
+        resolveEditor: authorMode ? editorForAuthorFill : null,
+      });
       return !Array.isArray(running) || running.length < aiReplyCount;
     };
-    showGrokOptions([], editable, { streaming: true, anchor: btn, authorMode, authorNote });
+    showGrokOptions([], editable, {
+      streaming: true,
+      anchor: btn,
+      authorMode,
+      authorNote,
+      resolveEditor: authorMode ? editorForAuthorFill : null,
+    });
     const comments = aiProvider === 'x-grok'
       ? await (async () => {
         if (!window.__xvmGrok) {
@@ -5021,7 +5047,13 @@ async function handleGrokGenerate(btn, editable, promptTemplate = null, authorJo
     showGrokOptions(
       Array.isArray(comments) ? comments.slice(0, aiReplyCount) : comments,
       editable,
-      { streaming: false, anchor: btn, authorMode, authorNote },
+      {
+        streaming: false,
+        anchor: btn,
+        authorMode,
+        authorNote,
+        resolveEditor: authorMode ? editorForAuthorFill : null,
+      },
     );
   } catch (err) {
     console.debug('[XVM-AI] generation failed', err);
@@ -5105,17 +5137,24 @@ function injectGrokReplyButtons(root = document) {
   }
 }
 
-function waitForReplyComposer(targetArticle, timeoutMs = 2500) {
+function replyEditors() {
+  return Array.from(document.querySelectorAll(
+    '[data-testid="tweetTextarea_0"][contenteditable="true"], [data-testid^="tweetTextarea_"][contenteditable="true"], div[role="textbox"][contenteditable="true"]',
+  ));
+}
+
+function editorForAuthorFill() {
+  const picked = window.__xvmAuthorReplyTarget?.pickNewReplyEditor(authorReplyEditorsBefore, replyEditors());
+  if (picked) return picked;
+  return authorReplyFillEditor?.isConnected ? authorReplyFillEditor : null;
+}
+
+function waitForNewReplyComposer(before, timeoutMs = 2500) {
   return new Promise((resolve) => {
     const start = Date.now();
     const tick = () => {
-      const dialogEditor = document.querySelector('[role="dialog"] [data-testid="tweetTextarea_0"][contenteditable="true"], [role="dialog"] div[role="textbox"][contenteditable="true"]');
-      if (dialogEditor) return resolve(dialogEditor);
-      const editors = document.querySelectorAll('[data-testid="tweetTextarea_0"][contenteditable="true"]');
-      for (const editor of editors) {
-        const composerRoot = findReplyComposerRoot(editor);
-        if (findReplyArticleForAiComposer(composerRoot) === targetArticle) return resolve(editor);
-      }
+      const picked = window.__xvmAuthorReplyTarget?.pickNewReplyEditor(before, replyEditors());
+      if (picked) return resolve(picked);
       if (Date.now() - start >= timeoutMs) return resolve(null);
       setTimeout(tick, 80);
     };
@@ -5142,9 +5181,11 @@ async function startAuthorReply(article, replyBtn) {
   grokLastReplyClickAt = Date.now();
   grokLastReplyPageStatusId = getStatusIdFromLocation();
   grokLastReplyThreadOg = mainArticle;
+  authorReplyEditorsBefore = replyEditors();
   replyBtn.click();
   try {
-    const editable = await waitForReplyComposer(article);
+    const editable = await waitForNewReplyComposer(authorReplyEditorsBefore);
+    authorReplyFillEditor = editable;
     if (!editable) {
       showGrokErrorToast('没有打开回复框');
       return;
@@ -5156,7 +5197,7 @@ async function startAuthorReply(article, replyBtn) {
       showGrokErrorToast('回复框已打开，但没有找到回评按钮');
       return;
     }
-    handleGrokGenerate(btn, editable, { id: 'author-reply', name: '回评', prompt: AUTHOR_REPLY_PROMPT }, payload);
+    handleGrokGenerate(btn, editable, { id: 'author-reply', name: '回评', prompt: currentAuthorReplyPrompt() }, payload);
   } finally {
     delete replyBtn.dataset.xvmAuthorBusy;
   }
@@ -5212,6 +5253,8 @@ function injectAuthorReplyButtons() {
 //                                  on a nested reply.
 let grokLastReplyThreadOg = null;
 let grokLastReplyPageStatusId = '';
+let authorReplyEditorsBefore = [];
+let authorReplyFillEditor = null;
 document.addEventListener('click', (e) => {
   // Sending the reply ends the job for that tweet: drop the panel and stop
   // any still-streaming generation instead of letting it repopulate.

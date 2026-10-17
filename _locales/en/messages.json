@@ -622,6 +622,9 @@
   "freshnessFreshColor": { "message": "Color" },
   "freshnessWarmMinutes": { "message": "Within 30 min" },
   "freshnessWarmColor": { "message": "Color" },
+  "authorReplyTitle": { "message": "AI home replies" },
+  "authorReplyDesc": { "message": "Used only when replying to comments on your own post. The main post and current comment replace [推文内容]." },
+  "authorReplyReset": { "message": "Restore default reply prompt" },
   "unfollowedTitle": { "message": "Not following" },
   "unfollowedDesc": { "message": "On replies only, mark people you do not follow and show their following and follower counts. No extra requests." }
 }

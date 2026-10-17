@@ -164,6 +164,7 @@ const DEFAULT_FEATURES = {
   grokSelectedPromptId: LOCALIZED_GROK_DEFAULTS.grokSelectedPromptId,
   grokTemporaryChat: true,
   grokEnterToReply: false,
+  authorReplyPrompt: '',
   aiProvider: 'x-grok',
   aiOpenAIPlatform: 'openai',
   aiBaseUrl: 'https://api.openai.com/v1',
@@ -385,6 +386,20 @@ const grokPromptResetBtn = document.getElementById('grok-prompt-reset');
 const grokTplStatus = document.getElementById('grok-tpl-status');
 const grokTempChatToggle = document.getElementById('grok-temp-chat');
 const grokEnterReplyToggle = document.getElementById('grok-enter-reply');
+const authorReplyPromptInput = document.getElementById('author-reply-prompt');
+const authorReplyResetBtn = document.getElementById('author-reply-reset');
+const authorReplyStatus = document.getElementById('author-reply-status');
+const AUTHOR_REPLY_DEFAULT = `[推文内容]
+
+你是【主贴】的作者，正在回复【当前评论】。主贴是你已经公开说过的话，当前评论是别人留在这条主贴下面、你现在要回的那一条。
+
+请生成3条可直接发送的回复。要求：
+- 先看当前评论在问、补充还是反驳主贴里的哪一点，只回应这一点
+- 回答必须和主贴对得上：评论问到主贴里的说法，就用主贴里的立场来答，不要另起一套
+- 不要复述整条主贴，不要夸自己的主贴，不要写成路人在评论别人的帖子
+- 语气像本人回评：简短、口语、不端着。有问题就答，有补充就补一句，有感谢就短谢
+- 跟当前评论使用的语言走
+- 每条只包含可直接发布的回复正文，用代码块包裹。`;
 const freshnessToggle = document.getElementById('feat-freshness');
 const freshnessHotMinutesInput = document.getElementById('freshness-hot-minutes');
 const freshnessHotColorInput = document.getElementById('freshness-hot-color');
@@ -672,6 +687,7 @@ chrome.storage.sync.get(STORAGE_DEFAULTS, (items) => {
   }
   if (grokTempChatToggle) grokTempChatToggle.checked = items.grokTemporaryChat !== false;
   if (grokEnterReplyToggle) grokEnterReplyToggle.checked = items.grokEnterToReply === true;
+  if (authorReplyPromptInput) authorReplyPromptInput.value = String(items.authorReplyPrompt || '').trim() || AUTHOR_REPLY_DEFAULT;
   setAiProviderValue(normalizeAiProvider(items.aiProvider));
   setCustomSelectValue(aiPlatformSelect, normalizeAiPlatform(items.aiOpenAIPlatform));
   if (aiBaseUrlInput) aiBaseUrlInput.value = items.aiBaseUrl || AI_PLATFORM_PRESETS[normalizeAiPlatform(items.aiOpenAIPlatform)].baseUrl;
@@ -790,6 +806,26 @@ function showGrokTemplateSaved() {
   clearTimeout(showGrokTemplateSaved._t);
   showGrokTemplateSaved._t = setTimeout(() => { delete grokTplStatus.dataset.on; }, 1400);
 }
+
+function showAuthorReplySaved() {
+  if (!authorReplyStatus) return;
+  authorReplyStatus.dataset.on = '1';
+  clearTimeout(showAuthorReplySaved._t);
+  showAuthorReplySaved._t = setTimeout(() => { delete authorReplyStatus.dataset.on; }, 1400);
+}
+
+function persistAuthorReplyPrompt(prompt) {
+  chrome.storage.sync.set({ authorReplyPrompt: String(prompt || '').trim() }, showAuthorReplySaved);
+}
+
+authorReplyPromptInput?.addEventListener('input', () => {
+  clearTimeout(persistAuthorReplyPrompt._t);
+  persistAuthorReplyPrompt._t = setTimeout(() => persistAuthorReplyPrompt(authorReplyPromptInput.value), 400);
+});
+authorReplyResetBtn?.addEventListener('click', () => {
+  if (authorReplyPromptInput) authorReplyPromptInput.value = AUTHOR_REPLY_DEFAULT;
+  persistAuthorReplyPrompt('');
+});
 
 function persistGrokTemplates(messageKey = '') {
   const active = grokTemplatesState.find((tpl) => tpl.id === grokSelectedTemplateId) || grokTemplatesState[0];

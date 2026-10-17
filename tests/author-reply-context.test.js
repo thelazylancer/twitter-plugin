@@ -22,7 +22,7 @@ describe('author reply reads the main post and the current comment', () => {
   });
 
   it('passes the assembled context into generation instead of re-reading the composer', () => {
-    expect(contentJs).toContain('handleGrokGenerate(btn, editable, { id: \'author-reply\', name: \'回评\', prompt: AUTHOR_REPLY_PROMPT }, payload)');
+    expect(contentJs).toContain('handleGrokGenerate(btn, editable, { id: \'author-reply\', name: \'回评\', prompt: currentAuthorReplyPrompt() }, payload)');
     expect(contentJs).toContain('if (authorJob?.context)');
     expect(contentJs).toContain('tweetText = authorJob.context');
   });
