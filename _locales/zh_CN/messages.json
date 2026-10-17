@@ -1,12 +1,12 @@
 {
   "extName": {
-    "message": "X 爆款监测"
+    "message": "X 快回"
   },
   "extDescription": {
-    "message": "X 推文流速徽章、长图阅读、Markdown 复制、转发星图、Grok 回复辅助 — 全部本地处理，零数据收集。"
+    "message": "在 X 回复框里一键生成评论候选，选一条填入。不自动发送。"
   },
   "popupSubtitle": {
-    "message": "X 推文的实时曝光流速"
+    "message": "一键生成评论，自己确认后再发"
   },
   "tierNormal": {
     "message": "正常"

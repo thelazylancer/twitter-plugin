@@ -1,3 +1,7 @@
+// Fork default: this build is a reply assistant. Do not rewrite timeline JSON
+// to drop promoted posts unless a later setting turns pruning back on.
+window.__xvmDisableAdPrune = true;
+
 // === Tweet Data Store ===
 const tweetDataStore = new Map();
 const DEFAULT_THRESHOLDS = {
@@ -5,6 +9,7 @@ const DEFAULT_THRESHOLDS = {
   viral: 10000,
 };
 let velocityThresholds = { ...DEFAULT_THRESHOLDS };
+let velocityBadgesEnabled = false;
 
 // === i18n ===
 let localizedStrings = {};
@@ -230,6 +235,7 @@ window.addEventListener('message', (event) => {
   applyLocalizedUi();
   velocityThresholds = normalizeThresholds(event.data.thresholds);
   badgeStyle = event.data.badgeStyle === 'inline-classic' ? 'inline-classic' : 'pill-solid';
+  velocityBadgesEnabled = event.data.featureVelocityBadges === true;
   applyBadgeStyle();
   // Apply showBookmarkCount BEFORE renderBadges so the very first
   // post-load render respects the persisted setting — otherwise the
@@ -304,14 +310,14 @@ window.postMessage({ type: 'XVM_REQUEST_SETTINGS' }, '*');
 
 // === Request Interception (fetch + XHR) ===
 const GRAPHQL_RE = /\/(?:i\/api\/)?graphql\//;
-const DEFAULT_GROK_COMMENT_PROMPT = '[推文内容]\n\n为我生成针对该推文的10条评论,每条评论用代码块包裹';
+const DEFAULT_GROK_COMMENT_PROMPT = '[推文内容]\n\n为我生成针对该推文的3条评论,每条评论用代码块包裹';
 const DEFAULT_GROK_PROMPT_TEMPLATES = [
   { id: 'default', name: '默认评论', prompt: DEFAULT_GROK_COMMENT_PROMPT },
-  { id: 'short-cn', name: '中文短评', prompt: '[推文内容]\n\n为该推文生成10条自然、简短、像真人回复的中文评论,每条评论用代码块包裹' },
-  { id: 'sharp', name: '犀利观点', prompt: '[推文内容]\n\n为该推文生成10条有观点、有信息密度、但不人身攻击的评论,每条评论用代码块包裹' },
-  { id: 'tieba-laoge', name: '贴吧老哥', prompt: '[推文内容]\n\n用贴吧老哥的语气为该推文生成10条评论。要求：\n- 每条评论用代码块包裹' },
-  { id: 'point-by-point', name: '针对性回应', prompt: '[推文内容]\n\n为该推文生成10条评论。要求：每条都针对推文里的一个具体观点、论据或例子回应（赞同/质疑/补充），不要笼统夸奖；语气自然像真人；每条评论只包含可直接发布的评论正文，用代码块包裹。' },
-  { id: 'deep-dive', name: '深度回应', prompt: '[推文内容]\n\n挑出这条推文里最值得讨论的3-5个点，围绕这些点生成10条有信息密度的评论（延伸思考、反例、或个人经验），每条评论只包含可直接发布的评论正文，用代码块包裹。' },
+  { id: 'short-cn', name: '中文短评', prompt: '[推文内容]\n\n为该推文生成3条自然、简短、像真人回复的中文评论,每条评论用代码块包裹' },
+  { id: 'sharp', name: '犀利观点', prompt: '[推文内容]\n\n为该推文生成3条有观点、有信息密度、但不人身攻击的评论,每条评论用代码块包裹' },
+  { id: 'tieba-laoge', name: '贴吧老哥', prompt: '[推文内容]\n\n用贴吧老哥的语气为该推文生成3条评论。要求：\n- 每条评论用代码块包裹' },
+  { id: 'point-by-point', name: '针对性回应', prompt: '[推文内容]\n\n为该推文生成3条评论。要求：每条都针对推文里的一个具体观点、论据或例子回应（赞同/质疑/补充），不要笼统夸奖；语气自然像真人；每条评论只包含可直接发布的评论正文，用代码块包裹。' },
+  { id: 'deep-dive', name: '深度回应', prompt: '[推文内容]\n\n挑出这条推文里最值得讨论的3-5个点，围绕这些点生成3条有信息密度的评论（延伸思考、反例、或个人经验），每条评论只包含可直接发布的评论正文，用代码块包裹。' },
 ];
 
 // --- prompt-normalize:start ---
@@ -352,7 +358,7 @@ let aiProvider = 'x-grok';
 let aiOpenAIPlatform = 'openai';
 let aiBaseUrl = 'https://api.openai.com/v1';
 let aiModel = 'gpt-4o-mini';
-let aiReplyCount = 10;
+let aiReplyCount = 3;
 let aiLanguage = 'auto';
 let aiRequestSeq = 0;
 const aiPendingRequests = new Map();
@@ -1311,6 +1317,9 @@ function getTooltip() {
 
 // === Badge Rendering ===
 function renderBadges() {
+  // typeof guard keeps the extracted unit-test copy runnable; the live
+  // script defines this flag and leaves badges off unless settings enable them.
+  if (typeof velocityBadgesEnabled !== 'undefined' && !velocityBadgesEnabled) return;
   const articles = document.querySelectorAll('article[data-testid="tweet"]');
   for (const article of articles) {
     const tweetId = getTweetIdFromArticle(article);
@@ -3519,6 +3528,7 @@ function scheduleComposerInject() {
   requestAnimationFrame(() => {
     composerInjectScheduled = false;
     injectGrokReplyButtons();
+    injectAuthorReplyButtons();
   });
 }
 
@@ -3552,7 +3562,10 @@ const observer = new MutationObserver((mutations) => {
     }
     if (hasNewArticles && touchedComposer) break;
   }
-  if (hasNewArticles) renderBadges();
+  if (hasNewArticles) {
+    renderBadges();
+    injectAuthorReplyButtons();
+  }
   if (touchedComposer) scheduleComposerInject();
 });
 
@@ -3572,6 +3585,7 @@ function bootGrokInjectorRetries() {
   let tries = 0;
   const id = setInterval(() => {
     injectGrokReplyButtons();
+    injectAuthorReplyButtons();
     if (++tries >= 10) clearInterval(id);
   }, 400);
 }
@@ -3587,18 +3601,21 @@ setInterval(() => {
   if (composer && !document.querySelector('.xvm-grok-generate-btn')) {
     injectGrokReplyButtons();
   }
+  injectAuthorReplyButtons();
 }, 2000);
 
 if (document.body) {
   startObserver();
   installEnterToReplyShortcut();
   injectGrokReplyButtons();
+  injectAuthorReplyButtons();
   bootGrokInjectorRetries();
 } else {
   document.addEventListener('DOMContentLoaded', () => {
     startObserver();
     installEnterToReplyShortcut();
     injectGrokReplyButtons();
+    injectAuthorReplyButtons();
     bootGrokInjectorRetries();
   });
 }
@@ -3640,6 +3657,114 @@ document.addEventListener('click', (e) => {
   if (!article) return;
   lastShareContext = createShareContextFromArticle(article);
 }, true);
+
+function getLoggedInHandle() {
+  const profile = document.querySelector('a[data-testid="AppTabBar_Profile_Link"]');
+  const href = profile?.getAttribute('href') || '';
+  const fromHref = href.match(/^\/([A-Za-z0-9_]{1,15})\/?$/)?.[1];
+  if (fromHref) return fromHref.toLowerCase();
+  const switcher = document.querySelector('[data-testid="SideNav_AccountSwitcher_Button"]');
+  const at = (switcher?.textContent || '').match(/@([A-Za-z0-9_]{1,15})/);
+  return at ? at[1].toLowerCase() : '';
+}
+
+function articleHandle(article) {
+  if (!article) return '';
+  const fromDom = getAuthorInfo(article).handle.replace(/^@/, '');
+  if (fromDom) return fromDom.toLowerCase();
+  const id = getTweetIdFromArticle(article);
+  const cached = id ? tweetDataStore.get(id) : null;
+  return String(cached?.screenName || '').toLowerCase();
+}
+
+function findOwnThreadRoot(targetArticle) {
+  const me = getLoggedInHandle();
+  if (!me) return null;
+  const statusArticle = findArticleForCurrentStatus();
+  if (statusArticle && articleHandle(statusArticle) === me) return statusArticle;
+  if (grokLastReplyThreadOg?.isConnected && articleHandle(grokLastReplyThreadOg) === me) {
+    return grokLastReplyThreadOg;
+  }
+  if (targetArticle && articleHandle(targetArticle) === me) {
+    const id = getTweetIdFromArticle(targetArticle);
+    const data = id ? tweetDataStore.get(id) : null;
+    if (!data?.inReplyToStatusId) return targetArticle;
+  }
+  return null;
+}
+
+function articleHasOwnAnalytics(article) {
+  if (!article) return false;
+  return Array.from(article.querySelectorAll('a[href*="/analytics"]'))
+    .some((el) => el.closest('article[data-testid="tweet"]') === article);
+}
+
+function isOwnStatusPage() {
+  const statusArticle = findArticleForCurrentStatus();
+  if (!statusArticle || !getStatusIdFromLocation()) return false;
+  const me = getLoggedInHandle();
+  if (me && articleHandle(statusArticle) === me) return true;
+  return articleHasOwnAnalytics(statusArticle);
+}
+
+function isAuthorReplyTarget(targetArticle) {
+  if (!targetArticle) return false;
+  const root = findOwnThreadRoot(targetArticle);
+  if (root && root !== targetArticle) return true;
+  const me = getLoggedInHandle();
+  if (!me) return false;
+  const id = getTweetIdFromArticle(targetArticle);
+  const data = id ? tweetDataStore.get(id) : null;
+  return !!data?.inReplyToScreenName && data.inReplyToScreenName.toLowerCase() === me;
+}
+
+const AUTHOR_REPLY_PROMPT = `[推文内容]
+
+你是【主贴】的作者，正在回复【当前评论】。主贴是你已经公开说过的话，当前评论是别人留在这条主贴下面、你现在要回的那一条。
+
+请生成3条可直接发送的回复。要求：
+- 先看当前评论在问、补充还是反驳主贴里的哪一点，只回应这一点
+- 回答必须和主贴对得上：评论问到主贴里的说法，就用主贴里的立场来答，不要另起一套
+- 不要复述整条主贴，不要夸自己的主贴，不要写成路人在评论别人的帖子
+- 语气像本人回评：简短、口语、不端着。有问题就答，有补充就补一句，有感谢就短谢
+- 跟当前评论使用的语言走
+- 每条只包含可直接发布的回复正文，用代码块包裹。`;
+
+function readArticleOwnText(article) {
+  if (!article) return '';
+  const node = Array.from(article.querySelectorAll('[data-testid="tweetText"]'))
+    .find((el) => el.closest('article[data-testid="tweet"]') === article);
+  const visible = (node?.textContent || '').trim();
+  if (visible) return visible;
+  const id = getTweetIdFromArticle(article);
+  const cached = id ? tweetDataStore.get(id) : null;
+  if (!cached || String(cached.id || id) !== String(id)) return '';
+  return String(cached.text || '').trim();
+}
+
+function buildAuthorReplyPayload(commentArticle, mainArticle) {
+  if (!commentArticle || !mainArticle || commentArticle === mainArticle) return null;
+  const mainText = readArticleOwnText(mainArticle);
+  const commentText = readArticleOwnText(commentArticle);
+  if (!mainText || !commentText || mainText === commentText) return null;
+  const handle = articleHandle(commentArticle);
+  const who = handle ? `@${handle}` : '对方';
+  return {
+    mainText,
+    commentText,
+    who,
+    context: `【主贴】\n${mainText}\n\n【当前评论】\n${who}：${commentText}`,
+  };
+}
+
+function resolveAuthorReplyPair(fallbackArticle) {
+  const clicked = grokLastReplyArticle?.isConnected ? grokLastReplyArticle : null;
+  const comment = clicked && clicked !== findOwnThreadRoot(clicked) ? clicked : fallbackArticle;
+  if (!comment || !isAuthorReplyTarget(comment)) return null;
+  const main = findOwnThreadRoot(comment);
+  if (!main || main === comment) return null;
+  return { comment, main };
+}
 
 function getAuthorInfo(article) {
   // User-Name block has display name + @handle
@@ -4147,8 +4272,8 @@ function installEnterToReplyShortcut() {
 
 function cleanupMisplacedGrokButtons(editable, composerRoot = null) {
   const editorShell = editable?.closest?.('[data-testid="tweetTextarea_0RichTextInputContainer"], .DraftEditor-root, .DraftEditor-editorContainer');
-  editorShell?.querySelectorAll?.('.xvm-grok-generate-btn').forEach((btn) => btn.remove());
-  composerRoot?.querySelectorAll?.('.xvm-grok-generate-btn').forEach((btn) => {
+  editorShell?.querySelectorAll?.('.xvm-grok-generate-btn, .xvm-grok-template-caret').forEach((btn) => btn.remove());
+  composerRoot?.querySelectorAll?.('.xvm-grok-generate-btn, .xvm-grok-template-caret').forEach((btn) => {
     if (isInvalidGrokButtonHost(btn.parentElement, editable)) btn.remove();
   });
 }
@@ -4256,14 +4381,22 @@ function showGrokOptions(comments, editable, opts = {}) {
     panel.className = 'xvm-grok-options';
     panel.innerHTML = `
       <div class="xvm-grok-options-head">
-        <strong>Grok 评论候选</strong>
+        <strong>评论候选</strong>
         <span class="xvm-grok-options-status" aria-live="polite"></span>
         <button type="button" class="xvm-grok-close" aria-label="Close">×</button>
       </div>
+      <div class="xvm-grok-options-note" hidden></div>
       <div class="xvm-grok-options-list"></div>
     `;
     panel.querySelector('.xvm-grok-close')?.addEventListener('click', closeGrokOptions);
     document.body.appendChild(panel);
+  }
+  const title = panel.querySelector('.xvm-grok-options-head strong');
+  if (title) title.textContent = opts.authorMode ? '回评候选' : '评论候选';
+  const note = panel.querySelector('.xvm-grok-options-note');
+  if (note) {
+    note.hidden = !opts.authorNote;
+    note.textContent = opts.authorNote || '';
   }
   const status = panel.querySelector('.xvm-grok-options-status');
   if (status) {
@@ -4425,9 +4558,10 @@ function showGrokOptions(comments, editable, opts = {}) {
   }
 }
 
-function setGrokButtonLabel(btn, label = 'AI 生成', loading = false) {
+function setGrokButtonLabel(btn, label = '', loading = false) {
+  const text = label || (btn?.dataset?.xvmMode === 'author' ? '回评' : '快回');
   btn.classList.toggle('xvm-grok-generate-btn--loading', loading);
-  btn.innerHTML = `<span class="xvm-grok-spark" aria-hidden="true">✦</span><span>${label}</span>`;
+  btn.innerHTML = `<span class="xvm-grok-spark" aria-hidden="true">✦</span><span>${text}</span>`;
 }
 
 function requestExternalAiGeneration(payload, onProgress = null) {
@@ -4454,43 +4588,68 @@ function requestExternalAiGeneration(payload, onProgress = null) {
   });
 }
 
-async function handleGrokGenerate(btn, editable, promptTemplate = null) {
+async function handleGrokGenerate(btn, editable, promptTemplate = null, authorJob = null) {
   // Synchronous re-entry guard. `btn.disabled = true` later races with rapid
   // double-clicks; the dataset flag is set before any await so the second
   // click sees it immediately.
   if (btn.dataset.xvmBusy === '1') return;
   btn.dataset.xvmBusy = '1';
 
-  const root = findReplyComposerRoot(editable);
-  const article = findReplyArticleForAiComposer(root);
-  const replyText = getTweetTextFromArticle(article);
-  if (!replyText) {
-    showGrokErrorToast('未找到推文内容');
-    delete btn.dataset.xvmBusy;
-    return;
+  let authorMode = false;
+  let authorNote = '';
+  let tweetText = '';
+  if (authorJob?.context) {
+    authorMode = true;
+    tweetText = authorJob.context;
+    authorNote = authorJob.who
+      ? `已读取主贴，并按 ${authorJob.who} 的当前评论来回`
+      : '已读取主贴和当前评论';
+  } else {
+    const root = findReplyComposerRoot(editable);
+    const article = findReplyArticleForAiComposer(root);
+    const pair = resolveAuthorReplyPair(article);
+    if (pair) {
+      const payload = buildAuthorReplyPayload(pair.comment, pair.main);
+      if (!payload) {
+        showGrokErrorToast('没读到主贴或当前评论');
+        delete btn.dataset.xvmBusy;
+        return;
+      }
+      authorMode = true;
+      tweetText = payload.context;
+      authorNote = `已读取主贴，并按 ${payload.who} 的当前评论来回`;
+    } else {
+      const replyText = getTweetTextFromArticle(article);
+      if (!replyText) {
+        showGrokErrorToast('未找到推文内容');
+        delete btn.dataset.xvmBusy;
+        return;
+      }
+      const ogArticle = grokLastReplyThreadOg && grokLastReplyThreadOg !== article && grokLastReplyThreadOg.isConnected
+        ? grokLastReplyThreadOg
+        : null;
+      const ogText = ogArticle ? getTweetTextFromArticle(ogArticle) : '';
+      tweetText = (ogText && ogText !== replyText)
+        ? `【原推文】\n${ogText}\n\n【对该推文的回复】\n${replyText}`
+        : replyText;
+    }
   }
-  // If the user clicked reply on a nested reply (article ≠ thread OG),
-  // compose the prompt context as 「原推文 + 回复」 so Grok sees the full
-  // conversation rather than just the tweet being immediately responded to.
-  const ogArticle = grokLastReplyThreadOg && grokLastReplyThreadOg !== article && grokLastReplyThreadOg.isConnected
-    ? grokLastReplyThreadOg
-    : null;
-  const ogText = ogArticle ? getTweetTextFromArticle(ogArticle) : '';
-  const tweetText = (ogText && ogText !== replyText)
-    ? `【原推文】\n${ogText}\n\n【对该推文的回复】\n${replyText}`
-    : replyText;
+  btn.dataset.xvmMode = authorMode ? 'author' : 'comment';
   btn.disabled = true;
   setGrokButtonLabel(btn, '生成中', true);
   const epoch = ++grokGenEpoch;
   try {
-    const tpl = promptTemplate || getSelectedGrokPromptTemplate();
+    const tpl = promptTemplate || (authorMode
+      ? { id: 'author-reply', name: '回评', prompt: AUTHOR_REPLY_PROMPT }
+      : getSelectedGrokPromptTemplate());
     // Returning false from onProgress tells the reader to abort the stream.
     const onProgress = (running) => {
       if (epoch !== grokGenEpoch) return false;
-      showGrokOptions(running, editable, { streaming: true, anchor: btn });
-      return true;
+      const capped = Array.isArray(running) ? running.slice(0, aiReplyCount) : running;
+      showGrokOptions(capped, editable, { streaming: true, anchor: btn, authorMode, authorNote });
+      return !Array.isArray(running) || running.length < aiReplyCount;
     };
-    showGrokOptions([], editable, { streaming: true, anchor: btn });
+    showGrokOptions([], editable, { streaming: true, anchor: btn, authorMode, authorNote });
     const comments = aiProvider === 'x-grok'
       ? await (async () => {
         if (!window.__xvmGrok) {
@@ -4500,6 +4659,7 @@ async function handleGrokGenerate(btn, editable, promptTemplate = null) {
           tweetText,
           promptTemplate: normalizeGrokPromptText(tpl?.prompt || tpl),
           temporaryChat: grokTemporaryChat,
+          replyCount: aiReplyCount,
           onProgress,
         });
       })()
@@ -4508,7 +4668,11 @@ async function handleGrokGenerate(btn, editable, promptTemplate = null) {
         promptTemplate: normalizeGrokPromptText(tpl?.prompt || tpl),
       }, onProgress);
     if (epoch !== grokGenEpoch) return;
-    showGrokOptions(comments, editable, { streaming: false, anchor: btn });
+    showGrokOptions(
+      Array.isArray(comments) ? comments.slice(0, aiReplyCount) : comments,
+      editable,
+      { streaming: false, anchor: btn, authorMode, authorNote },
+    );
   } catch (err) {
     console.debug('[XVM-AI] generation failed', err);
     if (epoch !== grokGenEpoch) return;
@@ -4550,16 +4714,29 @@ function injectGrokReplyButtons(root = document) {
     if (target.placement === 'mobile-top') {
       btn.classList.add('xvm-grok-generate-btn--mobile-top');
     }
+    const recentComment = hasRecentReplyClickContext() ? grokLastReplyArticle : null;
+    const authorMode = isAuthorReplyTarget(recentComment)
+      || isAuthorReplyTarget(findReplyArticleForAiComposer(composerRoot));
+    btn.dataset.xvmMode = authorMode ? 'author' : 'comment';
     setGrokButtonLabel(btn);
-    btn.title = '使用提示词模板生成评论';
+    btn.title = authorMode
+      ? '以原帖作者的身份回复这条评论。点一条填入，不会自动发送。'
+      : '用当前模板生成评论。点一条填入回复框，不会自动发送。';
     btn.addEventListener('click', (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
-      if (grokPromptTemplates.length > 1) {
-        showGrokTemplateMenu(btn, editable);
-      } else {
-        handleGrokGenerate(btn, editable);
-      }
+      handleGrokGenerate(btn, editable);
+    });
+    const caret = document.createElement('button');
+    caret.type = 'button';
+    caret.className = 'xvm-grok-template-caret';
+    caret.textContent = '▾';
+    caret.title = '更换评论模板';
+    caret.setAttribute('aria-label', '更换评论模板');
+    caret.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      showGrokTemplateMenu(btn, editable);
     });
     if (target.insertBefore?.parentElement === host) {
       prepareGrokActionsHost(host);
@@ -4571,6 +4748,105 @@ function injectGrokReplyButtons(root = document) {
       prepareGrokActionsHost(host);
       host.appendChild(btn);
     }
+    if (btn.parentElement) btn.insertAdjacentElement('afterend', caret);
+  }
+}
+
+function waitForReplyComposer(targetArticle, timeoutMs = 2500) {
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const tick = () => {
+      const dialogEditor = document.querySelector('[role="dialog"] [data-testid="tweetTextarea_0"][contenteditable="true"], [role="dialog"] div[role="textbox"][contenteditable="true"]');
+      if (dialogEditor) return resolve(dialogEditor);
+      const editors = document.querySelectorAll('[data-testid="tweetTextarea_0"][contenteditable="true"]');
+      for (const editor of editors) {
+        const composerRoot = findReplyComposerRoot(editor);
+        if (findReplyArticleForAiComposer(composerRoot) === targetArticle) return resolve(editor);
+      }
+      if (Date.now() - start >= timeoutMs) return resolve(null);
+      setTimeout(tick, 80);
+    };
+    tick();
+  });
+}
+
+async function startAuthorReply(article, replyBtn) {
+  if (!article || !replyBtn || replyBtn.dataset.xvmAuthorBusy === '1') return;
+  replyBtn.dataset.xvmAuthorBusy = '1';
+  const mainArticle = findOwnThreadRoot(article);
+  const payload = buildAuthorReplyPayload(article, mainArticle);
+  if (!payload) {
+    showGrokErrorToast('没读到主贴或当前评论');
+    delete replyBtn.dataset.xvmAuthorBusy;
+    return;
+  }
+  grokLastReplyArticle = article;
+  grokLastReplyClickAt = Date.now();
+  grokLastReplyThreadOg = mainArticle;
+  replyBtn.click();
+  try {
+    const editable = await waitForReplyComposer(article);
+    if (!editable) {
+      showGrokErrorToast('没有打开回复框');
+      return;
+    }
+    injectGrokReplyButtons();
+    const composerRoot = findReplyComposerRoot(editable);
+    const btn = composerRoot?.querySelector('.xvm-grok-generate-btn');
+    if (!btn) {
+      showGrokErrorToast('回复框已打开，但没有找到回评按钮');
+      return;
+    }
+    handleGrokGenerate(btn, editable, { id: 'author-reply', name: '回评', prompt: AUTHOR_REPLY_PROMPT }, payload);
+  } finally {
+    delete replyBtn.dataset.xvmAuthorBusy;
+  }
+}
+
+function placeAuthorReplyEntry(article) {
+  if (article.querySelector('.xvm-author-reply-row')) return;
+  const replyBtn = Array.from(article.querySelectorAll('[data-testid="reply"]'))
+    .find((node) => node.closest('article[data-testid="tweet"]') === article);
+  const text = Array.from(article.querySelectorAll('[data-testid="tweetText"]'))
+    .find((node) => node.closest('article[data-testid="tweet"]') === article);
+  const row = document.createElement('div');
+  row.className = 'xvm-author-reply-row';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'xvm-author-reply-btn';
+  btn.textContent = '回评';
+  btn.title = '读取主贴和这条评论，再生成回复草稿。不会自动发送';
+  btn.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (!replyBtn) {
+      showGrokErrorToast('这条评论没有回复按钮');
+      return;
+    }
+    startAuthorReply(article, replyBtn);
+  });
+  const hint = document.createElement('span');
+  hint.className = 'xvm-author-reply-hint';
+  hint.textContent = '读取主贴和这条评论';
+  row.append(btn, hint);
+  if (text) text.insertAdjacentElement('afterend', row);
+  else if (replyBtn) replyBtn.closest('div')?.parentElement?.appendChild(row);
+  else article.appendChild(row);
+}
+
+function injectAuthorReplyButtons(root = document) {
+  const statusArticle = findArticleForCurrentStatus();
+  if (!isOwnStatusPage()) {
+    document.querySelectorAll('.xvm-author-reply-row').forEach((row) => row.remove());
+    return;
+  }
+  const articles = root.querySelectorAll?.('article[data-testid="tweet"]') || [];
+  for (const article of articles) {
+    if (article === statusArticle || !isAuthorReplyTarget(article)) {
+      article.querySelectorAll?.('.xvm-author-reply-row').forEach((row) => row.remove());
+      continue;
+    }
+    placeAuthorReplyEntry(article);
   }
 }
 

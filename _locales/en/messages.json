@@ -1,14 +1,14 @@
 {
   "extName": {
-    "message": "X Viral Monitor",
+    "message": "X Quick Reply",
     "description": "Extension name"
   },
   "extDescription": {
-    "message": "Velocity badges, long-image reader, Markdown copy, supporter chart, and Grok reply drafts — all on X. No data collection.",
+    "message": "Draft reply candidates in the X composer. You pick one. Nothing is sent automatically.",
     "description": "Extension description"
   },
   "popupSubtitle": {
-    "message": "Real-time impression velocity on X tweets"
+    "message": "Draft a reply, then send it yourself"
   },
   "tierNormal": {
     "message": "Normal"

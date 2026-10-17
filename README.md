@@ -1,3 +1,15 @@
+# X 快回
+
+基于 [Icy-Cat/x-viral-monitor](https://github.com/Icy-Cat/x-viral-monitor)（MIT）改成的回复插件。打开别人的帖子，点 **快回** 生成评论。打开自己的帖子，每条评论旁有 **回评**。它会先读主贴和这条评论，再按主贴的立场回复这条评论。点一条填入，不会自动发送。
+
+流速徽章、排行榜、星图、Markdown 复制和广告裁剪默认关闭。弹窗打开就是「AI 评论」。默认走已登录的 X Grok，不需要另配 Key；也可以在弹窗里换成 OpenAI 兼容接口或本机 Ollama。
+
+这份本地构建走官方的 community-dev 通道，Pro 闸门全部打开，没有试用倒计时，也不需要 License。流速过滤默认仍是关的，要在弹窗「过滤」里自己打开。
+
+加载：Chrome 打开 `chrome://extensions/`，打开开发者模式，加载已解压的扩展程序，选这个仓库根目录。改完代码后在扩展页点重新加载，再刷新 x.com。
+
+---
+
 # X Viral Monitor
 
 [English](README.en.md)

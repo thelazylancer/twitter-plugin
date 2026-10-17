@@ -62,7 +62,7 @@
   }
 
   function setTab(name, opts = {}) {
-    if (!TABS.includes(name)) name = 'filter';
+    if (!TABS.includes(name)) name = 'ai';
     const persist = opts.persist !== false;
     document.body.dataset.tab = name;
     document.querySelectorAll('[role="tab"][data-tab]').forEach((btn) => {
@@ -88,15 +88,15 @@
       markTabReady();
     }
     try {
-      chrome.storage.local.get({ [ACTIVE_TAB_KEY]: 'filter' }, (items) => {
+      chrome.storage.local.get({ [ACTIVE_TAB_KEY]: 'ai' }, (items) => {
         const saved = items?.[ACTIVE_TAB_KEY];
-        const next = isValidTab(saved) ? saved : 'filter';
+        const next = isValidTab(saved) ? saved : 'ai';
         setTab(next, { persist: false });
         try { localStorage.setItem(ACTIVE_TAB_KEY, next); } catch (_) {}
         markTabReady();
       });
     } catch (_) {
-      setTab('filter', { persist: false });
+      setTab('ai', { persist: false });
       markTabReady();
     }
   }

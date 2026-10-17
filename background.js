@@ -1,7 +1,7 @@
 const PLACEHOLDER = '[推文内容]';
 const DEFAULT_PROVIDER = 'x-grok';
 const DEFAULT_PLATFORM = 'openai';
-const DEFAULT_REPLY_COUNT = 10;
+const DEFAULT_REPLY_COUNT = 3;
 const LICENSE_PROXY_URL = 'https://xvm-license.lengkuxiaomao.workers.dev';
 const LICENSE_PROXY_ACTIONS = new Set(['activate', 'validate', 'deactivate']);
 

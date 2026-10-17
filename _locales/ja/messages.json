@@ -1,12 +1,12 @@
 {
   "extName": {
-    "message": "X バイラルモニター"
+    "message": "X クイック返信"
   },
   "extDescription": {
-    "message": "X 投稿の流速バッジ・長尺画像ビューア・Markdown コピー・サポーター星図・Grok 返信補助 — すべてローカル処理、データ収集なし。"
+    "message": "X の返信欄でコメント候補を生成し、選んだ文だけを入力します。自動送信はしません。"
   },
   "popupSubtitle": {
-    "message": "X 投稿のリアルタイム表示流速"
+    "message": "返信案を作って、自分で送信"
   },
   "tierNormal": {
     "message": "通常"

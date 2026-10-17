@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>X Viral Monitor</title>
+  <title>X 快回</title>
   <style>
     /*
      * Tabs layout (mock A) — shadcn-style dark popup.
@@ -718,7 +718,7 @@
     #xvm-toast.show { opacity: 1; }
   </style>
 </head>
-<body data-tab="filter" data-tier="free" data-theme="light">
+<body data-tab="ai" data-tier="free" data-theme="light">
 
   <!-- ============ Lucide SVG icon sprite ============ -->
   <svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden" focusable="false">
@@ -736,9 +736,9 @@
 
     <!-- ============ Compact header ============ -->
     <header class="app-header">
-      <img class="app-logo" src="icons/icon_origin.svg" alt="X Viral Monitor">
+      <img class="app-logo" src="icons/icon_origin.svg" alt="X 快回">
       <div class="app-title">
-        <span class="name">X-Viral-Monitor</span>
+        <span class="name">X 快回</span>
         <span class="sub" data-i18n="popupSubtitle">Real-time impression velocity on X tweets</span>
       </div>
       <span id="tier-chip">FREE</span>
@@ -756,9 +756,9 @@
     <!-- ============ Tab bar ============ -->
     <div class="tabbar" role="tablist">
       <button type="button" class="tab-btn" role="tab" data-tab="pro"         aria-selected="false"><span data-i18n="tabPro">Pro</span></button>
-      <button type="button" class="tab-btn" role="tab" data-tab="filter"      aria-selected="true"><span data-i18n="tabFilter">Filter</span></button>
+      <button type="button" class="tab-btn" role="tab" data-tab="filter"      aria-selected="false"><span data-i18n="tabFilter">Filter</span></button>
       <button type="button" class="tab-btn" role="tab" data-tab="leaderboard" aria-selected="false"><span data-i18n="tabLeaderboard">Leaderboard</span></button>
-      <button type="button" class="tab-btn" role="tab" data-tab="ai"          aria-selected="false"><span data-i18n="tabAi">AI 评论</span></button>
+      <button type="button" class="tab-btn" role="tab" data-tab="ai"          aria-selected="true"><span data-i18n="tabAi">AI 评论</span></button>
       <button type="button" class="tab-btn" role="tab" data-tab="about"       aria-selected="false"><span data-i18n="tabAbout">About</span></button>
     </div>
 
@@ -789,7 +789,7 @@
     </section>
 
     <!-- ============ Tab: Filter ============ -->
-    <section role="tabpanel" id="tabpanel-filter" data-tab-panel="filter" data-active="1">
+    <section role="tabpanel" id="tabpanel-filter" data-tab-panel="filter">
       <!-- popup-rate-filter.js renders into #rate-filter-section with
            nested Short/Long sub-tabs (see rebuilt buildSection). -->
       <div id="content-filter-section" class="cf-section" data-locked="0"></div>
@@ -859,7 +859,7 @@
     </section>
 
     <!-- ============ Tab: AI ============ -->
-    <section role="tabpanel" id="tabpanel-ai" data-tab-panel="ai">
+    <section role="tabpanel" id="tabpanel-ai" data-tab-panel="ai" data-active="1">
 
       <div class="panel-card ai-provider-card">
         <h3 data-i18n="aiProviderTitle">AI comment provider</h3>

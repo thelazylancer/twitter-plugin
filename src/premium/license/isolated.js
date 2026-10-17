@@ -279,6 +279,9 @@
   }
 
   async function resolveTier() {
+    if (globalThis.__xvmIsCommunityDevBuild === true) {
+      return { tier: 'pro', daysLeft: 0, source: 'community-dev' };
+    }
     const stored = await safeStorageGet(STORAGE_KEY, null);
     const trial = await safeStorageGet(TRIAL_KEY, null);
     const r = resolveTierFrom(stored, trial, Date.now());
@@ -455,7 +458,7 @@
 
   // ─── Bootstrap: ensure trial started, push tier so MAIN can render ──
   (async () => {
-    await ensureTrialStarted();
+    if (globalThis.__xvmIsCommunityDevBuild !== true) await ensureTrialStarted();
     pushTier();
     pushRateSettings();
     pushContentFilterSettings();

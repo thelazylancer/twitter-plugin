@@ -37,8 +37,8 @@ function contrastRatio(foreground, background) {
 }
 
 describe('#45 popup tabs structure (mock A)', () => {
-  it('body declares data-tab default "filter" + data-tier "free" + data-theme "light"', () => {
-    expect(/<body[^>]*data-tab="filter"/.test(html)).toBe(true);
+  it('body declares data-tab default "ai" + data-tier "free" + data-theme "light"', () => {
+    expect(/<body[^>]*data-tab="ai"/.test(html)).toBe(true);
     expect(/<body[^>]*data-tier="free"/.test(html)).toBe(true);
     expect(/<body[^>]*data-theme="light"/.test(html)).toBe(true);
   });
@@ -51,10 +51,10 @@ describe('#45 popup tabs structure (mock A)', () => {
     }
   });
 
-  it('Filter tab is the default active (aria-selected="true")', () => {
-    const filterBtn = html.match(/<button[^>]*data-tab="filter"[^>]*>/)?.[0] || '';
-    expect(/aria-selected="true"/.test(filterBtn),
-      'Filter tab must be the default-selected (Pro feature surface)'
+  it('AI tab is the default active (aria-selected="true")', () => {
+    const aiBtn = html.match(/<button[^>]*data-tab="ai"[^>]*>/)?.[0] || '';
+    expect(/aria-selected="true"/.test(aiBtn),
+      'AI tab must be the default-selected reply surface'
     ).toBe(true);
   });
 
@@ -67,7 +67,7 @@ describe('#45 popup tabs structure (mock A)', () => {
   });
 
   it('header includes the SVG app icon, tier chip, language button, and theme toggle button', () => {
-    expect(/<img class="app-logo" src="icons\/icon_origin\.svg" alt="X Viral Monitor">/.test(html)).toBe(true);
+    expect(/<img class="app-logo" src="icons\/icon_origin\.svg" alt="X 快回">/.test(html)).toBe(true);
     expect(/id="tier-chip"/.test(html)).toBe(true);
     expect(/id="language-toggle"/.test(html)).toBe(true);
     expect(/id="theme-toggle"/.test(html)).toBe(true);
@@ -372,12 +372,12 @@ describe('#45 popup-dashboard.js tab router', () => {
     expect(/ACTIVE_TAB_KEY\s*=\s*['"]xvm_popup_active_tab['"]/.test(dashJs)).toBe(true);
     expect(/localStorage\.getItem\(ACTIVE_TAB_KEY\)/.test(dashJs)).toBe(true);
     expect(/localStorage\.setItem\(ACTIVE_TAB_KEY,\s*name\)/.test(dashJs)).toBe(true);
-    expect(/chrome\.storage\.local\.get\(\s*\{\s*\[ACTIVE_TAB_KEY\]\s*:\s*['"]filter['"]\s*\}/.test(dashJs)).toBe(true);
+    expect(/chrome\.storage\.local\.get\(\s*\{\s*\[ACTIVE_TAB_KEY\]\s*:\s*['"]ai['"]\s*\}/.test(dashJs)).toBe(true);
     expect(/chrome\.storage\.local\.set\(\s*\{\s*\[ACTIVE_TAB_KEY\]\s*:\s*name\s*\}/.test(dashJs)).toBe(true);
     expect(/<body[^>]*data-tab-ready=/.test(html)).toBe(false);
     expect(/body:not\(\[data-tab-ready="1"\]\)\s+\.popup\s*\{\s*visibility:\s*hidden/.test(html)).toBe(true);
     expect(/document\.body\.dataset\.tabReady\s*=\s*['"]1['"]/.test(dashJs)).toBe(true);
-    expect(/const\s+next\s*=\s*isValidTab\(saved\)\s*\?\s*saved\s*:\s*['"]filter['"]/.test(dashJs)).toBe(true);
+    expect(/const\s+next\s*=\s*isValidTab\(saved\)\s*\?\s*saved\s*:\s*['"]ai['"]/.test(dashJs)).toBe(true);
     expect(/setTab\(next,\s*\{\s*persist:\s*false\s*\}\s*\)/.test(dashJs)).toBe(true);
   });
   it('listens for xvm-pro-nav (activate link click)', () => {
@@ -472,12 +472,12 @@ describe('#45 i18n keys (mock A + dual theme)', () => {
   it('keeps the original Chinese Grok default prompt templates', () => {
     expect(popupJs).toContain("id: 'short-cn', name: '中文短评'");
     expect(popupJs).toContain("id: 'tieba-laoge', name: '贴吧老哥'");
-    expect(popupJs).toContain('为我生成针对该推文的10条评论,每条评论只包含可直接发布的评论正文，用代码块包裹。');
-    expect(popupJs).toContain('用贴吧老哥的语气为该推文生成10条评论。整体阴阳怪气，但不带脏字、不人身攻击；保持口语感，不要装文艺、不要写得像新闻评论；每条评论控制在 30 字以内，简短精悍。');
+    expect(popupJs).toContain('为我生成针对该推文的3条评论,每条评论只包含可直接发布的评论正文，用代码块包裹。');
+    expect(popupJs).toContain('用贴吧老哥的语气为该推文生成3条评论。整体阴阳怪气，但不带脏字、不人身攻击；保持口语感，不要装文艺、不要写得像新闻评论；每条评论控制在 30 字以内，简短精悍。');
     expect(bridgeJs).toContain("id: 'short-cn', name: '中文短评'");
     expect(bridgeJs).toContain("id: 'tieba-laoge', name: '贴吧老哥'");
-    expect(bridgeJs).toContain('用贴吧老哥的语气为该推文生成10条评论。整体阴阳怪气，但不带脏字、不人身攻击；保持口语感，不要装文艺、不要写得像新闻评论；每条评论控制在 30 字以内，简短精悍。');
-    expect(bridgeJs).toContain('为我生成针对该推文的10条评论, 每条评论只包含可直接发布的评论正文，用代码块包裹。');
+    expect(bridgeJs).toContain('用贴吧老哥的语气为该推文生成3条评论。整体阴阳怪气，但不带脏字、不人身攻击；保持口语感，不要装文艺、不要写得像新闻评论；每条评论控制在 30 字以内，简短精悍。');
+    expect(bridgeJs).toContain('为我生成针对该推文的3条评论, 每条评论只包含可直接发布的评论正文，用代码块包裹。');
   });
 });
 
@@ -864,13 +864,13 @@ describe('#15 AI comment provider contract', () => {
     expect(bridgeJs).not.toContain('function bridgeInsertTextIntoReply');
     expect(bridgeJs).not.toContain('xvm-grok-options-list');
     expect(contentJs).toContain('function showGrokOptions');
-    expect(contentJs).toContain('showGrokOptions(running, editable, { streaming: true, anchor: btn })');
+    expect(contentJs).toContain('showGrokOptions(capped, editable, { streaming: true, anchor: btn, authorMode, authorNote })');
   });
 });
 
 describe('#45 carry-over invariants', () => {
-  it('leaderboard default ON (bridge + popup mirror)', () => {
-    expect(/featureVelocityLeaderboard:\s*true/.test(bridgeJs)).toBe(true);
-    expect(/featureVelocityLeaderboard:\s*true/.test(popupJs)).toBe(true);
+  it('leaderboard default OFF so the reply fork stays quiet (bridge + popup mirror)', () => {
+    expect(/featureVelocityLeaderboard:\s*false/.test(bridgeJs)).toBe(true);
+    expect(/featureVelocityLeaderboard:\s*false/.test(popupJs)).toBe(true);
   });
 });
