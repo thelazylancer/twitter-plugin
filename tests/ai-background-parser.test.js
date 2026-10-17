@@ -37,6 +37,11 @@ describe('AI background comment parser', () => {
     const prompt = renderPrompt('\uFEFFCafe\u0301\u0000\n\t正文\u000B\uD800', '[推文内容]', 1);
 
     expect(prompt).toContain('Café\n\t正文\uFFFD');
+    const english = renderPrompt('This post is in English.', '为该推文生成3条评论', 3, { replyLanguage: 'post' });
+    expect(english).toContain('Write every reply in English only');
+    expect(english).not.toContain('请只输出');
+    const forced = renderPrompt('This post is in English.', '为该推文生成3条评论', 3, { replyLanguage: 'zh' });
+    expect(forced).toContain('Write every reply in Chinese only');
     expect(prompt).not.toMatch(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\uFEFF]/);
   });
 

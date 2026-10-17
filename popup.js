@@ -171,6 +171,7 @@ const DEFAULT_FEATURES = {
   aiModel: 'gpt-4o-mini',
   aiReplyCount: 3,
   aiLanguage: 'auto',
+  replyLanguage: 'post',
   language: initialLanguagePref,
   freshnessEnabled: true,
   freshnessHotMinutes: 5,
@@ -415,6 +416,7 @@ const aiPlatformSelect = document.getElementById('ai-platform');
 const aiBaseUrlInput = document.getElementById('ai-base-url');
 const aiModelInput = document.getElementById('ai-model');
 const aiReplyCountInput = document.getElementById('ai-reply-count');
+const replyLanguageSelect = document.getElementById('reply-language');
 const aiApiKeyInput = document.getElementById('ai-api-key');
 const aiGrokSummary = document.getElementById('ai-grok-summary');
 const aiConnectionGrid = document.getElementById('ai-connection-grid');
@@ -575,8 +577,11 @@ function buildAiSyncPatch() {
     aiModel: model,
     aiReplyCount: normalizeAiReplyCount(aiReplyCountInput?.value),
     aiLanguage: 'auto',
+    replyLanguage: ['post', 'zh', 'en', 'ja'].includes(replyLanguageSelect?.value) ? replyLanguageSelect.value : 'post',
   };
 }
+
+replyLanguageSelect?.addEventListener('change', () => saveAiProviderSettings(() => flash('回复语言已保存')));
 
 function saveAiProviderSettings(callback) {
   const syncPatch = buildAiSyncPatch();
@@ -704,6 +709,9 @@ chrome.storage.sync.get(STORAGE_DEFAULTS, (items) => {
   if (aiBaseUrlInput) aiBaseUrlInput.value = items.aiBaseUrl || AI_PLATFORM_PRESETS[normalizeAiPlatform(items.aiOpenAIPlatform)].baseUrl;
   if (aiModelInput) aiModelInput.value = items.aiModel || AI_PLATFORM_PRESETS[normalizeAiPlatform(items.aiOpenAIPlatform)].model;
   if (aiReplyCountInput) aiReplyCountInput.value = normalizeAiReplyCount(items.aiReplyCount);
+  if (replyLanguageSelect) {
+    replyLanguageSelect.value = ['post', 'zh', 'en', 'ja'].includes(items.replyLanguage) ? items.replyLanguage : 'post';
+  }
   if (freshnessToggleEl) freshnessToggleEl.checked = items.freshnessEnabled !== false;
   if (freshnessHotMinutesEl) freshnessHotMinutesEl.value = items.freshnessHotMinutes || 5;
   if (freshnessHotColorEl) freshnessHotColorEl.value = items.freshnessHotColor || '#f4212e';

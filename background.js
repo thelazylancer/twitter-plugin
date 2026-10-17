@@ -141,13 +141,47 @@ function sanitizeAiPromptText(value) {
     .trim();
 }
 
-function renderPrompt(tweetText, templateText, replyCount) {
+function textBeingRepliedTo(text) {
+  const raw = String(text || '');
+  const comment = raw.split('【当前评论】')[1] || raw.split('【对该推文的回复】')[1] || raw;
+  return comment.replace(/【(?:主贴|当前评论|原推文|对该推文的回复|对方的评论|我的原帖)】/g, '');
+}
+
+function replyLanguageOf(text) {
+  const body = textBeingRepliedTo(text);
+  const kana = (body.match(/[\u3040-\u30ff]/g) || []).length;
+  const cjk = (body.match(/[\u4e00-\u9fff]/g) || []).length;
+  const latin = (body.match(/[A-Za-z]/g) || []).length;
+  if (kana > 0 && kana >= cjk) return 'ja';
+  if (cjk > latin) return 'zh';
+  return 'en';
+}
+
+function normalizePluginLang(value) {
+  const raw = String(value || '').toLowerCase();
+  if (raw.startsWith('zh')) return 'zh';
+  if (raw.startsWith('ja')) return 'ja';
+  if (raw.startsWith('en')) return 'en';
+  return 'zh';
+}
+
+function resolveReplyLang(text, replyLanguage) {
+  const mode = ['post', 'zh', 'en', 'ja'].includes(replyLanguage) ? replyLanguage : 'post';
+  return mode === 'post' ? replyLanguageOf(text) : mode;
+}
+
+function outputHint(text, replyCount, options = {}) {
+  const name = { en: 'English', zh: 'Chinese', ja: 'Japanese' }[resolveReplyLang(text, options.replyLanguage)];
+  return `Write every reply in ${name} only. Do not follow the template language. Return at most ${replyCount} replies. Output only ready-to-post text, each inside its own code block.`;
+}
+
+function renderPrompt(tweetText, templateText, replyCount, options = {}) {
   const text = sanitizeAiPromptText(tweetText);
   const tpl = sanitizeAiPromptText(templateText);
   const rendered = tpl
     ? (tpl.includes(PLACEHOLDER) ? tpl.split(PLACEHOLDER).join(text) : `${text}\n\n${tpl}`)
     : `${text}\n\nGenerate ${replyCount} natural replies. Output only ready-to-post reply text, each inside its own code block.`;
-  return `${rendered}\n\n请只输出可直接发布的评论候选，优先使用代码块分隔。最多返回 ${replyCount} 条。`;
+  return `${rendered}\n\n${outputHint(text, replyCount, options)}`;
 }
 
 function extractComments(rawText, limit = DEFAULT_REPLY_COUNT) {
@@ -278,7 +312,9 @@ async function loadConfig() {
 async function generateWithOllama(config, payload, onProgress) {
   const baseUrl = assertAllowedOllamaBaseUrl(config.baseUrl || 'http://localhost:11434');
   const model = config.model || 'llama3.1';
-  const prompt = renderPrompt(payload.tweetText, payload.promptTemplate, config.replyCount);
+  const prompt = renderPrompt(payload.tweetText, payload.promptTemplate, config.replyCount, {
+    replyLanguage: payload.replyLanguage,
+  });
   let generated = '';
   let pending = '';
   const progressState = { lastProgressSig: '' };
@@ -328,7 +364,9 @@ async function generateWithOpenAICompatible(config, payload, onProgress) {
   const model = config.model;
   if (!model) throw new Error('请先填写模型名称');
   if (!config.apiKey && !isLocalHttpUrl(baseUrl)) throw new Error('请先填写 API Key');
-  const prompt = renderPrompt(payload.tweetText, payload.promptTemplate, config.replyCount);
+  const prompt = renderPrompt(payload.tweetText, payload.promptTemplate, config.replyCount, {
+    replyLanguage: payload.replyLanguage,
+  });
   const headers = { 'content-type': 'application/json' };
   if (config.apiKey) headers.authorization = `Bearer ${config.apiKey}`;
   if (config.platform === 'openrouter') {

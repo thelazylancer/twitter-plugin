@@ -250,6 +250,7 @@ const DEFAULT_FEATURES = {
   aiModel: 'gpt-4o-mini',
   aiReplyCount: 3,
   aiLanguage: 'auto',
+  replyLanguage: 'post',
   language: 'auto',
   freshnessEnabled: true,
   freshnessHotMinutes: 5,
@@ -1441,6 +1442,7 @@ window.addEventListener('message', (event) => {
             aiModel: syncItems.aiModel || DEFAULT_FEATURES.aiModel,
             aiReplyCount: syncItems.aiReplyCount || DEFAULT_FEATURES.aiReplyCount,
             aiLanguage: syncItems.aiLanguage || DEFAULT_FEATURES.aiLanguage,
+            replyLanguage: ['post', 'zh', 'en', 'ja'].includes(syncItems.replyLanguage) ? syncItems.replyLanguage : 'post',
             authorReplyPrompt: syncItems.authorReplyPrompt || '',
             capturedTxId: localItems.xvmGrokCapturedTxId,
           }, '*');
@@ -1531,7 +1533,7 @@ safeChromeCall(() => {
       const pref = changes.theme.newValue || 'system';
       window.postMessage({ type: 'XVM_THEME_UPDATE', pref }, '*');
     }
-    const aiTouched = changes.aiProvider || changes.aiOpenAIPlatform || changes.aiBaseUrl || changes.aiModel || changes.aiReplyCount || changes.aiLanguage;
+    const aiTouched = changes.aiProvider || changes.aiOpenAIPlatform || changes.aiBaseUrl || changes.aiModel || changes.aiReplyCount || changes.aiLanguage || changes.replyLanguage;
     const grokTouched = changes.grokCommentPrompt || changes.grokPromptTemplates || changes.grokSelectedPromptId || changes.grokTemporaryChat || changes.grokEnterToReply || changes.authorReplyPrompt || changes.language || aiTouched;
     const bookmarkTimelineInjectTouched = changes.featureBookmarkTimelineInject || changes.bookmarkTimelineInjectFolderIds || changes.bookmarkTimelineInjectEvery;
     if (!changes.trending && !changes.viral && !changes.featureVelocityLeaderboard && !changes.featureCopyAsMarkdown && !changes.featureStarChart && !changes.featureBookmarkFolders && !bookmarkTimelineInjectTouched && !changes.showBookmarkCount && !changes.leaderboardEdgeHideEnabled && !changes.badgeStyle && !changes.leaderboardCount && !changes.leaderboardColumns && !changes.language && !grokTouched) return;
@@ -1577,6 +1579,7 @@ safeChromeCall(() => {
             aiModel: items.aiModel || DEFAULT_FEATURES.aiModel,
             aiReplyCount: items.aiReplyCount || DEFAULT_FEATURES.aiReplyCount,
             aiLanguage: items.aiLanguage || DEFAULT_FEATURES.aiLanguage,
+            replyLanguage: ['post', 'zh', 'en', 'ja'].includes(items.replyLanguage) ? items.replyLanguage : 'post',
             authorReplyPrompt: items.authorReplyPrompt || '',
           }, '*');
         });

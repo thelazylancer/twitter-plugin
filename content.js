@@ -378,6 +378,7 @@ let aiBaseUrl = 'https://api.openai.com/v1';
 let aiModel = 'gpt-4o-mini';
 let aiReplyCount = 3;
 let aiLanguage = 'auto';
+let replyLanguage = 'post';
 let aiRequestSeq = 0;
 const aiPendingRequests = new Map();
 
@@ -429,6 +430,9 @@ window.addEventListener('message', (event) => {
   }
   if (['auto', 'zh_CN', 'en', 'ja'].includes(event.data.aiLanguage)) {
     aiLanguage = event.data.aiLanguage;
+  }
+  if (['post', 'zh', 'en', 'ja'].includes(event.data.replyLanguage)) {
+    replyLanguage = event.data.replyLanguage;
   }
 });
 
@@ -5010,6 +5014,7 @@ function requestExternalAiGeneration(payload, onProgress = null) {
         model: aiModel,
         replyCount: aiReplyCount,
         language: aiLanguage,
+        replyLanguage,
       },
     }, '*');
   });
@@ -5118,6 +5123,7 @@ async function handleGrokGenerate(btn, editable, promptTemplate = null, authorJo
           promptTemplate: normalizeGrokPromptText(tpl?.prompt || tpl),
           temporaryChat: grokTemporaryChat,
           replyCount: aiReplyCount,
+          replyLanguage,
           onProgress,
         });
       })()

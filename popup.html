@@ -906,6 +906,14 @@
           <div class="ai-provider-section-title" data-i18n="aiGenerationSettingsTitle">Generation settings</div>
           <div class="ai-generation-grid">
             <label class="field" for="ai-reply-count"><span data-i18n="aiReplyCountLabel">Reply count</span><input id="ai-reply-count" type="number" min="1" max="20" step="1"></label>
+            <label class="field" for="reply-language"><span data-i18n="replyLanguageLabel">回复语言</span>
+              <select id="reply-language">
+                <option value="post" data-i18n="replyLanguagePost" selected>跟随帖子</option>
+                <option value="zh" data-i18n="replyLanguageZh">中文</option>
+                <option value="en" data-i18n="replyLanguageEn">英文</option>
+                <option value="ja" data-i18n="replyLanguageJa">日语</option>
+              </select>
+            </label>
           </div>
         </div>
         <div class="ft-desc" id="ai-provider-hint" data-i18n="aiProviderHint">Cloud providers send tweet context to the selected AI service. Ollama runs on your local machine.</div>
