@@ -970,6 +970,24 @@
         </div>
       </div>
 
+      <div class="panel-card">
+        <div class="feature-row">
+          <div class="ft-body">
+            <label for="feat-freshness"><div class="ft-title" data-i18n="freshnessTitle">新鲜度上色</div></label>
+            <div class="ft-desc" data-i18n="freshnessDesc">原创帖和评论按发布时间上色。转发、引用、广告不上色。页面停着不改色。</div>
+          </div>
+          <label class="switch" for="feat-freshness" aria-label="新鲜度上色"><input id="feat-freshness" type="checkbox" checked><span class="slider"></span></label>
+        </div>
+        <div class="row">
+          <label class="field"><span data-i18n="freshnessFreshMinutes">10 分钟内</span><input id="freshness-fresh-minutes" type="number" min="1" max="1440" step="1" value="10"></label>
+          <label class="field"><span data-i18n="freshnessFreshColor">颜色</span><input id="freshness-fresh-color" type="color" value="#1d9bf0"></label>
+        </div>
+        <div class="row">
+          <label class="field"><span data-i18n="freshnessWarmMinutes">30 分钟内</span><input id="freshness-warm-minutes" type="number" min="1" max="1440" step="1" value="30"></label>
+          <label class="field"><span data-i18n="freshnessWarmColor">颜色</span><input id="freshness-warm-color" type="color" value="#f7b928"></label>
+        </div>
+      </div>
+
       <p class="footer-line">
         <a href="https://github.com/Icy-Cat/x-viral-monitor" target="_blank" rel="noopener">github.com/Icy-Cat/x-viral-monitor</a>
         · <a href="https://x.com/intent/follow?screen_name=icycat" target="_blank" rel="noopener">X @icycat</a>

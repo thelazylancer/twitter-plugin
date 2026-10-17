@@ -605,5 +605,11 @@
   "cfRulesRefreshOk":     { "message": "ルールを更新しました。" },
   "cfRulesRefreshErr":    { "message": "取得に失敗しました。後ほど再試行してください。" },
   "cfAutoSaved":          { "message": "自動保存しました" },
-  "advAppearanceTitle": { "message": "外観" }
+  "advAppearanceTitle": { "message": "外観" },
+  "freshnessTitle": { "message": "新しさの色" },
+  "freshnessDesc": { "message": "投稿と返信を公開時刻で色分けします。リポスト、引用、広告は色を付けません。表示中のカードは色を変えません。" },
+  "freshnessFreshMinutes": { "message": "10分以内" },
+  "freshnessFreshColor": { "message": "色" },
+  "freshnessWarmMinutes": { "message": "30分以内" },
+  "freshnessWarmColor": { "message": "色" }
 }

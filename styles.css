@@ -1702,6 +1702,12 @@ article[data-testid="tweet"].xvm-article-linked {
   animation: xvm-grok-pulse 0.9s ease-in-out infinite alternate;
 }
 
+article[data-testid="tweet"][data-xvm-freshness="fresh"],
+article[data-testid="tweet"][data-xvm-freshness="warm"] {
+  box-shadow: inset 3px 0 0 var(--xvm-freshness-color, #1d9bf0);
+  background: var(--xvm-freshness-wash, transparent);
+}
+
 .xvm-author-reply-row {
   display: flex;
   align-items: center;

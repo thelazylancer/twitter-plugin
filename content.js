@@ -10,6 +10,11 @@ const DEFAULT_THRESHOLDS = {
 };
 let velocityThresholds = { ...DEFAULT_THRESHOLDS };
 let velocityBadgesEnabled = false;
+let freshnessEnabled = true;
+let freshnessFreshMinutes = 10;
+let freshnessWarmMinutes = 30;
+let freshnessFreshColor = '#1d9bf0';
+let freshnessWarmColor = '#f7b928';
 
 // === i18n ===
 let localizedStrings = {};
@@ -236,6 +241,7 @@ window.addEventListener('message', (event) => {
   velocityThresholds = normalizeThresholds(event.data.thresholds);
   badgeStyle = event.data.badgeStyle === 'inline-classic' ? 'inline-classic' : 'pill-solid';
   velocityBadgesEnabled = event.data.featureVelocityBadges === true;
+  applyFreshnessSettings(event.data);
   applyBadgeStyle();
   // Apply showBookmarkCount BEFORE renderBadges so the very first
   // post-load render respects the persisted setting — otherwise the
@@ -3118,6 +3124,98 @@ function hideLeaderboard() {
   clearLink();
 }
 
+function freshnessApi() {
+  return window.__xvmFreshness || {
+    tier: () => '',
+    normalizeMinutes: (value, fallback) => fallback,
+    normalizeColor: (_value, fallback) => fallback,
+    wash: () => 'transparent',
+  };
+}
+
+function applyFreshnessSettings(data = {}) {
+  const api = freshnessApi();
+  freshnessEnabled = data.freshnessEnabled !== false;
+  freshnessFreshMinutes = api.normalizeMinutes(data.freshnessFreshMinutes, 10);
+  freshnessWarmMinutes = api.normalizeMinutes(data.freshnessWarmMinutes, 30);
+  freshnessFreshColor = api.normalizeColor(data.freshnessFreshColor, '#1d9bf0');
+  freshnessWarmColor = api.normalizeColor(data.freshnessWarmColor, '#f7b928');
+  document.querySelectorAll('article[data-xvm-freshness-stamped]').forEach((article) => {
+    article.removeAttribute('data-xvm-freshness-stamped');
+    article.removeAttribute('data-xvm-freshness');
+    article.style.removeProperty('--xvm-freshness-color');
+    article.style.removeProperty('--xvm-freshness-wash');
+  });
+  paintFreshness();
+}
+
+function articleOwnTime(article) {
+  return Array.from(article.querySelectorAll('time[datetime]'))
+    .find((node) => node.closest('article[data-testid="tweet"]') === article)
+    ?.getAttribute('datetime') || '';
+}
+
+function isRetweetArticle(article) {
+  return Array.from(article.querySelectorAll('[data-testid="socialContext"]'))
+    .some((node) => node.closest('article[data-testid="tweet"]') === article);
+}
+
+function isQuoteArticle(article) {
+  const own = (selector) => Array.from(article.querySelectorAll(selector))
+    .filter((node) => node.closest('article[data-testid="tweet"]') === article);
+  if (own('[data-testid="quoteTweet"]').length) return true;
+  return own('[data-testid="tweetText"]').length > 1;
+}
+
+function clearFreshnessStyle(article) {
+  article.removeAttribute('data-xvm-freshness');
+  article.style.removeProperty('--xvm-freshness-color');
+  article.style.removeProperty('--xvm-freshness-wash');
+}
+
+function applyFreshnessTier(article, tierName) {
+  if (!tierName) {
+    clearFreshnessStyle(article);
+    return;
+  }
+  const color = tierName === 'fresh' ? freshnessFreshColor : freshnessWarmColor;
+  article.dataset.xvmFreshness = tierName;
+  article.style.setProperty('--xvm-freshness-color', color);
+  article.style.setProperty('--xvm-freshness-wash', freshnessApi().wash(color));
+}
+
+function stampFreshness(article) {
+  if (!article || article.dataset.xvmFreshnessStamped === '1') return;
+  if (article.parentElement?.closest('article[data-testid="tweet"]')) {
+    article.dataset.xvmFreshnessStamped = '1';
+    clearFreshnessStyle(article);
+    return;
+  }
+  const id = getTweetIdFromArticle(article);
+  if ((id && promotedTweetIds.has(id)) || isPromotedArticle(article) || isRetweetArticle(article) || isQuoteArticle(article)) {
+    article.dataset.xvmFreshnessStamped = '1';
+    clearFreshnessStyle(article);
+    return;
+  }
+  const datetime = articleOwnTime(article);
+  if (!datetime) return;
+  const ageMs = Date.now() - new Date(datetime).getTime();
+  article.dataset.xvmFreshnessStamped = '1';
+  applyFreshnessTier(article, freshnessApi().tier(ageMs, freshnessFreshMinutes, freshnessWarmMinutes));
+}
+
+function paintFreshness(root = document) {
+  const articles = root.querySelectorAll?.('article[data-testid="tweet"]') || [];
+  if (!freshnessEnabled) {
+    articles.forEach((article) => {
+      article.removeAttribute('data-xvm-freshness-stamped');
+      clearFreshnessStyle(article);
+    });
+    return;
+  }
+  articles.forEach(stampFreshness);
+}
+
 function getTweetPermalinkFromArticle(article, tweetId = '') {
   if (!article) return '';
   const links = article.querySelectorAll('a[href*="/status/"]');
@@ -3507,6 +3605,7 @@ setInterval(() => {
   } else if (leaderboardEnabled) {
     renderLeaderboard();
   }
+  paintFreshness();
 }, 2000);
 
 // Refresh leaderboard on scroll as virtualized articles come and go
@@ -3565,6 +3664,7 @@ const observer = new MutationObserver((mutations) => {
   if (hasNewArticles) {
     renderBadges();
     injectAuthorReplyButtons();
+    paintFreshness();
   }
   if (touchedComposer) scheduleComposerInject();
 });
@@ -3609,6 +3709,7 @@ if (document.body) {
   installEnterToReplyShortcut();
   injectGrokReplyButtons();
   injectAuthorReplyButtons();
+  paintFreshness();
   bootGrokInjectorRetries();
 } else {
   document.addEventListener('DOMContentLoaded', () => {
@@ -3616,6 +3717,7 @@ if (document.body) {
     installEnterToReplyShortcut();
     injectGrokReplyButtons();
     injectAuthorReplyButtons();
+    paintFreshness();
     bootGrokInjectorRetries();
   });
 }

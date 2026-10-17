@@ -171,6 +171,11 @@ const DEFAULT_FEATURES = {
   aiReplyCount: 3,
   aiLanguage: 'auto',
   language: initialLanguagePref,
+  freshnessEnabled: true,
+  freshnessFreshMinutes: 10,
+  freshnessWarmMinutes: 30,
+  freshnessFreshColor: '#1d9bf0',
+  freshnessWarmColor: '#f7b928',
 };
 const STORAGE_DEFAULTS = { ...DEFAULT_THRESHOLDS, ...DEFAULT_FEATURES };
 const AI_PLATFORM_PRESETS = {
@@ -377,6 +382,11 @@ const grokPromptResetBtn = document.getElementById('grok-prompt-reset');
 const grokTplStatus = document.getElementById('grok-tpl-status');
 const grokTempChatToggle = document.getElementById('grok-temp-chat');
 const grokEnterReplyToggle = document.getElementById('grok-enter-reply');
+const freshnessToggle = document.getElementById('feat-freshness');
+const freshnessFreshMinutesInput = document.getElementById('freshness-fresh-minutes');
+const freshnessWarmMinutesInput = document.getElementById('freshness-warm-minutes');
+const freshnessFreshColorInput = document.getElementById('freshness-fresh-color');
+const freshnessWarmColorInput = document.getElementById('freshness-warm-color');
 const aiProviderSelect = document.getElementById('ai-provider');
 const aiProviderOptions = [...document.querySelectorAll('[data-ai-provider-option]')];
 const aiPlatformSelect = document.getElementById('ai-platform');
@@ -661,6 +671,11 @@ chrome.storage.sync.get(STORAGE_DEFAULTS, (items) => {
   if (aiBaseUrlInput) aiBaseUrlInput.value = items.aiBaseUrl || AI_PLATFORM_PRESETS[normalizeAiPlatform(items.aiOpenAIPlatform)].baseUrl;
   if (aiModelInput) aiModelInput.value = items.aiModel || AI_PLATFORM_PRESETS[normalizeAiPlatform(items.aiOpenAIPlatform)].model;
   if (aiReplyCountInput) aiReplyCountInput.value = normalizeAiReplyCount(items.aiReplyCount);
+  if (freshnessToggle) freshnessToggle.checked = items.freshnessEnabled !== false;
+  if (freshnessFreshMinutesInput) freshnessFreshMinutesInput.value = items.freshnessFreshMinutes || 10;
+  if (freshnessWarmMinutesInput) freshnessWarmMinutesInput.value = items.freshnessWarmMinutes || 30;
+  if (freshnessFreshColorInput) freshnessFreshColorInput.value = items.freshnessFreshColor || '#1d9bf0';
+  if (freshnessWarmColorInput) freshnessWarmColorInput.value = items.freshnessWarmColor || '#f7b928';
   chrome.storage.local.get({ xvmAiApiKey: '' }, (localItems) => {
     if (aiApiKeyInput) aiApiKeyInput.value = localItems.xvmAiApiKey || '';
     updateAiProviderFields();
@@ -847,6 +862,24 @@ colListEl.addEventListener('dragend', () => {
 function persistColumns() {
   chrome.storage.sync.set({ leaderboardColumns: columnsState }, () => flash(tr('flashColumnsSaved')));
 }
+
+function saveFreshnessSettings() {
+  const fresh = Number.parseInt(freshnessFreshMinutesInput?.value, 10);
+  const warm = Number.parseInt(freshnessWarmMinutesInput?.value, 10);
+  chrome.storage.sync.set({
+    freshnessEnabled: freshnessToggle ? freshnessToggle.checked : true,
+    freshnessFreshMinutes: Number.isFinite(fresh) && fresh >= 1 ? fresh : 10,
+    freshnessWarmMinutes: Number.isFinite(warm) && warm >= 1 ? warm : 30,
+    freshnessFreshColor: freshnessFreshColorInput?.value || '#1d9bf0',
+    freshnessWarmColor: freshnessWarmColorInput?.value || '#f7b928',
+  }, () => flash(tr('flashFreshnessSaved') || '新鲜度设置已保存'));
+}
+
+freshnessToggle?.addEventListener('change', saveFreshnessSettings);
+freshnessFreshMinutesInput?.addEventListener('change', saveFreshnessSettings);
+freshnessWarmMinutesInput?.addEventListener('change', saveFreshnessSettings);
+freshnessFreshColorInput?.addEventListener('change', saveFreshnessSettings);
+freshnessWarmColorInput?.addEventListener('change', saveFreshnessSettings);
 
 leaderboardToggle.addEventListener('change', () => {
   chrome.storage.sync.set({ featureVelocityLeaderboard: leaderboardToggle.checked }, () => {

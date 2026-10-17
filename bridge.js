@@ -250,6 +250,11 @@ const DEFAULT_FEATURES = {
   aiReplyCount: 3,
   aiLanguage: 'auto',
   language: 'auto',
+  freshnessEnabled: true,
+  freshnessFreshMinutes: 10,
+  freshnessWarmMinutes: 30,
+  freshnessFreshColor: '#1d9bf0',
+  freshnessWarmColor: '#f7b928',
 };
 const STORAGE_DEFAULTS = { ...DEFAULT_THRESHOLDS, ...DEFAULT_FEATURES };
 const RELEASE_NOTES_SEEN_KEY = 'xvm_release_notes_seen_version';
@@ -454,6 +459,11 @@ async function pushSettings(raw) {
     leaderboardCount: normalizeLeaderboardCount(raw?.leaderboardCount),
     leaderboardColumns: normalizeLeaderboardColumns(raw?.leaderboardColumns),
     badgeStyle: raw?.badgeStyle === 'inline-classic' ? 'inline-classic' : 'pill-solid',
+    freshnessEnabled: raw?.freshnessEnabled !== false,
+    freshnessFreshMinutes: raw?.freshnessFreshMinutes,
+    freshnessWarmMinutes: raw?.freshnessWarmMinutes,
+    freshnessFreshColor: raw?.freshnessFreshColor,
+    freshnessWarmColor: raw?.freshnessWarmColor,
     language: normalizeLanguage(raw?.language),
     effectiveLanguage: getEffectiveLanguageId(raw?.language),
     messages: await getLocalizedMessages(raw?.language),

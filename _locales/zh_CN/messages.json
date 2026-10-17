@@ -610,5 +610,11 @@
   "cfRulesRefreshOk":     { "message": "规则已更新。" },
   "cfRulesRefreshErr":    { "message": "拉取失败,请稍后重试。" },
   "cfAutoSaved":          { "message": "已自动保存" },
-  "advAppearanceTitle": { "message": "外观" }
+  "advAppearanceTitle": { "message": "外观" },
+  "freshnessTitle": { "message": "新鲜度上色" },
+  "freshnessDesc": { "message": "原创帖和评论按发布时间上色。转发、引用、广告不上色。页面停着不改色。" },
+  "freshnessFreshMinutes": { "message": "10 分钟内" },
+  "freshnessFreshColor": { "message": "颜色" },
+  "freshnessWarmMinutes": { "message": "30 分钟内" },
+  "freshnessWarmColor": { "message": "颜色" }
 }

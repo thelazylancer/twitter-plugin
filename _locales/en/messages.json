@@ -612,5 +612,11 @@
   "cfRulesRefreshOk":     { "message": "Rules updated." },
   "cfRulesRefreshErr":    { "message": "Fetch failed, please retry later." },
   "cfAutoSaved":          { "message": "Auto-saved" },
-  "advAppearanceTitle": { "message": "Appearance" }
+  "advAppearanceTitle": { "message": "Appearance" },
+  "freshnessTitle": { "message": "Freshness colors" },
+  "freshnessDesc": { "message": "Color original posts and replies by age. Reposts, quotes, and ads stay plain. Colors do not change while a card stays on screen." },
+  "freshnessFreshMinutes": { "message": "Within 10 min" },
+  "freshnessFreshColor": { "message": "Color" },
+  "freshnessWarmMinutes": { "message": "Within 30 min" },
+  "freshnessWarmColor": { "message": "Color" }
 }
