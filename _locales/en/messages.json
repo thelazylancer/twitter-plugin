@@ -519,6 +519,7 @@
   "tabFilter":      { "message": "Filter" },
   "tabLeaderboard": { "message": "Leaderboard" },
   "tabAi":          { "message": "AI replies" },
+  "tabMarks":       { "message": "Marks" },
   "tabAbout":       { "message": "About" },
   "rfSubShort":     { "message": "Short tweet" },
   "rfSubLong":      { "message": "X Article (long)" },
@@ -615,8 +616,12 @@
   "advAppearanceTitle": { "message": "Appearance" },
   "freshnessTitle": { "message": "Freshness colors" },
   "freshnessDesc": { "message": "Color original posts and replies by age. Reposts, quotes, and ads stay plain. Colors do not change while a card stays on screen." },
+  "freshnessHotMinutes": { "message": "Within 5 min" },
+  "freshnessHotColor": { "message": "Color" },
   "freshnessFreshMinutes": { "message": "Within 10 min" },
   "freshnessFreshColor": { "message": "Color" },
   "freshnessWarmMinutes": { "message": "Within 30 min" },
-  "freshnessWarmColor": { "message": "Color" }
+  "freshnessWarmColor": { "message": "Color" },
+  "unfollowedTitle": { "message": "Not following" },
+  "unfollowedDesc": { "message": "On replies only, mark people you do not follow and show their following and follower counts. No extra requests." }
 }

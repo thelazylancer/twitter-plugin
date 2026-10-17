@@ -36,7 +36,7 @@
     },
     {
       "matches": ["https://x.com/*", "https://pro.x.com/*"],
-      "js": ["src/build-channel.js", "lib/x-net-hook.js", "lib/x-client-transaction.js", "lib/grok-reply.js", "lib/freshness.js", "lib/long-image-viewer.js", "lib/image-viewer.js", "lib/bookmark-timeline-inject.js", "lib/timeline-ad-prune.js", "src/premium/license/gate.js", "src/premium/content-filter/rules.js", "src/premium/content-filter/filter.js", "src/premium/rate-filter/filter.js", "content.js", "starchart.js", "bookmark-menu.js"],
+      "js": ["src/build-channel.js", "lib/x-net-hook.js", "lib/x-client-transaction.js", "lib/grok-reply.js", "lib/freshness.js", "lib/unfollowed.js", "lib/author-reply-target.js", "lib/long-image-viewer.js", "lib/image-viewer.js", "lib/bookmark-timeline-inject.js", "lib/timeline-ad-prune.js", "src/premium/license/gate.js", "src/premium/content-filter/rules.js", "src/premium/content-filter/filter.js", "src/premium/rate-filter/filter.js", "content.js", "starchart.js", "bookmark-menu.js"],
       "css": ["styles.css"],
       "run_at": "document_start",
       "world": "MAIN"

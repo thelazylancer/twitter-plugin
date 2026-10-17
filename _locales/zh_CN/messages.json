@@ -517,6 +517,7 @@
   "tabFilter":      { "message": "过滤" },
   "tabLeaderboard": { "message": "流速榜" },
   "tabAi":          { "message": "AI 评论" },
+  "tabMarks":       { "message": "标记" },
   "tabAbout":       { "message": "关于" },
   "rfSubShort":     { "message": "短推" },
   "rfSubLong":      { "message": "长文 (X Article)" },
@@ -613,8 +614,12 @@
   "advAppearanceTitle": { "message": "外观" },
   "freshnessTitle": { "message": "新鲜度上色" },
   "freshnessDesc": { "message": "原创帖和评论按发布时间上色。转发、引用、广告不上色。页面停着不改色。" },
+  "freshnessHotMinutes": { "message": "5 分钟内" },
+  "freshnessHotColor": { "message": "颜色" },
   "freshnessFreshMinutes": { "message": "10 分钟内" },
   "freshnessFreshColor": { "message": "颜色" },
   "freshnessWarmMinutes": { "message": "30 分钟内" },
-  "freshnessWarmColor": { "message": "颜色" }
+  "freshnessWarmColor": { "message": "颜色" },
+  "unfollowedTitle": { "message": "未关注标记" },
+  "unfollowedDesc": { "message": "只在评论区标出你未关注的人，并显示关注数和粉丝数。不额外请求。" }
 }

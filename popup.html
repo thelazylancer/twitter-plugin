@@ -759,6 +759,7 @@
       <button type="button" class="tab-btn" role="tab" data-tab="filter"      aria-selected="false"><span data-i18n="tabFilter">Filter</span></button>
       <button type="button" class="tab-btn" role="tab" data-tab="leaderboard" aria-selected="false"><span data-i18n="tabLeaderboard">Leaderboard</span></button>
       <button type="button" class="tab-btn" role="tab" data-tab="ai"          aria-selected="true"><span data-i18n="tabAi">AI 评论</span></button>
+      <button type="button" class="tab-btn" role="tab" data-tab="marks"       aria-selected="false"><span data-i18n="tabMarks">标记</span></button>
       <button type="button" class="tab-btn" role="tab" data-tab="about"       aria-selected="false"><span data-i18n="tabAbout">About</span></button>
     </div>
 
@@ -930,6 +931,38 @@
       </div>
     </section>
 
+    <!-- ============ Tab: Marks ============ -->
+    <section role="tabpanel" id="tabpanel-marks" data-tab-panel="marks">
+      <div class="panel-card">
+        <div class="feature-row">
+          <div class="ft-body">
+            <label for="feat-freshness"><div class="ft-title" data-i18n="freshnessTitle">新鲜度上色</div></label>
+            <div class="ft-desc" data-i18n="freshnessDesc">原创帖和评论按发布时间上色。转发、引用、广告不上色。页面停着不改色。</div>
+          </div>
+          <label class="switch" for="feat-freshness" aria-label="新鲜度上色"><input id="feat-freshness" type="checkbox" checked><span class="slider"></span></label>
+        </div>
+        <div class="row">
+          <label class="field"><span data-i18n="freshnessHotMinutes">5 分钟内</span><input id="freshness-hot-minutes" type="number" min="1" max="1440" step="1" value="5"></label>
+          <label class="field"><span data-i18n="freshnessHotColor">颜色</span><input id="freshness-hot-color" type="color" value="#f4212e"></label>
+        </div>
+        <div class="row">
+          <label class="field"><span data-i18n="freshnessFreshMinutes">10 分钟内</span><input id="freshness-fresh-minutes" type="number" min="1" max="1440" step="1" value="10"></label>
+          <label class="field"><span data-i18n="freshnessFreshColor">颜色</span><input id="freshness-fresh-color" type="color" value="#1d9bf0"></label>
+        </div>
+        <div class="row">
+          <label class="field"><span data-i18n="freshnessWarmMinutes">30 分钟内</span><input id="freshness-warm-minutes" type="number" min="1" max="1440" step="1" value="30"></label>
+          <label class="field"><span data-i18n="freshnessWarmColor">颜色</span><input id="freshness-warm-color" type="color" value="#f7b928"></label>
+        </div>
+        <div class="feature-row">
+          <div class="ft-body">
+            <label for="feat-unfollowed"><div class="ft-title" data-i18n="unfollowedTitle">未关注标记</div></label>
+            <div class="ft-desc" data-i18n="unfollowedDesc">只在评论区标出你未关注的人，并显示关注数和粉丝数。不额外请求。</div>
+          </div>
+          <label class="switch" for="feat-unfollowed" aria-label="未关注标记"><input id="feat-unfollowed" type="checkbox" checked><span class="slider"></span></label>
+        </div>
+      </div>
+    </section>
+
     <!-- ============ Tab: About ============ -->
     <section role="tabpanel" id="tabpanel-about" data-tab-panel="about">
 
@@ -967,24 +1000,6 @@
         <div class="rf-row">
           <span data-i18n="aboutUpdatesDesc">Open the latest update popup on the current X page.</span>
           <button type="button" id="show-update-notes" class="adv-btn" data-i18n="aboutShowUpdateNotes">Show update notes</button>
-        </div>
-      </div>
-
-      <div class="panel-card">
-        <div class="feature-row">
-          <div class="ft-body">
-            <label for="feat-freshness"><div class="ft-title" data-i18n="freshnessTitle">新鲜度上色</div></label>
-            <div class="ft-desc" data-i18n="freshnessDesc">原创帖和评论按发布时间上色。转发、引用、广告不上色。页面停着不改色。</div>
-          </div>
-          <label class="switch" for="feat-freshness" aria-label="新鲜度上色"><input id="feat-freshness" type="checkbox" checked><span class="slider"></span></label>
-        </div>
-        <div class="row">
-          <label class="field"><span data-i18n="freshnessFreshMinutes">10 分钟内</span><input id="freshness-fresh-minutes" type="number" min="1" max="1440" step="1" value="10"></label>
-          <label class="field"><span data-i18n="freshnessFreshColor">颜色</span><input id="freshness-fresh-color" type="color" value="#1d9bf0"></label>
-        </div>
-        <div class="row">
-          <label class="field"><span data-i18n="freshnessWarmMinutes">30 分钟内</span><input id="freshness-warm-minutes" type="number" min="1" max="1440" step="1" value="30"></label>
-          <label class="field"><span data-i18n="freshnessWarmColor">颜色</span><input id="freshness-warm-color" type="color" value="#f7b928"></label>
         </div>
       </div>
 

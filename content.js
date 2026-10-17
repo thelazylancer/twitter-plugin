@@ -11,10 +11,15 @@ const DEFAULT_THRESHOLDS = {
 let velocityThresholds = { ...DEFAULT_THRESHOLDS };
 let velocityBadgesEnabled = false;
 let freshnessEnabled = true;
+let freshnessHotMinutes = 5;
 let freshnessFreshMinutes = 10;
 let freshnessWarmMinutes = 30;
+let freshnessHotColor = '#f4212e';
 let freshnessFreshColor = '#1d9bf0';
 let freshnessWarmColor = '#f7b928';
+let unfollowedEnabled = true;
+const authorRelationStore = new Map();
+const authorRelationByHandle = new Map();
 
 // === i18n ===
 let localizedStrings = {};
@@ -242,6 +247,9 @@ window.addEventListener('message', (event) => {
   badgeStyle = event.data.badgeStyle === 'inline-classic' ? 'inline-classic' : 'pill-solid';
   velocityBadgesEnabled = event.data.featureVelocityBadges === true;
   applyFreshnessSettings(event.data);
+  unfollowedEnabled = event.data.unfollowedEnabled !== false;
+  clearUnfollowedLabels();
+  paintUnfollowed();
   applyBadgeStyle();
   // Apply showBookmarkCount BEFORE renderBadges so the very first
   // post-load render respects the persisted setting — otherwise the
@@ -687,6 +695,7 @@ function countBookmarkTimelineHomeEntries(json) {
 // Recursively scan any JSON for tweet_results objects
 function scanForTweets(obj) {
   if (!obj || typeof obj !== 'object') return;
+  if (typeof rememberUserFromGraph === 'function') rememberUserFromGraph(obj);
   let found = false;
 
   const promotedId = promotedTweetIdFrom(obj);
@@ -703,6 +712,7 @@ function scanForTweets(obj) {
     || obj.tweetResult?.result
     || obj.tweetResults?.result;
   if (result) {
+    if (typeof rememberAuthorRelation === 'function') rememberAuthorRelation(result);
     const data = extractTweetData(result);
     if (data) {
       tweetDataStore.set(data.id, data);
@@ -823,6 +833,61 @@ function extractTweetData(result) {
 }
 
 // Draft.js-style content_state → Markdown for X Articles
+function booleanOrNull(value) {
+  return value === true ? true : value === false ? false : null;
+}
+
+function readAuthorRelation(user, tweetLegacy) {
+  if (!user || typeof user !== 'object') return null;
+  const userLegacy = user.legacy || {};
+  const perspective = user.relationship_perspectives || user.relationshipPerspectives || {};
+  const screenName = String(userLegacy.screen_name || user.core?.screen_name || user.screen_name || '').toLowerCase();
+  const following = booleanOrNull(
+    userLegacy.following ?? perspective.following ?? user.following ?? user.super_following,
+  );
+  const followers = [userLegacy.followers_count, userLegacy.normal_followers_count, user.followers_count, user.public_metrics?.followers_count]
+    .map((value) => Number(value))
+    .find((value) => Number.isFinite(value) && value >= 0);
+  const followingCount = [userLegacy.friends_count, user.friends_count, user.public_metrics?.following_count]
+    .map((value) => Number(value))
+    .find((value) => Number.isFinite(value) && value >= 0);
+  if (!screenName && following === null && !Number.isFinite(followers)) return null;
+  return {
+    screenName,
+    following,
+    followers,
+    followingCount,
+    inReplyToStatusId: String(tweetLegacy?.in_reply_to_status_id_str || ''),
+  };
+}
+
+function storeAuthorRelation(relation, tweetId = '') {
+  if (!relation) return;
+  if (tweetId) {
+    const id = String(tweetId);
+    authorRelationStore.set(id, mergeAuthorRelation(authorRelationStore.get(id), relation));
+  }
+  if (relation.screenName) {
+    authorRelationByHandle.set(
+      relation.screenName,
+      mergeAuthorRelation(authorRelationByHandle.get(relation.screenName), relation),
+    );
+  }
+}
+
+function rememberAuthorRelation(result) {
+  const tweet = result?.tweet || result;
+  const legacy = tweet?.legacy;
+  const user = tweet?.core?.user_results?.result || tweet?.user_results?.result;
+  const id = String(legacy?.id_str || tweet?.rest_id || '');
+  storeAuthorRelation(readAuthorRelation(user, legacy), id);
+}
+
+function rememberUserFromGraph(obj) {
+  const user = obj?.user_results?.result || obj?.userResult?.result;
+  if (user) storeAuthorRelation(readAuthorRelation(user));
+}
+
 function buildArticleMarkdown(articleResult) {
   const title = articleResult.title || '';
   const coverUrl = extractMediaUrl(articleResult.cover_media)
@@ -3136,8 +3201,10 @@ function freshnessApi() {
 function applyFreshnessSettings(data = {}) {
   const api = freshnessApi();
   freshnessEnabled = data.freshnessEnabled !== false;
+  freshnessHotMinutes = api.normalizeMinutes(data.freshnessHotMinutes, 5);
   freshnessFreshMinutes = api.normalizeMinutes(data.freshnessFreshMinutes, 10);
   freshnessWarmMinutes = api.normalizeMinutes(data.freshnessWarmMinutes, 30);
+  freshnessHotColor = api.normalizeColor(data.freshnessHotColor, '#f4212e');
   freshnessFreshColor = api.normalizeColor(data.freshnessFreshColor, '#1d9bf0');
   freshnessWarmColor = api.normalizeColor(data.freshnessWarmColor, '#f7b928');
   document.querySelectorAll('article[data-xvm-freshness-stamped]').forEach((article) => {
@@ -3178,7 +3245,11 @@ function applyFreshnessTier(article, tierName) {
     clearFreshnessStyle(article);
     return;
   }
-  const color = tierName === 'fresh' ? freshnessFreshColor : freshnessWarmColor;
+  const color = tierName === 'hot'
+    ? freshnessHotColor
+    : tierName === 'fresh'
+      ? freshnessFreshColor
+      : freshnessWarmColor;
   article.dataset.xvmFreshness = tierName;
   article.style.setProperty('--xvm-freshness-color', color);
   article.style.setProperty('--xvm-freshness-wash', freshnessApi().wash(color));
@@ -3201,7 +3272,160 @@ function stampFreshness(article) {
   if (!datetime) return;
   const ageMs = Date.now() - new Date(datetime).getTime();
   article.dataset.xvmFreshnessStamped = '1';
-  applyFreshnessTier(article, freshnessApi().tier(ageMs, freshnessFreshMinutes, freshnessWarmMinutes));
+  applyFreshnessTier(article, freshnessApi().tier(
+    ageMs,
+    freshnessHotMinutes,
+    freshnessFreshMinutes,
+    freshnessWarmMinutes,
+  ));
+}
+
+function unfollowedApi() {
+  return window.__xvmUnfollowed || { label: () => null };
+}
+
+function articleOwnStatusId(article) {
+  const time = ownArticleNodes(article, 'time[datetime]')
+    .map((node) => node.closest('a'))
+    .find((link) => link && link.closest('article[data-testid="tweet"]') === article);
+  return time?.getAttribute('href')?.match(/\/status\/(\d+)/)?.[1] || '';
+}
+
+function isCommentArticle(article) {
+  if (!article || article.parentElement?.closest('article[data-testid="tweet"]')) return false;
+  const statusId = getStatusIdFromLocation();
+  const ownId = articleOwnStatusId(article);
+  if (statusId && ownId) return ownId !== statusId;
+  const statusArticle = findArticleForCurrentStatus();
+  if (statusArticle) return article !== statusArticle;
+  return false;
+}
+
+function relationForComment(article) {
+  const handle = articleHandle(article);
+  const byHandle = handle ? authorRelationByHandle.get(handle) : null;
+  const ownId = articleOwnStatusId(article);
+  const byId = ownId ? authorRelationStore.get(ownId) : null;
+  const fiber = relationFromFiber(article);
+  const merged = {
+    screenName: handle || byHandle?.screenName || byId?.screenName || fiber?.screenName || '',
+    following: booleanOrNull(byId?.following ?? byHandle?.following ?? fiber?.following),
+    followers: [byId?.followers, byHandle?.followers, fiber?.followers].find((value) => Number.isFinite(value)),
+    followingCount: [byId?.followingCount, byHandle?.followingCount, fiber?.followingCount].find((value) => Number.isFinite(value)),
+  };
+  const buttonFollowing = followSignalFromButtons(article);
+  if (merged.following === null && buttonFollowing !== null) merged.following = buttonFollowing;
+  return merged;
+}
+
+function mergeAuthorRelation(base, extra) {
+  if (!extra) return base || null;
+  if (!base) return extra;
+  return {
+    screenName: base.screenName || extra.screenName,
+    following: base.following === true || base.following === false ? base.following : extra.following,
+    followers: Number.isFinite(base.followers) ? base.followers : extra.followers,
+    followingCount: Number.isFinite(base.followingCount) ? base.followingCount : extra.followingCount,
+    inReplyToStatusId: base.inReplyToStatusId || extra.inReplyToStatusId || '',
+  };
+}
+
+function relationComplete(relation) {
+  return !!relation
+    && (relation.following === true || relation.following === false)
+    && Number.isFinite(relation.followers)
+    && Number.isFinite(relation.followingCount);
+}
+
+function relationFromFiber(article) {
+  const key = Object.keys(article).find((name) => name.startsWith('__reactFiber') || name.startsWith('__reactInternalInstance'));
+  let fiber = key ? article[key] : null;
+  const seen = new Set();
+  let best = null;
+  const handle = articleHandle(article);
+  for (let depth = 0; fiber && depth < 30 && !seen.has(fiber); depth += 1) {
+    seen.add(fiber);
+    const props = fiber.memoizedProps || fiber.pendingProps;
+    const found = findRelationInProps(props, 0, null);
+    if (found && (!handle || !found.screenName || found.screenName === handle)) {
+      best = mergeAuthorRelation(best, found);
+      if (relationComplete(best)) return best;
+    }
+    fiber = fiber.return;
+  }
+  return best;
+}
+
+function findRelationInProps(value, depth, acc) {
+  if (!value || typeof value !== 'object' || depth > 6) return acc;
+  const direct = readAuthorRelation(value.user_results?.result || value.user || value);
+  acc = mergeAuthorRelation(acc, direct);
+  if (relationComplete(acc)) return acc;
+  const keys = Object.keys(value).slice(0, 24);
+  for (const key of keys) {
+    const child = value[key];
+    if (!child || typeof child !== 'object') continue;
+    acc = findRelationInProps(child, depth + 1, acc);
+    if (relationComplete(acc)) return acc;
+  }
+  return acc;
+}
+
+function clearUnfollowedLabels(root = document) {
+  root.querySelectorAll?.('.xvm-unfollowed').forEach((node) => node.remove());
+  root.querySelectorAll?.('article[data-xvm-unfollowed-stamped]').forEach((article) => {
+    article.removeAttribute('data-xvm-unfollowed-stamped');
+  });
+}
+
+function ownArticleNodes(article, selector) {
+  return Array.from(article.querySelectorAll(selector))
+    .filter((node) => node.closest('article[data-testid="tweet"]') === article);
+}
+
+function followSignalFromButtons(article) {
+  for (const btn of ownArticleNodes(article, 'button, [role="button"]')) {
+    const testid = btn.getAttribute('data-testid') || '';
+    const label = (btn.getAttribute('aria-label') || btn.textContent || '').trim();
+    if (testid === 'follow' || testid.endsWith('-follow') || /^(Follow|关注|回关)( |@|$)/i.test(label)) return false;
+    if (testid === 'unfollow' || /^(Following|正在关注|已关注)( |@|$)/i.test(label)) return true;
+  }
+  return null;
+}
+
+function paintUnfollowed(root = document) {
+  const articles = root.querySelectorAll?.('article[data-testid="tweet"]') || [];
+  if (!unfollowedEnabled) {
+    clearUnfollowedLabels(root);
+    return;
+  }
+  const me = getLoggedInHandle();
+  articles.forEach((article) => {
+    if (article.dataset.xvmUnfollowedStamped === '1') return;
+    if (!isCommentArticle(article)) return;
+    const handle = articleHandle(article);
+    if (me && handle && handle === me) {
+      article.dataset.xvmUnfollowedStamped = '1';
+      return;
+    }
+    const relation = relationForComment(article);
+    if (relation.following !== true && relation.following !== false) return;
+    const mark = unfollowedApi().label(relation);
+    if (!mark) {
+      article.dataset.xvmUnfollowedStamped = '1';
+      return;
+    }
+    const name = ownArticleNodes(article, '[data-testid="User-Name"]')[0];
+    if (!name) return;
+    let chip = ownArticleNodes(article, '.xvm-unfollowed')[0];
+    if (!chip) {
+      chip = document.createElement('span');
+      name.appendChild(chip);
+    }
+    chip.className = mark.hard ? 'xvm-unfollowed xvm-unfollowed--hard' : 'xvm-unfollowed';
+    chip.textContent = mark.text;
+    if (mark.hasCounts) article.dataset.xvmUnfollowedStamped = '1';
+  });
 }
 
 function paintFreshness(root = document) {
@@ -3606,6 +3830,7 @@ setInterval(() => {
     renderLeaderboard();
   }
   paintFreshness();
+  paintUnfollowed();
 }, 2000);
 
 // Refresh leaderboard on scroll as virtualized articles come and go
@@ -3665,6 +3890,7 @@ const observer = new MutationObserver((mutations) => {
     renderBadges();
     injectAuthorReplyButtons();
     paintFreshness();
+    paintUnfollowed();
   }
   if (touchedComposer) scheduleComposerInject();
 });
@@ -3710,6 +3936,7 @@ if (document.body) {
   injectGrokReplyButtons();
   injectAuthorReplyButtons();
   paintFreshness();
+  paintUnfollowed();
   bootGrokInjectorRetries();
 } else {
   document.addEventListener('DOMContentLoaded', () => {
@@ -3718,6 +3945,7 @@ if (document.body) {
     injectGrokReplyButtons();
     injectAuthorReplyButtons();
     paintFreshness();
+    paintUnfollowed();
     bootGrokInjectorRetries();
   });
 }
@@ -3801,23 +4029,43 @@ function articleHasOwnAnalytics(article) {
     .some((el) => el.closest('article[data-testid="tweet"]') === article);
 }
 
-function isOwnStatusPage() {
-  const statusArticle = findArticleForCurrentStatus();
-  if (!statusArticle || !getStatusIdFromLocation()) return false;
-  const me = getLoggedInHandle();
-  if (me && articleHandle(statusArticle) === me) return true;
-  return articleHasOwnAnalytics(statusArticle);
+function authorReplyInput() {
+  const articles = Array.from(document.querySelectorAll('article[data-testid="tweet"]'));
+  return {
+    pageStatusId: getStatusIdFromLocation(),
+    loggedInHandle: getLoggedInHandle(),
+    cards: articles.map((article) => {
+      const statusId = articleOwnStatusId(article);
+      return {
+        article,
+        statusId,
+        handle: articleHandle(article),
+        nested: !!article.parentElement?.closest('article[data-testid="tweet"]'),
+        promoted: isPromotedArticle(article) || (!!statusId && promotedTweetIds.has(statusId)),
+        hasAnalytics: articleHasOwnAnalytics(article),
+      };
+    }),
+  };
+}
+
+function authorReplyTargetArticles() {
+  const api = window.__xvmAuthorReplyTarget;
+  const input = authorReplyInput();
+  if (!api) return [];
+  const ids = new Set(api.authorReplyStatusIds(input));
+  return input.cards
+    .filter((card) => ids.has(String(card.statusId || '')))
+    .map((card) => card.article);
 }
 
 function isAuthorReplyTarget(targetArticle) {
   if (!targetArticle) return false;
-  const root = findOwnThreadRoot(targetArticle);
-  if (root && root !== targetArticle) return true;
-  const me = getLoggedInHandle();
-  if (!me) return false;
-  const id = getTweetIdFromArticle(targetArticle);
-  const data = id ? tweetDataStore.get(id) : null;
-  return !!data?.inReplyToScreenName && data.inReplyToScreenName.toLowerCase() === me;
+  return authorReplyTargetArticles().includes(targetArticle);
+}
+
+function ownFocalArticle() {
+  const focal = window.__xvmAuthorReplyTarget?.focalCard(authorReplyInput());
+  return focal?.article || null;
 }
 
 const AUTHOR_REPLY_PROMPT = `[推文内容]
@@ -4816,7 +5064,10 @@ function injectGrokReplyButtons(root = document) {
     if (target.placement === 'mobile-top') {
       btn.classList.add('xvm-grok-generate-btn--mobile-top');
     }
-    const recentComment = hasRecentReplyClickContext() ? grokLastReplyArticle : null;
+    const recentComment = hasRecentReplyClickContext()
+      && grokLastReplyPageStatusId === getStatusIdFromLocation()
+      ? grokLastReplyArticle
+      : null;
     const authorMode = isAuthorReplyTarget(recentComment)
       || isAuthorReplyTarget(findReplyArticleForAiComposer(composerRoot));
     btn.dataset.xvmMode = authorMode ? 'author' : 'comment';
@@ -4875,7 +5126,12 @@ function waitForReplyComposer(targetArticle, timeoutMs = 2500) {
 async function startAuthorReply(article, replyBtn) {
   if (!article || !replyBtn || replyBtn.dataset.xvmAuthorBusy === '1') return;
   replyBtn.dataset.xvmAuthorBusy = '1';
-  const mainArticle = findOwnThreadRoot(article);
+  const mainArticle = ownFocalArticle();
+  if (!isAuthorReplyTarget(article) || !mainArticle) {
+    showGrokErrorToast('这不是你主贴下的评论');
+    delete replyBtn.dataset.xvmAuthorBusy;
+    return;
+  }
   const payload = buildAuthorReplyPayload(article, mainArticle);
   if (!payload) {
     showGrokErrorToast('没读到主贴或当前评论');
@@ -4884,6 +5140,7 @@ async function startAuthorReply(article, replyBtn) {
   }
   grokLastReplyArticle = article;
   grokLastReplyClickAt = Date.now();
+  grokLastReplyPageStatusId = getStatusIdFromLocation();
   grokLastReplyThreadOg = mainArticle;
   replyBtn.click();
   try {
@@ -4936,20 +5193,13 @@ function placeAuthorReplyEntry(article) {
   else article.appendChild(row);
 }
 
-function injectAuthorReplyButtons(root = document) {
-  const statusArticle = findArticleForCurrentStatus();
-  if (!isOwnStatusPage()) {
-    document.querySelectorAll('.xvm-author-reply-row').forEach((row) => row.remove());
-    return;
-  }
-  const articles = root.querySelectorAll?.('article[data-testid="tweet"]') || [];
-  for (const article of articles) {
-    if (article === statusArticle || !isAuthorReplyTarget(article)) {
-      article.querySelectorAll?.('.xvm-author-reply-row').forEach((row) => row.remove());
-      continue;
-    }
-    placeAuthorReplyEntry(article);
-  }
+function injectAuthorReplyButtons() {
+  const targets = new Set(authorReplyTargetArticles());
+  document.querySelectorAll('.xvm-author-reply-row').forEach((row) => {
+    const article = row.closest('article[data-testid="tweet"]');
+    if (!targets.has(article)) row.remove();
+  });
+  targets.forEach((article) => placeAuthorReplyEntry(article));
 }
 
 // Tracks the conversation the user is replying into. Two pieces:
@@ -4961,6 +5211,7 @@ function injectAuthorReplyButtons(root = document) {
 //                                  OG context in the prompt when commenting
 //                                  on a nested reply.
 let grokLastReplyThreadOg = null;
+let grokLastReplyPageStatusId = '';
 document.addEventListener('click', (e) => {
   // Sending the reply ends the job for that tweet: drop the panel and stop
   // any still-streaming generation instead of letting it repopulate.
@@ -4970,6 +5221,7 @@ document.addEventListener('click', (e) => {
   const article = replyBtn.closest('article[data-testid="tweet"]');
   if (article) grokLastReplyArticle = article;
   grokLastReplyClickAt = Date.now();
+  grokLastReplyPageStatusId = getStatusIdFromLocation();
   // Find the conversation root at click-time. On a status page X renders the
   // OG tweet as the article matching the URL's status id; on the timeline
   // there is no page-wide root so OG defaults to the same article.

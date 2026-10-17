@@ -43,8 +43,8 @@ describe('#45 popup tabs structure (mock A)', () => {
     expect(/<body[^>]*data-theme="light"/.test(html)).toBe(true);
   });
 
-  it('declares 5 tab buttons (role=tab) with data-tab values', () => {
-    for (const name of ['pro', 'filter', 'leaderboard', 'ai', 'about']) {
+  it('declares 6 tab buttons (role=tab) with data-tab values', () => {
+    for (const name of ['pro', 'filter', 'leaderboard', 'ai', 'marks', 'about']) {
       expect(new RegExp(`<button[^>]*role="tab"[^>]*data-tab="${name}"`).test(html),
         `popup.html must contain <button role="tab" data-tab="${name}">`
       ).toBe(true);
@@ -58,8 +58,8 @@ describe('#45 popup tabs structure (mock A)', () => {
     ).toBe(true);
   });
 
-  it('declares 5 tab panels (data-tab-panel) matching the 5 tabs', () => {
-    for (const name of ['pro', 'filter', 'leaderboard', 'ai', 'about']) {
+  it('declares 6 tab panels (data-tab-panel) matching the 6 tabs', () => {
+    for (const name of ['pro', 'filter', 'leaderboard', 'ai', 'marks', 'about']) {
       expect(new RegExp(`data-tab-panel="${name}"`).test(html),
         `popup.html must contain a panel with data-tab-panel="${name}"`
       ).toBe(true);
@@ -359,7 +359,7 @@ describe('#45 Filter sub-tabs (Short / Long)', () => {
 describe('#45 popup-dashboard.js tab router', () => {
   it('exposes setTab function + TABS whitelist', () => {
     expect(/function\s+setTab\s*\(/.test(dashJs)).toBe(true);
-    expect(/TABS\s*=\s*\[\s*['"]pro['"]\s*,\s*['"]filter['"]\s*,\s*['"]leaderboard['"]\s*,\s*['"]ai['"]\s*,\s*['"]about['"]\s*\]/.test(dashJs)).toBe(true);
+    expect(/TABS\s*=\s*\[\s*['"]pro['"]\s*,\s*['"]filter['"]\s*,\s*['"]leaderboard['"]\s*,\s*['"]ai['"]\s*,\s*['"]marks['"]\s*,\s*['"]about['"]\s*\]/.test(dashJs)).toBe(true);
   });
   it('wires aria-selected updates on tab click', () => {
     expect(/aria-selected/.test(dashJs)).toBe(true);

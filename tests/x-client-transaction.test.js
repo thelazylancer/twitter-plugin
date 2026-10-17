@@ -7,7 +7,8 @@ const homeHtml = '59924:"ondemand.s",59924:"26791a5c30a3bd19"';
 
 function loadXct({ failPrime = false, missingVerification = false, modules = ['564498'], consumedFrames = false } = {}) {
   class Node {
-    constructor(tag) { this.tag = tag; this.children = []; this.id = ''; this.attrs = {}; }
+    constructor(tag) { this.tag = tag; this.children = []; this.id = ''; this.attrs = {}; this.nodeType = tag === '#text' ? 3 : 1; }
+    get childNodes() { return this.children; }
     appendChild(node) { this.children.push(node); node.parent = this; return node; }
     setAttribute(key, value) { this.attrs[key] = value; }
     getAttribute(key) { return this.attrs[key] ?? null; }
@@ -26,12 +27,15 @@ function loadXct({ failPrime = false, missingVerification = false, modules = ['5
     body,
     createElement: (tag) => new Node(tag),
     createElementNS: (_ns, tag) => new Node(tag),
+    createTextNode: () => new Node('#text'),
     querySelector: () => verification,
     querySelectorAll: (selector) => body.querySelectorAll(selector),
   };
   const frames = Array.from({ length: 4 }, () => {
     const svg = new Node('svg');
-    for (let i = 0; i < 2; i++) svg.appendChild(new Node('path')).setAttribute('d', 'M 0,0 C 1,2 3,4');
+    svg.appendChild(new Node('#text'));
+    const group = svg.appendChild(new Node('g'));
+    for (let i = 0; i < 2; i++) group.appendChild(new Node('path')).setAttribute('d', 'M 0,0 C 1,2 3,4');
     svg.setAttribute('onload', 'must not be copied');
     svg.setAttribute('class', 'r-16n140');
     return svg;
@@ -49,7 +53,10 @@ function loadXct({ failPrime = false, missingVerification = false, modules = ['5
     // Removing them before that read throws the exact browser error.
     await Promise.resolve();
     const frame = document.querySelectorAll('[id^="loading-x-anim-"]')[0];
-    if (!frame) throw new TypeError("Cannot read properties of undefined (reading 'childNodes')");
+    // Native ondemand.s indexes past a leading text node, then reads childNodes.
+    const group = frame?.childNodes?.[1];
+    if (!group) throw new TypeError("Cannot read properties of undefined (reading 'childNodes')");
+    if (!group.childNodes) throw new TypeError("Cannot read properties of undefined (reading 'childNodes')");
     return `native:${method}:${path}`;
   });
   const chunks = [];

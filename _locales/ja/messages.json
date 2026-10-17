@@ -517,6 +517,7 @@
   "tabFilter":      { "message": "フィルター" },
   "tabLeaderboard": { "message": "ランキング" },
   "tabAi":          { "message": "AI 返信" },
+  "tabMarks":       { "message": "マーク" },
   "tabAbout":       { "message": "情報" },
   "rfSubShort":     { "message": "短い投稿" },
   "rfSubLong":      { "message": "長文 (X Article)" },
@@ -608,8 +609,12 @@
   "advAppearanceTitle": { "message": "外観" },
   "freshnessTitle": { "message": "新しさの色" },
   "freshnessDesc": { "message": "投稿と返信を公開時刻で色分けします。リポスト、引用、広告は色を付けません。表示中のカードは色を変えません。" },
+  "freshnessHotMinutes": { "message": "5分以内" },
+  "freshnessHotColor": { "message": "色" },
   "freshnessFreshMinutes": { "message": "10分以内" },
   "freshnessFreshColor": { "message": "色" },
   "freshnessWarmMinutes": { "message": "30分以内" },
-  "freshnessWarmColor": { "message": "色" }
+  "freshnessWarmColor": { "message": "色" },
+  "unfollowedTitle": { "message": "未フォロー" },
+  "unfollowedDesc": { "message": "返信だけに、フォローしていない人のフォロー数とフォロワー数を表示します。追加リクエストはしません。" }
 }
