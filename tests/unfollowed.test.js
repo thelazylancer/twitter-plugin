@@ -14,6 +14,9 @@ describe('unfollowed comment labels', () => {
     expect(api.label({ following: false, followers: 120, followingCount: 80 }).text).toBe('未关注 · 关注 80 · 粉丝 120');
     expect(api.label({ following: false, followers: 120 }).text).toBe('未关注 · 粉丝 120');
     expect(api.label({ following: false, followers: 120 }).hasCounts).toBe(false);
+    expect(api.label({ following: false, blueVerified: false }, { blueOnly: true })).toBeNull();
+    expect(api.label({ following: false, blueVerified: true }, { blueOnly: true }).text).toBe('未关注');
+    expect(api.label({ following: false, blueVerified: false }, { blueOnly: false }).text).toBe('未关注');
   });
 
   it('marks unlikely follow-back only when followers are at least 10x and 1000', () => {

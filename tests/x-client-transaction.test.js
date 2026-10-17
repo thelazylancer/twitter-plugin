@@ -53,10 +53,10 @@ function loadXct({ failPrime = false, missingVerification = false, modules = ['5
     // Removing them before that read throws the exact browser error.
     await Promise.resolve();
     const frame = document.querySelectorAll('[id^="loading-x-anim-"]')[0];
-    // Native ondemand.s indexes past a leading text node, then reads childNodes.
-    const group = frame?.childNodes?.[1];
-    if (!group) throw new TypeError("Cannot read properties of undefined (reading 'childNodes')");
-    if (!group.childNodes) throw new TypeError("Cannot read properties of undefined (reading 'childNodes')");
+    // ondemand.s: querySelectorAll(class)[i].childNodes[0].childNodes[1]
+    const group = frame?.childNodes?.[0];
+    const secondPath = group?.childNodes?.[1];
+    if (!group || !secondPath) throw new TypeError("Cannot read properties of undefined (reading 'childNodes')");
     return `native:${method}:${path}`;
   });
   const chunks = [];
@@ -81,6 +81,25 @@ function loadXct({ failPrime = false, missingVerification = false, modules = ['5
 }
 
 describe('native X transaction generator', () => {
+  it('supplies prepared frames when the native class selector misses', () => {
+    const src = require('node:fs').readFileSync(new URL('../lib/x-client-transaction.js', import.meta.url), 'utf8');
+    const start = src.indexOf('function isAnimFrame');
+    const end = src.indexOf('function installFrameQueryFallback');
+    const framesForSelector = new Function(`${src.slice(start, end)}; return framesForSelector;`)();
+    const frames = [
+      { id: 'loading-x-anim-0', classList: { add() {} } },
+      { id: 'loading-x-anim-1', classList: { add() {} } },
+      { id: 'loading-x-anim-2', classList: { add() {} } },
+      { id: 'loading-x-anim-3', classList: { add() {} } },
+    ];
+    const found = { length: 0 };
+    const decoys = [{ id: 'x' }, { id: 'y' }, { id: 'z' }, { id: 'w' }];
+    expect(framesForSelector('.r-32hy0', found, frames)).toBe(frames);
+    expect(framesForSelector('.r-32hy0', decoys, frames)).toBe(frames);
+    expect(framesForSelector('.r-32hy0', frames, frames)).toEqual(frames);
+    expect(framesForSelector('div', found, frames)).toBe(found);
+  });
+
   it('loads the current chunk with its 16-character hash through X, then signs the actual method/path', async () => {
     const { api, runtime, generate, original, body, chunks, document } = loadXct();
     await expect(api.generateTxId('POST', '/2/grok/add_response.json')).resolves.toBe('native:POST:/2/grok/add_response.json');

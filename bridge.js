@@ -259,6 +259,7 @@ const DEFAULT_FEATURES = {
   freshnessFreshColor: '#1d9bf0',
   freshnessWarmColor: '#f7b928',
   unfollowedEnabled: true,
+  unfollowedBlueOnly: true,
 };
 const STORAGE_DEFAULTS = { ...DEFAULT_THRESHOLDS, ...DEFAULT_FEATURES };
 const RELEASE_NOTES_SEEN_KEY = 'xvm_release_notes_seen_version';
@@ -471,6 +472,7 @@ async function pushSettings(raw) {
     freshnessFreshColor: raw?.freshnessFreshColor,
     freshnessWarmColor: raw?.freshnessWarmColor,
     unfollowedEnabled: raw?.unfollowedEnabled !== false,
+    unfollowedBlueOnly: raw?.unfollowedBlueOnly !== false,
     language: normalizeLanguage(raw?.language),
     effectiveLanguage: getEffectiveLanguageId(raw?.language),
     messages: await getLocalizedMessages(raw?.language),

@@ -625,6 +625,8 @@
   "authorReplyTitle": { "message": "AI home replies" },
   "authorReplyDesc": { "message": "Used only when replying to comments on your own post. The main post and current comment replace [推文内容]." },
   "authorReplyReset": { "message": "Restore default reply prompt" },
+  "unfollowedBlueTitle": { "message": "Blue check only" },
+  "unfollowedBlueDesc": { "message": "On by default. Only mark unfollowed commenters with a blue check. Turn it off to mark everyone you do not follow." },
   "unfollowedTitle": { "message": "Not following" },
   "unfollowedDesc": { "message": "On replies only, mark people you do not follow and show their following and follower counts. No extra requests." }
 }

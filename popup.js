@@ -180,6 +180,7 @@ const DEFAULT_FEATURES = {
   freshnessFreshColor: '#1d9bf0',
   freshnessWarmColor: '#f7b928',
   unfollowedEnabled: true,
+  unfollowedBlueOnly: true,
 };
 const STORAGE_DEFAULTS = { ...DEFAULT_THRESHOLDS, ...DEFAULT_FEATURES };
 const AI_PLATFORM_PRESETS = {
@@ -400,7 +401,6 @@ const AUTHOR_REPLY_DEFAULT = `[推文内容]
 - 语气像本人回评：简短、口语、不端着。有问题就答，有补充就补一句，有感谢就短谢
 - 跟当前评论使用的语言走
 - 每条只包含可直接发布的回复正文，用代码块包裹。`;
-const freshnessToggle = document.getElementById('feat-freshness');
 const freshnessHotMinutesInput = document.getElementById('freshness-hot-minutes');
 const freshnessHotColorInput = document.getElementById('freshness-hot-color');
 const freshnessFreshMinutesInput = document.getElementById('freshness-fresh-minutes');
@@ -408,6 +408,7 @@ const freshnessWarmMinutesInput = document.getElementById('freshness-warm-minute
 const freshnessFreshColorInput = document.getElementById('freshness-fresh-color');
 const freshnessWarmColorInput = document.getElementById('freshness-warm-color');
 const unfollowedToggle = document.getElementById('feat-unfollowed');
+const unfollowedBlueToggle = document.getElementById('feat-unfollowed-blue');
 const aiProviderSelect = document.getElementById('ai-provider');
 const aiProviderOptions = [...document.querySelectorAll('[data-ai-provider-option]')];
 const aiPlatformSelect = document.getElementById('ai-platform');
@@ -663,6 +664,16 @@ function fill(v) {
 }
 
 chrome.storage.sync.get(STORAGE_DEFAULTS, (items) => {
+  try {
+  const freshnessToggleEl = document.getElementById('feat-freshness');
+  const freshnessHotMinutesEl = document.getElementById('freshness-hot-minutes');
+  const freshnessHotColorEl = document.getElementById('freshness-hot-color');
+  const freshnessFreshMinutesEl = document.getElementById('freshness-fresh-minutes');
+  const freshnessWarmMinutesEl = document.getElementById('freshness-warm-minutes');
+  const freshnessFreshColorEl = document.getElementById('freshness-fresh-color');
+  const freshnessWarmColorEl = document.getElementById('freshness-warm-color');
+  const unfollowedToggleEl = document.getElementById('feat-unfollowed');
+  const unfollowedBlueToggleEl = document.getElementById('feat-unfollowed-blue');
   fill(normalize(items));
   leaderboardToggle.checked = !!items.featureVelocityLeaderboard;
   leaderboardEdgeHideToggle.checked = items.leaderboardEdgeHideEnabled !== false;
@@ -693,14 +704,15 @@ chrome.storage.sync.get(STORAGE_DEFAULTS, (items) => {
   if (aiBaseUrlInput) aiBaseUrlInput.value = items.aiBaseUrl || AI_PLATFORM_PRESETS[normalizeAiPlatform(items.aiOpenAIPlatform)].baseUrl;
   if (aiModelInput) aiModelInput.value = items.aiModel || AI_PLATFORM_PRESETS[normalizeAiPlatform(items.aiOpenAIPlatform)].model;
   if (aiReplyCountInput) aiReplyCountInput.value = normalizeAiReplyCount(items.aiReplyCount);
-  if (freshnessToggle) freshnessToggle.checked = items.freshnessEnabled !== false;
-  if (freshnessHotMinutesInput) freshnessHotMinutesInput.value = items.freshnessHotMinutes || 5;
-  if (freshnessHotColorInput) freshnessHotColorInput.value = items.freshnessHotColor || '#f4212e';
-  if (freshnessFreshMinutesInput) freshnessFreshMinutesInput.value = items.freshnessFreshMinutes || 10;
-  if (freshnessWarmMinutesInput) freshnessWarmMinutesInput.value = items.freshnessWarmMinutes || 30;
-  if (freshnessFreshColorInput) freshnessFreshColorInput.value = items.freshnessFreshColor || '#1d9bf0';
-  if (freshnessWarmColorInput) freshnessWarmColorInput.value = items.freshnessWarmColor || '#f7b928';
-  if (unfollowedToggle) unfollowedToggle.checked = items.unfollowedEnabled !== false;
+  if (freshnessToggleEl) freshnessToggleEl.checked = items.freshnessEnabled !== false;
+  if (freshnessHotMinutesEl) freshnessHotMinutesEl.value = items.freshnessHotMinutes || 5;
+  if (freshnessHotColorEl) freshnessHotColorEl.value = items.freshnessHotColor || '#f4212e';
+  if (freshnessFreshMinutesEl) freshnessFreshMinutesEl.value = items.freshnessFreshMinutes || 10;
+  if (freshnessWarmMinutesEl) freshnessWarmMinutesEl.value = items.freshnessWarmMinutes || 30;
+  if (freshnessFreshColorEl) freshnessFreshColorEl.value = items.freshnessFreshColor || '#1d9bf0';
+  if (freshnessWarmColorEl) freshnessWarmColorEl.value = items.freshnessWarmColor || '#f7b928';
+  if (unfollowedToggleEl) unfollowedToggleEl.checked = items.unfollowedEnabled !== false;
+  if (unfollowedBlueToggleEl) unfollowedBlueToggleEl.checked = items.unfollowedBlueOnly !== false;
   chrome.storage.local.get({ xvmAiApiKey: '' }, (localItems) => {
     if (aiApiKeyInput) aiApiKeyInput.value = localItems.xvmAiApiKey || '';
     updateAiProviderFields();
@@ -708,6 +720,9 @@ chrome.storage.sync.get(STORAGE_DEFAULTS, (items) => {
   renderGrokTemplateEditor();
   columnsState = normalizeColumns(items.leaderboardColumns);
   renderColList();
+  } catch (err) {
+    if (statusEl) statusEl.textContent = err?.message || '设置读取失败';
+  }
 });
 
 function renderGrokTemplateEditor() {
@@ -913,7 +928,7 @@ function saveFreshnessSettings() {
   const fresh = Number.parseInt(freshnessFreshMinutesInput?.value, 10);
   const warm = Number.parseInt(freshnessWarmMinutesInput?.value, 10);
   chrome.storage.sync.set({
-    freshnessEnabled: freshnessToggle ? freshnessToggle.checked : true,
+    freshnessEnabled: document.getElementById('feat-freshness')?.checked !== false,
     freshnessHotMinutes: Number.isFinite(hot) && hot >= 1 ? hot : 5,
     freshnessFreshMinutes: Number.isFinite(fresh) && fresh >= 1 ? fresh : 10,
     freshnessWarmMinutes: Number.isFinite(warm) && warm >= 1 ? warm : 30,
@@ -923,18 +938,21 @@ function saveFreshnessSettings() {
   }, () => flash(tr('flashFreshnessSaved') || '新鲜度设置已保存'));
 }
 
-freshnessToggle?.addEventListener('change', saveFreshnessSettings);
+document.getElementById('feat-freshness')?.addEventListener('change', saveFreshnessSettings);
 freshnessHotMinutesInput?.addEventListener('change', saveFreshnessSettings);
 freshnessHotColorInput?.addEventListener('change', saveFreshnessSettings);
 freshnessFreshMinutesInput?.addEventListener('change', saveFreshnessSettings);
 freshnessWarmMinutesInput?.addEventListener('change', saveFreshnessSettings);
 freshnessFreshColorInput?.addEventListener('change', saveFreshnessSettings);
 freshnessWarmColorInput?.addEventListener('change', saveFreshnessSettings);
-unfollowedToggle?.addEventListener('change', () => {
-  chrome.storage.sync.set({ unfollowedEnabled: unfollowedToggle.checked }, () => {
-    flash(unfollowedToggle.checked ? '已开启未关注标记' : '已关闭未关注标记');
-  });
-});
+function saveUnfollowedSettings() {
+  chrome.storage.sync.set({
+    unfollowedEnabled: unfollowedToggle ? unfollowedToggle.checked : true,
+    unfollowedBlueOnly: unfollowedBlueToggle ? unfollowedBlueToggle.checked : true,
+  }, () => flash('未关注标记已保存'));
+}
+unfollowedToggle?.addEventListener('change', saveUnfollowedSettings);
+unfollowedBlueToggle?.addEventListener('change', saveUnfollowedSettings);
 
 leaderboardToggle.addEventListener('change', () => {
   chrome.storage.sync.set({ featureVelocityLeaderboard: leaderboardToggle.checked }, () => {

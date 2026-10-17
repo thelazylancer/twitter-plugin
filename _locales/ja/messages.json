@@ -618,6 +618,8 @@
   "authorReplyTitle": { "message": "AI ホーム返信" },
   "authorReplyDesc": { "message": "自分の投稿への返信だけに使います。生成時に元投稿と現在のコメントが [推文内容] に入ります。" },
   "authorReplyReset": { "message": "返信プロンプトを初期化" },
+  "unfollowedBlueTitle": { "message": "青バッジのみ" },
+  "unfollowedBlueDesc": { "message": "初期状態はオンです。青バッジの未フォローだけ表示します。オフにすると未フォロー全員を表示します。" },
   "unfollowedTitle": { "message": "未フォロー" },
   "unfollowedDesc": { "message": "返信だけに、フォローしていない人のフォロー数とフォロワー数を表示します。追加リクエストはしません。" }
 }

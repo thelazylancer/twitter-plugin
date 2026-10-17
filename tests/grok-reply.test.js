@@ -250,7 +250,7 @@ describe('Grok initialization failures and readiness', () => {
       fetch: async () => { throw new Error('request must not be sent'); },
       xct: { generateTxId: async () => { throw new Error('native module missing'); } },
     });
-    await expect(grok.generate({ tweetText: 'tweet' })).rejects.toThrow('Grok 签名初始化失败：native module missing');
+    await expect(grok.generate({ tweetText: 'tweet' })).rejects.toThrow('native module missing');
     await expect(grok.generate({ tweetText: 'tweet' })).rejects.not.toThrow('发一条消息');
   });
 

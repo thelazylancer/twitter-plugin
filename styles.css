@@ -1946,6 +1946,33 @@ article[data-testid="tweet"][data-xvm-overlay-host="1"] {
   background: rgba(29, 155, 240, 0.06);
 }
 
+.xvm-grok-options-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.xvm-grok-refresh {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgb(29, 155, 240);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.xvm-grok-refresh:hover {
+  background: rgba(29, 155, 240, 0.12);
+}
+
+.xvm-grok-refresh--busy {
+  animation: xvm-grok-pulse 0.9s ease-in-out infinite alternate;
+}
+
 .xvm-grok-close {
   width: 28px;
   height: 28px;

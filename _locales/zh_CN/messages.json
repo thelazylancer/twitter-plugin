@@ -623,6 +623,8 @@
   "authorReplyTitle": { "message": "AI 主页回评" },
   "authorReplyDesc": { "message": "只用于你自己帖子下的回评。生成时会把主贴和当前评论填进 [推文内容]。" },
   "authorReplyReset": { "message": "恢复默认回评提示词" },
+  "unfollowedBlueTitle": { "message": "只标蓝 V" },
+  "unfollowedBlueDesc": { "message": "默认勾选。只给带蓝勾的会员显示未关注。取消后，所有未关注的评论者都会标。" },
   "unfollowedTitle": { "message": "未关注标记" },
   "unfollowedDesc": { "message": "只在评论区标出你未关注的人，并显示关注数和粉丝数。不额外请求。" }
 }

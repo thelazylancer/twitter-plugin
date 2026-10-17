@@ -18,6 +18,7 @@ let freshnessHotColor = '#f4212e';
 let freshnessFreshColor = '#1d9bf0';
 let freshnessWarmColor = '#f7b928';
 let unfollowedEnabled = true;
+let unfollowedBlueOnly = true;
 const authorRelationStore = new Map();
 const authorRelationByHandle = new Map();
 
@@ -248,6 +249,7 @@ window.addEventListener('message', (event) => {
   velocityBadgesEnabled = event.data.featureVelocityBadges === true;
   applyFreshnessSettings(event.data);
   unfollowedEnabled = event.data.unfollowedEnabled !== false;
+  unfollowedBlueOnly = event.data.unfollowedBlueOnly !== false;
   clearUnfollowedLabels();
   paintUnfollowed();
   applyBadgeStyle();
@@ -369,7 +371,8 @@ let grokSelectedTemplateId = 'default';
 let grokTemporaryChat = true;
 let grokEnterToReply = false;
 let grokLastReplyArticle = null;
-let aiProvider = 'x-grok';
+let aiProvider = '';
+let aiSettingsReady = false;
 let aiOpenAIPlatform = 'openai';
 let aiBaseUrl = 'https://api.openai.com/v1';
 let aiModel = 'gpt-4o-mini';
@@ -378,10 +381,9 @@ let aiLanguage = 'auto';
 let aiRequestSeq = 0;
 const aiPendingRequests = new Map();
 
+// Do not touch Grok signing until settings say the provider is X Grok.
+window.__xvmSkipGrok = true;
 window.postMessage({ type: 'XVM_GROK_SETTINGS_REQUEST' }, '*');
-
-// Pre-warm tx-id context so the first AI 生成 click is fast.
-window.__xvmXct?.warmup?.();
 
 window.addEventListener('message', (event) => {
   if (event.source !== window) return;
@@ -409,6 +411,8 @@ window.addEventListener('message', (event) => {
   }
   if (['x-grok', 'ollama', 'openai-compatible'].includes(event.data.aiProvider)) {
     aiProvider = event.data.aiProvider;
+    aiSettingsReady = true;
+    window.__xvmSkipGrok = aiProvider !== 'x-grok';
   }
   if (typeof event.data.aiOpenAIPlatform === 'string' && event.data.aiOpenAIPlatform) {
     aiOpenAIPlatform = event.data.aiOpenAIPlatform;
@@ -855,12 +859,18 @@ function readAuthorRelation(user, tweetLegacy) {
   const followingCount = [userLegacy.friends_count, user.friends_count, user.public_metrics?.following_count]
     .map((value) => Number(value))
     .find((value) => Number.isFinite(value) && value >= 0);
-  if (!screenName && following === null && !Number.isFinite(followers)) return null;
+  const verifiedType = String(user.verified_type || userLegacy.verified_type || '').toLowerCase();
+  let blueVerified = null;
+  if (verifiedType === 'business' || verifiedType === 'government') blueVerified = false;
+  else if (user.is_blue_verified === true || userLegacy.is_blue_verified === true) blueVerified = true;
+  else if (user.is_blue_verified === false || userLegacy.is_blue_verified === false) blueVerified = false;
+  if (!screenName && following === null && !Number.isFinite(followers) && blueVerified === null) return null;
   return {
     screenName,
     following,
     followers,
     followingCount,
+    blueVerified,
     inReplyToStatusId: String(tweetLegacy?.in_reply_to_status_id_str || ''),
   };
 }
@@ -3316,6 +3326,7 @@ function relationForComment(article) {
     following: booleanOrNull(byId?.following ?? byHandle?.following ?? fiber?.following),
     followers: [byId?.followers, byHandle?.followers, fiber?.followers].find((value) => Number.isFinite(value)),
     followingCount: [byId?.followingCount, byHandle?.followingCount, fiber?.followingCount].find((value) => Number.isFinite(value)),
+    blueVerified: [byId?.blueVerified, byHandle?.blueVerified, fiber?.blueVerified].find((value) => value === true || value === false) ?? null,
   };
   const buttonFollowing = followSignalFromButtons(article);
   if (merged.following === null && buttonFollowing !== null) merged.following = buttonFollowing;
@@ -3330,6 +3341,7 @@ function mergeAuthorRelation(base, extra) {
     following: base.following === true || base.following === false ? base.following : extra.following,
     followers: Number.isFinite(base.followers) ? base.followers : extra.followers,
     followingCount: Number.isFinite(base.followingCount) ? base.followingCount : extra.followingCount,
+    blueVerified: base.blueVerified === true || base.blueVerified === false ? base.blueVerified : extra.blueVerified,
     inReplyToStatusId: base.inReplyToStatusId || extra.inReplyToStatusId || '',
   };
 }
@@ -3387,6 +3399,21 @@ function ownArticleNodes(article, selector) {
     .filter((node) => node.closest('article[data-testid="tweet"]') === article);
 }
 
+function blueVerifiedFromDom(article) {
+  const name = ownArticleNodes(article, '[data-testid="User-Name"]')[0];
+  if (!name) return null;
+  const labels = Array.from(name.querySelectorAll('[aria-label]'))
+    .map((node) => node.getAttribute('aria-label') || '');
+  const text = labels.join('\n');
+  if (/organization|government|政府|企业|组织/i.test(text)) return false;
+  if (/verified account|已验证账号|已认证账号|认证账号/i.test(text)) return true;
+  const fills = Array.from(name.querySelectorAll('svg path'))
+    .map((node) => (node.getAttribute('fill') || '').toLowerCase());
+  if (fills.includes('#1d9bf0')) return true;
+  if (fills.some((fill) => fill === '#e2b719' || fill === '#829aab')) return false;
+  return name.querySelector('svg[aria-label], [data-testid="icon-verified"]') ? null : false;
+}
+
 function followSignalFromButtons(article) {
   for (const btn of ownArticleNodes(article, 'button, [role="button"]')) {
     const testid = btn.getAttribute('data-testid') || '';
@@ -3414,7 +3441,12 @@ function paintUnfollowed(root = document) {
     }
     const relation = relationForComment(article);
     if (relation.following !== true && relation.following !== false) return;
-    const mark = unfollowedApi().label(relation);
+    const domBlue = blueVerifiedFromDom(article);
+    if (unfollowedBlueOnly && unfollowedApi().isBlueMember(relation, domBlue) === null) return;
+    const mark = unfollowedApi().label(relation, {
+      blueOnly: unfollowedBlueOnly,
+      domBlue,
+    });
     if (!mark) {
       article.dataset.xvmUnfollowedStamped = '1';
       return;
@@ -4698,6 +4730,8 @@ function insertTextIntoReply(editable, text) {
 // and bails out — otherwise its streaming onProgress keeps re-creating the
 // panel after the user already picked a comment.
 let grokGenEpoch = 0;
+let grokRefreshHandler = null;
+const GROK_REFRESH_HINT = '\n\n请换一批不同角度的说法，不要重复刚才已经给出的候选。';
 
 function closeGrokOptions() {
   grokGenEpoch += 1;
@@ -4760,14 +4794,25 @@ function showGrokOptions(comments, editable, opts = {}) {
       <div class="xvm-grok-options-head">
         <strong>评论候选</strong>
         <span class="xvm-grok-options-status" aria-live="polite"></span>
-        <button type="button" class="xvm-grok-close" aria-label="Close">×</button>
+        <div class="xvm-grok-options-actions">
+          <button type="button" class="xvm-grok-refresh" aria-label="刷新候选" title="换一批">↻</button>
+          <button type="button" class="xvm-grok-close" aria-label="Close">×</button>
+        </div>
       </div>
       <div class="xvm-grok-options-note" hidden></div>
       <div class="xvm-grok-options-list"></div>
     `;
     panel.querySelector('.xvm-grok-close')?.addEventListener('click', closeGrokOptions);
+    panel.querySelector('.xvm-grok-refresh')?.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      grokRefreshHandler?.();
+    });
     document.body.appendChild(panel);
   }
+  if (typeof opts.onRefresh === 'function') grokRefreshHandler = opts.onRefresh;
+  const refreshBtn = panel.querySelector('.xvm-grok-refresh');
+  if (refreshBtn) refreshBtn.classList.toggle('xvm-grok-refresh--busy', !!opts.streaming);
   const title = panel.querySelector('.xvm-grok-options-head strong');
   if (title) title.textContent = opts.authorMode ? '回评候选' : '评论候选';
   const note = panel.querySelector('.xvm-grok-options-note');
@@ -4970,12 +5015,28 @@ function requestExternalAiGeneration(payload, onProgress = null) {
   });
 }
 
+function waitForAiSettings() {
+  if (aiSettingsReady) return Promise.resolve();
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, 1200);
+    const onMsg = (event) => {
+      if (event.source !== window || event.data?.type !== 'XVM_GROK_SETTINGS_LOAD') return;
+      clearTimeout(timer);
+      window.removeEventListener('message', onMsg);
+      resolve();
+    };
+    window.addEventListener('message', onMsg);
+    window.postMessage({ type: 'XVM_GROK_SETTINGS_REQUEST' }, '*');
+  });
+}
+
 async function handleGrokGenerate(btn, editable, promptTemplate = null, authorJob = null) {
   // Synchronous re-entry guard. `btn.disabled = true` later races with rapid
   // double-clicks; the dataset flag is set before any await so the second
   // click sees it immediately.
   if (btn.dataset.xvmBusy === '1') return;
   btn.dataset.xvmBusy = '1';
+  await waitForAiSettings();
 
   let authorMode = false;
   let authorNote = '';
@@ -5024,27 +5085,30 @@ async function handleGrokGenerate(btn, editable, promptTemplate = null, authorJo
     const tpl = promptTemplate || (authorMode
       ? { id: 'author-reply', name: '回评', prompt: currentAuthorReplyPrompt() }
       : getSelectedGrokPromptTemplate());
-    // Returning false from onProgress tells the reader to abort the stream.
-    const onProgress = (running) => {
-      if (epoch !== grokGenEpoch) return false;
-      const capped = Array.isArray(running) ? running.slice(0, aiReplyCount) : running;
-      showGrokOptions(capped, editable, {
-        streaming: true,
-        anchor: btn,
-        authorMode,
-        authorNote,
-        resolveEditor: authorMode ? editorForAuthorFill : null,
-      });
-      return !Array.isArray(running) || running.length < aiReplyCount;
+    const onRefresh = () => {
+      delete btn.dataset.xvmBusy;
+      btn.disabled = false;
+      grokGenEpoch += 1;
+      const base = String(tpl?.prompt || tpl || '').replace(GROK_REFRESH_HINT, '');
+      const next = { id: tpl?.id || 'refresh', name: tpl?.name || '刷新', prompt: `${base}${GROK_REFRESH_HINT}` };
+      handleGrokGenerate(btn, editable, next, authorJob);
     };
-    showGrokOptions([], editable, {
-      streaming: true,
+    const panelOpts = {
       anchor: btn,
       authorMode,
       authorNote,
       resolveEditor: authorMode ? editorForAuthorFill : null,
-    });
-    const comments = aiProvider === 'x-grok'
+      onRefresh,
+    };
+    // Returning false from onProgress tells the reader to abort the stream.
+    const onProgress = (running) => {
+      if (epoch !== grokGenEpoch) return false;
+      const capped = Array.isArray(running) ? running.slice(0, aiReplyCount) : running;
+      showGrokOptions(capped, editable, { ...panelOpts, streaming: true });
+      return !Array.isArray(running) || running.length < aiReplyCount;
+    };
+    showGrokOptions([], editable, { ...panelOpts, streaming: true });
+    const comments = aiProvider === 'x-grok' && aiSettingsReady
       ? await (async () => {
         if (!window.__xvmGrok) {
           throw new Error('插件未正确加载（lib/grok-reply.js 缺失），请重载扩展');
@@ -5065,13 +5129,7 @@ async function handleGrokGenerate(btn, editable, promptTemplate = null, authorJo
     showGrokOptions(
       Array.isArray(comments) ? comments.slice(0, aiReplyCount) : comments,
       editable,
-      {
-        streaming: false,
-        anchor: btn,
-        authorMode,
-        authorNote,
-        resolveEditor: authorMode ? editorForAuthorFill : null,
-      },
+      { ...panelOpts, streaming: false },
     );
   } catch (err) {
     console.debug('[XVM-AI] generation failed', err);
