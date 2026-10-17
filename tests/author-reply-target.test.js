@@ -57,6 +57,20 @@ describe('author reply target', () => {
     expect(api.authorReplyStatusIds(input)).toEqual([]);
   });
 
+  it('keeps marking comments after the main post scrolls out of the list', () => {
+    const input = {
+      pageStatusId: '100',
+      loggedInHandle: 'me',
+      knownOwnStatusId: '100',
+      cards: [
+        { statusId: '200', handle: 'ada' },
+        { statusId: '201', handle: 'bob' },
+      ],
+    };
+    expect(api.isOwnThread(input)).toBe(true);
+    expect(api.authorReplyStatusIds(input)).toEqual(['200', '201']);
+  });
+
   it('fills the composer that appeared after the click, not the main post box', () => {
     const main = { id: 'main', closest: () => null };
     const dialogBox = { id: 'dialog', closest: () => ({ role: 'dialog' }) };

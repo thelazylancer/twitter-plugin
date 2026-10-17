@@ -3419,12 +3419,11 @@ function paintUnfollowed(root = document) {
       article.dataset.xvmUnfollowedStamped = '1';
       return;
     }
-    const name = ownArticleNodes(article, '[data-testid="User-Name"]')[0];
-    if (!name) return;
+    article.dataset.xvmOverlayHost = '1';
     let chip = ownArticleNodes(article, '.xvm-unfollowed')[0];
     if (!chip) {
       chip = document.createElement('span');
-      name.appendChild(chip);
+      article.appendChild(chip);
     }
     chip.className = mark.hard ? 'xvm-unfollowed xvm-unfollowed--hard' : 'xvm-unfollowed';
     chip.textContent = mark.text;
@@ -3835,6 +3834,7 @@ setInterval(() => {
   }
   paintFreshness();
   paintUnfollowed();
+  injectAuthorReplyButtons();
 }, 2000);
 
 // Refresh leaderboard on scroll as virtualized articles come and go
@@ -4033,11 +4033,20 @@ function articleHasOwnAnalytics(article) {
     .some((el) => el.closest('article[data-testid="tweet"]') === article);
 }
 
+let knownOwnStatusId = '';
+let knownOwnMainText = '';
+
 function authorReplyInput() {
+  const pageStatusId = getStatusIdFromLocation();
+  if (knownOwnStatusId && knownOwnStatusId !== pageStatusId) {
+    knownOwnStatusId = '';
+    knownOwnMainText = '';
+  }
   const articles = Array.from(document.querySelectorAll('article[data-testid="tweet"]'));
-  return {
-    pageStatusId: getStatusIdFromLocation(),
+  const input = {
+    pageStatusId,
     loggedInHandle: getLoggedInHandle(),
+    knownOwnStatusId,
     cards: articles.map((article) => {
       const statusId = articleOwnStatusId(article);
       return {
@@ -4050,6 +4059,15 @@ function authorReplyInput() {
       };
     }),
   };
+  const api = window.__xvmAuthorReplyTarget;
+  const focal = api?.focalCard(input);
+  if (focal && api?.focalIsOwn(input)) {
+    knownOwnStatusId = pageStatusId;
+    input.knownOwnStatusId = pageStatusId;
+    const text = readArticleOwnText(focal.article);
+    if (text) knownOwnMainText = text;
+  }
+  return input;
 }
 
 function authorReplyTargetArticles() {
@@ -4102,8 +4120,8 @@ function readArticleOwnText(article) {
 }
 
 function buildAuthorReplyPayload(commentArticle, mainArticle) {
-  if (!commentArticle || !mainArticle || commentArticle === mainArticle) return null;
-  const mainText = readArticleOwnText(mainArticle);
+  if (!commentArticle || (mainArticle && commentArticle === mainArticle)) return null;
+  const mainText = (mainArticle && readArticleOwnText(mainArticle)) || knownOwnMainText;
   const commentText = readArticleOwnText(commentArticle);
   if (!mainText || !commentText || mainText === commentText) return null;
   const handle = articleHandle(commentArticle);
@@ -5166,7 +5184,7 @@ async function startAuthorReply(article, replyBtn) {
   if (!article || !replyBtn || replyBtn.dataset.xvmAuthorBusy === '1') return;
   replyBtn.dataset.xvmAuthorBusy = '1';
   const mainArticle = ownFocalArticle();
-  if (!isAuthorReplyTarget(article) || !mainArticle) {
+  if (!isAuthorReplyTarget(article) || (!mainArticle && !knownOwnMainText)) {
     showGrokErrorToast('这不是你主贴下的评论');
     delete replyBtn.dataset.xvmAuthorBusy;
     return;
@@ -5207,8 +5225,6 @@ function placeAuthorReplyEntry(article) {
   if (article.querySelector('.xvm-author-reply-row')) return;
   const replyBtn = Array.from(article.querySelectorAll('[data-testid="reply"]'))
     .find((node) => node.closest('article[data-testid="tweet"]') === article);
-  const text = Array.from(article.querySelectorAll('[data-testid="tweetText"]'))
-    .find((node) => node.closest('article[data-testid="tweet"]') === article);
   const row = document.createElement('div');
   row.className = 'xvm-author-reply-row';
   const btn = document.createElement('button');
@@ -5225,13 +5241,9 @@ function placeAuthorReplyEntry(article) {
     }
     startAuthorReply(article, replyBtn);
   });
-  const hint = document.createElement('span');
-  hint.className = 'xvm-author-reply-hint';
-  hint.textContent = '读取主贴和这条评论';
-  row.append(btn, hint);
-  if (text) text.insertAdjacentElement('afterend', row);
-  else if (replyBtn) replyBtn.closest('div')?.parentElement?.appendChild(row);
-  else article.appendChild(row);
+  row.append(btn);
+  article.dataset.xvmOverlayHost = '1';
+  article.appendChild(row);
 }
 
 function injectAuthorReplyButtons() {

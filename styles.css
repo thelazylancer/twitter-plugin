@@ -1709,10 +1709,18 @@ article[data-testid="tweet"][data-xvm-freshness="warm"] {
   background: var(--xvm-freshness-wash, transparent);
 }
 
+article[data-testid="tweet"][data-xvm-overlay-host="1"] {
+  position: relative;
+}
+
 .xvm-unfollowed {
+  position: absolute;
+  top: 8px;
+  right: 48px;
+  z-index: 4;
   display: inline-flex;
   align-items: center;
-  margin-left: 8px;
+  margin: 0;
   padding: 2px 10px;
   border-radius: 999px;
   background: #1d9bf0;
@@ -1720,7 +1728,7 @@ article[data-testid="tweet"][data-xvm-freshness="warm"] {
   font-size: 12px;
   font-weight: 800;
   line-height: 1.5;
-  vertical-align: middle;
+  pointer-events: none;
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.45);
 }
 
@@ -1730,12 +1738,14 @@ article[data-testid="tweet"][data-xvm-freshness="warm"] {
 }
 
 .xvm-author-reply-row {
+  position: absolute;
+  right: 12px;
+  bottom: 8px;
+  z-index: 4;
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 8px 0 4px;
-  position: relative;
-  z-index: 2;
+  margin: 0;
+  pointer-events: none;
 }
 
 .xvm-author-reply-btn {
@@ -1754,6 +1764,7 @@ article[data-testid="tweet"][data-xvm-freshness="warm"] {
   font-weight: 700;
   line-height: 1;
   cursor: pointer;
+  pointer-events: auto;
 }
 
 .xvm-author-reply-btn:hover {
