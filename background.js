@@ -50,23 +50,7 @@ const OPENAI_COMPAT_PLATFORMS = {
   },
 };
 
-const ALLOWED_OPENAI_PREFIXES = [
-  'https://api.openai.com/v1',
-  'https://api.deepseek.com',
-  'https://openrouter.ai/api/v1',
-  'https://api.moonshot.ai/v1',
-  'https://api.moonshot.cn/v1',
-  'https://dashscope.aliyuncs.com/compatible-mode/v1',
-  'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
-  'https://dashscope-us.aliyuncs.com/compatible-mode/v1',
-  'https://cn-hongkong.dashscope.aliyuncs.com/compatible-mode/v1',
-  'https://api.siliconflow.cn/v1',
-  'https://api.siliconflow.com/v1',
-  'http://localhost:1234/v1',
-  'http://127.0.0.1:1234/v1',
-  'http://localhost:11434/v1',
-  'http://127.0.0.1:11434/v1',
-];
+
 
 const SYNC_DEFAULTS = {
   aiProvider: DEFAULT_PROVIDER,
@@ -125,21 +109,27 @@ function isLocalHttpUrl(baseUrl) {
   }
 }
 
-function assertAllowedOpenAIBaseUrl(baseUrl) {
-  const normalized = trimTrailingSlash(baseUrl);
-  if (ALLOWED_OPENAI_PREFIXES.some((prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`))) {
-    return normalized;
+function normalizeHttpBaseUrl(baseUrl, fallback = '') {
+  const raw = trimTrailingSlash(baseUrl || fallback);
+  let url;
+  try {
+    url = new URL(raw);
+  } catch (_) {
+    throw new Error('Base URL 不是合法地址');
   }
-  if (isLocalHttpUrl(normalized) && normalized.endsWith('/v1')) return normalized;
-  throw new Error('暂不支持这个 Base URL。请使用内置平台预设，或本地 OpenAI-compatible 地址（localhost/127.0.0.1）。');
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error('Base URL 只支持 http 或 https');
+  }
+  if (!url.hostname) throw new Error('Base URL 缺少主机名');
+  return trimTrailingSlash(url.toString());
+}
+
+function assertAllowedOpenAIBaseUrl(baseUrl) {
+  return normalizeHttpBaseUrl(baseUrl);
 }
 
 function assertAllowedOllamaBaseUrl(baseUrl) {
-  const normalized = trimTrailingSlash(baseUrl || 'http://localhost:11434');
-  if (!isLocalHttpUrl(normalized)) {
-    throw new Error('Ollama Base URL 仅支持本机地址 localhost / 127.0.0.1。');
-  }
-  return normalized.replace(/\/v1$/, '');
+  return normalizeHttpBaseUrl(baseUrl, 'http://localhost:11434').replace(/\/v1$/, '');
 }
 
 function sanitizeAiPromptText(value) {

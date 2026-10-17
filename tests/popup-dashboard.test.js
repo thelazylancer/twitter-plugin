@@ -785,22 +785,13 @@ describe('#45 i18n lock-step (content.js i18n() ↔ bridge CONTENT_MESSAGE_KEYS 
 });
 
 describe('#15 AI comment provider contract', () => {
-  it('ships a background service worker for provider calls without broad host permissions', () => {
+  it('ships a background service worker that can call any http(s) AI base URL', () => {
     expect(manifest.background?.service_worker).toBe('background.js');
     expect(buildDistJs).toContain("'background.js'");
-    expect(manifest.host_permissions).not.toContain('<all_urls>');
-    for (const pattern of [
-      'http://localhost/*',
-      'http://127.0.0.1/*',
-      'https://api.openai.com/*',
-      'https://api.deepseek.com/*',
-      'https://openrouter.ai/*',
-      'https://api.moonshot.ai/*',
-      'https://dashscope.aliyuncs.com/*',
-      'https://api.siliconflow.cn/*',
-    ]) {
-      expect(manifest.host_permissions).toContain(pattern);
-    }
+    expect(manifest.host_permissions).toContain('https://*/*');
+    expect(manifest.host_permissions).toContain('http://*/*');
+    expect(backgroundJs).not.toContain('ALLOWED_OPENAI_PREFIXES');
+    expect(backgroundJs).not.toContain('暂不支持这个 Base URL');
   });
 
   it('keeps AI API keys out of sync storage and the MAIN-world content script', () => {

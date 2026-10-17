@@ -5,7 +5,7 @@ import vm from 'node:vm';
 const src = readFileSync(new URL('../lib/x-client-transaction.js', import.meta.url), 'utf8');
 const homeHtml = '59924:"ondemand.s",59924:"26791a5c30a3bd19"';
 
-function loadXct({ failPrime = false, missingVerification = false, modules = ['564498'] } = {}) {
+function loadXct({ failPrime = false, missingVerification = false, modules = ['564498'], consumedFrames = false } = {}) {
   class Node {
     constructor(tag) { this.tag = tag; this.children = []; this.id = ''; this.attrs = {}; }
     appendChild(node) { this.children.push(node); node.parent = this; return node; }
@@ -19,8 +19,8 @@ function loadXct({ failPrime = false, missingVerification = false, modules = ['5
     }
   }
   const body = new Node('body');
-  const original = body.appendChild(new Node('svg'));
-  original.id = 'loading-x-anim-0';
+  const original = consumedFrames ? null : body.appendChild(new Node('svg'));
+  if (original) original.id = 'loading-x-anim-0';
   const verification = { getAttribute: () => missingVerification ? null : 'test-verification' };
   const document = {
     body,
@@ -36,8 +36,8 @@ function loadXct({ failPrime = false, missingVerification = false, modules = ['5
     svg.setAttribute('class', 'r-16n140');
     return svg;
   });
-  const generate = vi.fn((path, method) => {
-    if (generate.mock.calls.length === 1) {
+  const generate = vi.fn(async (path, method) => {
+    if (generate.mock.calls.length === 1 && original) {
       expect(document.querySelectorAll('[id^="loading-x-anim-"]')).toHaveLength(4);
       expect(original.id).toBe('xvm-saved-frame-0');
       const frames = document.querySelectorAll('[id^="loading-x-anim-"]');
@@ -45,7 +45,12 @@ function loadXct({ failPrime = false, missingVerification = false, modules = ['5
       expect(frames.every((n) => n.getAttribute('onload') === null)).toBe(true);
       if (failPrime) throw new Error('native animation failed');
     }
-    return Promise.resolve(`native:${method}:${path}`);
+    // X's current ondemand.s reads animation frames after its first await.
+    // Removing them before that read throws the exact browser error.
+    await Promise.resolve();
+    const frame = document.querySelectorAll('[id^="loading-x-anim-"]')[0];
+    if (!frame) throw new TypeError("Cannot read properties of undefined (reading 'childNodes')");
+    return `native:${method}:${path}`;
   });
   const chunks = [];
   chunks.push = function (entry) {
@@ -65,16 +70,20 @@ function loadXct({ failPrime = false, missingVerification = false, modules = ['5
       querySelectorAll: () => frames,
     }; } },
   });
-  return { api: win.__xvmXct, runtime, generate, fetch, original, body, chunks };
+  return { api: win.__xvmXct, runtime, generate, fetch, original, body, chunks, document };
 }
 
 describe('native X transaction generator', () => {
   it('loads the current chunk with its 16-character hash through X, then signs the actual method/path', async () => {
-    const { api, runtime, generate, original, body, chunks } = loadXct();
+    const { api, runtime, generate, original, body, chunks, document } = loadXct();
     await expect(api.generateTxId('POST', '/2/grok/add_response.json')).resolves.toBe('native:POST:/2/grok/add_response.json');
     expect(runtime.e).toHaveBeenCalledWith(59924);
     expect(runtime).toHaveBeenCalledWith('564498');
     expect(generate).toHaveBeenLastCalledWith('/2/grok/add_response.json', 'POST');
+    expect(original.id).toBe('xvm-saved-frame-0');
+    expect(body.children).toHaveLength(2);
+    expect(document.querySelectorAll('[id^="loading-x-anim-"]')).toHaveLength(4);
+    api.reset();
     expect(original.id).toBe('loading-x-anim-0');
     expect(body.children).toEqual([original]);
     expect(chunks).toHaveLength(1); // synthetic runtime entry removed
@@ -98,6 +107,11 @@ describe('native X transaction generator', () => {
     expect(body.children).toEqual([original]);
     await expect(api.ensureReady()).resolves.toBeTypeOf('function');
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps injected frames available when X already consumed the page frames', async () => {
+    const { api } = loadXct({ consumedFrames: true });
+    await expect(api.generateTxId('POST', '/2/grok/add_response.json')).resolves.toBe('native:POST:/2/grok/add_response.json');
   });
 
   it('rejects a page without its verification context rather than emitting an invalid signature', async () => {
