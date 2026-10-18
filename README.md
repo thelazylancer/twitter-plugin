@@ -1,6 +1,6 @@
 # X 快回
 
-基于 [Icy-Cat/x-viral-monitor](https://github.com/Icy-Cat/x-viral-monitor)（MIT）改成的回复插件，来源与同步方法见 [`docs/UPSTREAM.md`](docs/UPSTREAM.md)。打开别人的帖子，点 **快回** 生成评论。打开自己的帖子，每条评论旁有 **回评**。它会先读主贴和这条评论，再按主贴的立场回复这条评论。点一条填入，不会自动发送。
+基于 [Icy-Cat/x-viral-monitor](https://github.com/Icy-Cat/x-viral-monitor)（MIT）改成的回复插件。打开别人的帖子，点 **快回** 生成评论。打开自己的帖子，每条评论旁有 **回评**。它会先读主贴和这条评论，再按主贴的立场回复这条评论。点一条填入，不会自动发送。
 
 流速徽章、排行榜、星图、Markdown 复制和广告裁剪默认关闭。弹窗打开就是「AI 评论」。默认走已登录的 X Grok，不需要另配 Key；也可以在弹窗里换成 OpenAI 兼容接口或本机 Ollama。
 
