@@ -192,6 +192,14 @@ iOS Safari 用户使用 [**Userscripts**](https://apps.apple.com/app/userscripts
 
 ---
 
+## 来源
+
+上游 [Icy-Cat/x-viral-monitor](https://github.com/Icy-Cat/x-viral-monitor)（MIT），分叉点 `b1b896d`（v1.18.17，2026-10-13）。
+
+同步上游：`git remote add upstream https://github.com/Icy-Cat/x-viral-monitor.git` → `git fetch upstream` → `git merge upstream/main`
+
+---
+
 ## 项目结构
 
 ```
