@@ -4768,7 +4768,7 @@ function showGrokTemplateMenu(anchor, editable) {
       closeGrokTemplateMenu();
       // Persist selection so the next plain click reuses it.
       grokSelectedTemplateId = tpl.id;
-      try { chrome.storage?.sync?.set?.({ grokSelectedPromptId: tpl.id }); } catch (_) {}
+      window.postMessage({ type: 'XVM_GROK_SELECT_TEMPLATE', templateId: tpl.id }, '*');
       handleGrokGenerate(anchor, editable, tpl);
     });
     list.appendChild(item);

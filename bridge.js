@@ -1411,6 +1411,14 @@ window.addEventListener('message', (event) => {
     return;
   }
 
+  if (type === 'XVM_GROK_SELECT_TEMPLATE' && typeof event.data.templateId === 'string' && event.data.templateId) {
+    const templateId = event.data.templateId;
+    safeChromeCall(() => {
+      chrome.storage.sync.set({ grokSelectedPromptId: templateId });
+    });
+    return;
+  }
+
   if (type === 'XVM_GROK_SETTINGS_REQUEST') {
     safeChromeCall(() => {
       chrome.storage.sync.get({
