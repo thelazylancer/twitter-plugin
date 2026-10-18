@@ -1,4 +1,4 @@
-# X 快回
+# 蓝V特工
 
 基于 [Icy-Cat/x-viral-monitor](https://github.com/Icy-Cat/x-viral-monitor)（MIT）改成的回复插件。打开别人的帖子，点 **快回** 生成评论。打开自己的帖子，每条评论旁有 **回评**。它会先读主贴和这条评论，再按主贴的立场回复这条评论。点一条填入，不会自动发送。
 

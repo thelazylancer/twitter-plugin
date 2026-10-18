@@ -1,6 +1,6 @@
 {
   "extName": {
-    "message": "X クイック返信"
+    "message": "ブルーバッジエージェント"
   },
   "extDescription": {
     "message": "X の返信欄でコメント候補を生成し、選んだ文だけを入力します。自動送信はしません。"

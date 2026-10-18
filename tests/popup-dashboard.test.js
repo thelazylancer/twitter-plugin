@@ -67,7 +67,7 @@ describe('#45 popup tabs structure (mock A)', () => {
   });
 
   it('header includes the SVG app icon, tier chip, language button, and theme toggle button', () => {
-    expect(/<img class="app-logo" src="icons\/icon_origin\.svg" alt="X 快回">/.test(html)).toBe(true);
+    expect(/<img class="app-logo" src="icons\/icon_origin\.svg" alt="蓝V特工">/.test(html)).toBe(true);
     expect(/id="tier-chip"/.test(html)).toBe(true);
     expect(/id="language-toggle"/.test(html)).toBe(true);
     expect(/id="theme-toggle"/.test(html)).toBe(true);
