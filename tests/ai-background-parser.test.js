@@ -39,9 +39,12 @@ describe('AI background comment parser', () => {
     expect(prompt).toContain('Café\n\t正文\uFFFD');
     const english = renderPrompt('This post is in English.', '为该推文生成3条评论', 3, { replyLanguage: 'post' });
     expect(english).toContain('Write every reply in English only');
-    expect(english).not.toContain('请只输出');
+    const breakfast = renderPrompt('早上好朋友们\n\n吃个扬州早茶 https://pic.x.com/vrvEmSMCvmhttps://pic.x.com/vrvEmSMCvmhttps://pic.x.com/vrvEmSMCvmhttps://pic.x.com/vrvEmSMCvm', 'Write 3 replies', 3, { replyLanguage: 'post' });
+    expect(breakfast).toContain('每条回复必须使用中文');
+    const chineseWithLink = renderPrompt('大家觉得这个怎么样 https://example.com/a/very/long/english/path', 'Write 3 replies', 3, { replyLanguage: 'post' });
+    expect(chineseWithLink).toContain('每条回复必须使用中文');
     const forced = renderPrompt('This post is in English.', '为该推文生成3条评论', 3, { replyLanguage: 'zh' });
-    expect(forced).toContain('Write every reply in Chinese only');
+    expect(forced).toContain('每条回复必须使用中文');
     expect(prompt).not.toMatch(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\uFEFF]/);
   });
 

@@ -148,12 +148,21 @@ function textBeingRepliedTo(text) {
 }
 
 function replyLanguageOf(text) {
-  const body = textBeingRepliedTo(text);
+  const body = textBeingRepliedTo(text)
+    .replace(/!\[[^\]]*]\([^)]*\)/g, ' ')
+    .replace(/https?:\/\/\S+/gi, ' ')
+    .replace(/(?:pic\.x\.com|pbs\.twimg\.com|t\.co)\/[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]*/gi, ' ')
+    .replace(/@[A-Za-z0-9_]+/g, ' ')
+    .replace(/#[A-Za-z0-9_]+/g, ' ');
   const kana = (body.match(/[\u3040-\u30ff]/g) || []).length;
   const cjk = (body.match(/[\u4e00-\u9fff]/g) || []).length;
   const latin = (body.match(/[A-Za-z]/g) || []).length;
-  if (kana > 0 && kana >= cjk) return 'ja';
-  if (cjk > latin) return 'zh';
+  if (kana > 0 && kana >= cjk && kana >= latin) return 'ja';
+  // A short Chinese line plus a few English words is still Chinese.
+  // Only treat it as English when Latin letters clearly dominate.
+  if (cjk >= 2 && cjk * 2 >= latin) return 'zh';
+  if (latin >= 8 && latin > cjk * 2) return 'en';
+  if (cjk > 0) return 'zh';
   return 'en';
 }
 
@@ -171,8 +180,14 @@ function resolveReplyLang(text, replyLanguage) {
 }
 
 function outputHint(text, replyCount, options = {}) {
-  const name = { en: 'English', zh: 'Chinese', ja: 'Japanese' }[resolveReplyLang(text, options.replyLanguage)];
-  return `Write every reply in ${name} only. Do not follow the template language. Return at most ${replyCount} replies. Output only ready-to-post text, each inside its own code block.`;
+  const lang = resolveReplyLang(text, options.replyLanguage);
+  if (lang === 'zh') {
+    return `每条回复必须使用中文，不要改用英文。最多返回 ${replyCount} 条。每条只输出可直接发布的正文，用代码块包裹。`;
+  }
+  if (lang === 'ja') {
+    return `各返信は日本語のみで書くこと。英語にしない。最大 ${replyCount} 件。各返信は投稿できる本文だけをコードブロックで囲む。`;
+  }
+  return `Write every reply in English only. Do not switch to Chinese. Return at most ${replyCount} replies. Output only ready-to-post text, each inside its own code block.`;
 }
 
 function renderPrompt(tweetText, templateText, replyCount, options = {}) {
