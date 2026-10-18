@@ -367,6 +367,7 @@ function normalizeGrokPromptText(prompt) {
 let grokPromptTemplate = DEFAULT_GROK_COMMENT_PROMPT;
 let grokPromptTemplates = DEFAULT_GROK_PROMPT_TEMPLATES.map((tpl) => ({ ...tpl }));
 let authorReplyPrompt = '';
+let inviteFollowPrompt = '';
 let grokSelectedTemplateId = 'default';
 let grokTemporaryChat = true;
 let grokEnterToReply = false;
@@ -409,6 +410,9 @@ window.addEventListener('message', (event) => {
   }
   if (typeof event.data.authorReplyPrompt === 'string') {
     authorReplyPrompt = event.data.authorReplyPrompt;
+  }
+  if (typeof event.data.inviteFollowPrompt === 'string') {
+    inviteFollowPrompt = event.data.inviteFollowPrompt;
   }
   if (['x-grok', 'ollama', 'openai-compatible'].includes(event.data.aiProvider)) {
     aiProvider = event.data.aiProvider;
@@ -4143,6 +4147,27 @@ function currentAuthorReplyPrompt() {
   return custom || AUTHOR_REPLY_PROMPT;
 }
 
+const INVITE_FOLLOW_PROMPT = `[推文内容]
+
+你要在对方的推文下留一条回复，邀请对方和你互相关注。要求：
+- 先接住这条推文的一个具体内容（观点、经历或细节）
+- 再自然提出邀请互相互关：不要写成商务邀约
+- 以小女子的身份去评论(不需要小女人人称)，一定要用网络用语，评论有梗
+- 生成3条候选，每条控制在20个字左右
+- 不要夸夸其谈，不要提粉丝数、流量、合作，不要用 emoji 堆砌
+- 跟这条推文使用的语言走
+- 只输出可直接发布的回复正文，用代码块包裹。`;
+
+function currentInviteFollowPrompt() {
+  const custom = String(inviteFollowPrompt || '').trim();
+  return custom || INVITE_FOLLOW_PROMPT;
+}
+
+// Fixed rather than aiReplyCount: the invite prompt asks for exactly three
+// short candidates, and the language hint appended downstream restates this
+// number, so the two must agree.
+const INVITE_FOLLOW_REPLY_COUNT = 3;
+
 function readArticleOwnText(article) {
   if (!article) return '';
   const node = Array.from(article.querySelectorAll('[data-testid="tweetText"]'))
@@ -4684,9 +4709,10 @@ function installEnterToReplyShortcut() {
 }
 
 function cleanupMisplacedGrokButtons(editable, composerRoot = null) {
+  const SEL = '.xvm-grok-generate-btn, .xvm-grok-template-caret, .xvm-grok-invite-btn';
   const editorShell = editable?.closest?.('[data-testid="tweetTextarea_0RichTextInputContainer"], .DraftEditor-root, .DraftEditor-editorContainer');
-  editorShell?.querySelectorAll?.('.xvm-grok-generate-btn, .xvm-grok-template-caret').forEach((btn) => btn.remove());
-  composerRoot?.querySelectorAll?.('.xvm-grok-generate-btn, .xvm-grok-template-caret').forEach((btn) => {
+  editorShell?.querySelectorAll?.(SEL).forEach((btn) => btn.remove());
+  composerRoot?.querySelectorAll?.(SEL).forEach((btn) => {
     if (isInvalidGrokButtonHost(btn.parentElement, editable)) btn.remove();
   });
 }
@@ -4818,7 +4844,7 @@ function showGrokOptions(comments, editable, opts = {}) {
   const refreshBtn = panel.querySelector('.xvm-grok-refresh');
   if (refreshBtn) refreshBtn.classList.toggle('xvm-grok-refresh--busy', !!opts.streaming);
   const title = panel.querySelector('.xvm-grok-options-head strong');
-  if (title) title.textContent = opts.authorMode ? '回评候选' : '评论候选';
+  if (title) title.textContent = opts.inviteMode ? '邀关文案' : opts.authorMode ? '回评候选' : '评论候选';
   const note = panel.querySelector('.xvm-grok-options-note');
   if (note) {
     note.hidden = !opts.authorNote;
@@ -4990,7 +5016,8 @@ function showGrokOptions(comments, editable, opts = {}) {
 }
 
 function setGrokButtonLabel(btn, label = '', loading = false) {
-  const text = label || (btn?.dataset?.xvmMode === 'author' ? '回评' : '快回');
+  const mode = btn?.dataset?.xvmMode;
+  const text = label || (mode === 'author' ? '回评' : mode === 'invite' ? '邀关' : '快回');
   btn.classList.toggle('xvm-grok-generate-btn--loading', loading);
   btn.innerHTML = `<span class="xvm-grok-spark" aria-hidden="true">✦</span><span>${text}</span>`;
 }
@@ -5043,10 +5070,23 @@ async function handleGrokGenerate(btn, editable, promptTemplate = null, authorJo
   btn.dataset.xvmBusy = '1';
   await waitForAiSettings();
 
+  // The 邀关 button shares this pipeline: same source tweet, same provider
+  // switch, different prompt and a one-candidate cap.
+  const inviteMode = !authorJob && btn.dataset.xvmMode === 'invite';
   let authorMode = false;
   let authorNote = '';
   let tweetText = '';
-  if (authorJob?.context) {
+  if (inviteMode) {
+    const root = findReplyComposerRoot(editable);
+    const article = findReplyArticleForAiComposer(root);
+    const replyText = getTweetTextFromArticle(article);
+    if (!replyText) {
+      showGrokErrorToast('未找到推文内容');
+      delete btn.dataset.xvmBusy;
+      return;
+    }
+    tweetText = replyText;
+  } else if (authorJob?.context) {
     authorMode = true;
     tweetText = authorJob.context;
     authorNote = authorJob.who
@@ -5082,14 +5122,19 @@ async function handleGrokGenerate(btn, editable, promptTemplate = null, authorJo
         : replyText;
     }
   }
-  btn.dataset.xvmMode = authorMode ? 'author' : 'comment';
+  // inviteMode keeps its own label; writing 'comment' here would flip the
+  // button back to 快回 after the first run.
+  if (!inviteMode) btn.dataset.xvmMode = authorMode ? 'author' : 'comment';
   btn.disabled = true;
   setGrokButtonLabel(btn, '生成中', true);
   const epoch = ++grokGenEpoch;
+  const replyLimit = inviteMode ? INVITE_FOLLOW_REPLY_COUNT : aiReplyCount;
   try {
-    const tpl = promptTemplate || (authorMode
-      ? { id: 'author-reply', name: '回评', prompt: currentAuthorReplyPrompt() }
-      : getSelectedGrokPromptTemplate());
+    const tpl = promptTemplate || (inviteMode
+      ? { id: 'invite-follow', name: '邀关', prompt: currentInviteFollowPrompt() }
+      : authorMode
+        ? { id: 'author-reply', name: '回评', prompt: currentAuthorReplyPrompt() }
+        : getSelectedGrokPromptTemplate());
     const onRefresh = () => {
       delete btn.dataset.xvmBusy;
       btn.disabled = false;
@@ -5101,6 +5146,7 @@ async function handleGrokGenerate(btn, editable, promptTemplate = null, authorJo
     const panelOpts = {
       anchor: btn,
       authorMode,
+      inviteMode,
       authorNote,
       resolveEditor: authorMode ? editorForAuthorFill : null,
       onRefresh,
@@ -5108,9 +5154,9 @@ async function handleGrokGenerate(btn, editable, promptTemplate = null, authorJo
     // Returning false from onProgress tells the reader to abort the stream.
     const onProgress = (running) => {
       if (epoch !== grokGenEpoch) return false;
-      const capped = Array.isArray(running) ? running.slice(0, aiReplyCount) : running;
+      const capped = Array.isArray(running) ? running.slice(0, replyLimit) : running;
       showGrokOptions(capped, editable, { ...panelOpts, streaming: true });
-      return !Array.isArray(running) || running.length < aiReplyCount;
+      return !Array.isArray(running) || running.length < replyLimit;
     };
     showGrokOptions([], editable, { ...panelOpts, streaming: true });
     const comments = aiProvider === 'x-grok' && aiSettingsReady
@@ -5122,7 +5168,7 @@ async function handleGrokGenerate(btn, editable, promptTemplate = null, authorJo
           tweetText,
           promptTemplate: normalizeGrokPromptText(tpl?.prompt || tpl),
           temporaryChat: grokTemporaryChat,
-          replyCount: aiReplyCount,
+          replyCount: replyLimit,
           replyLanguage,
           onProgress,
         });
@@ -5133,7 +5179,7 @@ async function handleGrokGenerate(btn, editable, promptTemplate = null, authorJo
       }, onProgress);
     if (epoch !== grokGenEpoch) return;
     showGrokOptions(
-      Array.isArray(comments) ? comments.slice(0, aiReplyCount) : comments,
+      Array.isArray(comments) ? comments.slice(0, replyLimit) : comments,
       editable,
       { ...panelOpts, streaming: false },
     );
@@ -5164,9 +5210,21 @@ function injectGrokReplyButtons(root = document) {
     // "new post" composer gets a reply-only AI button.
     if (!findReplyArticleForAiComposer(composerRoot)) {
       composerRoot.querySelectorAll?.('.xvm-grok-generate-btn').forEach((btn) => btn.remove());
+      composerRoot.querySelectorAll?.('.xvm-grok-invite-btn').forEach((btn) => btn.remove());
       continue;
     }
-    if (composerRoot.querySelector('.xvm-grok-generate-btn')) continue;
+    // Hot-reload / re-inject: the generate button survived but the invite
+    // button was added after it, so backfill it instead of bailing out.
+    const existingGenerate = composerRoot.querySelector('.xvm-grok-generate-btn');
+    if (existingGenerate) {
+      if (!composerRoot.querySelector('.xvm-grok-invite-btn')) {
+        const anchorEl = existingGenerate.nextElementSibling?.classList?.contains('xvm-grok-template-caret')
+          ? existingGenerate.nextElementSibling
+          : existingGenerate;
+        anchorEl.insertAdjacentElement('afterend', createInviteFollowButton(editable));
+      }
+      continue;
+    }
 
     const target = findGrokButtonHost(editable, composerRoot);
     if (!target) continue;
@@ -5216,7 +5274,23 @@ function injectGrokReplyButtons(root = document) {
       host.appendChild(btn);
     }
     if (btn.parentElement) btn.insertAdjacentElement('afterend', caret);
+    if (caret.parentElement) caret.insertAdjacentElement('afterend', createInviteFollowButton(editable));
   }
+}
+
+function createInviteFollowButton(editable) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'xvm-grok-invite-btn';
+  btn.dataset.xvmMode = 'invite';
+  setGrokButtonLabel(btn);
+  btn.title = '生成一条邀请对方互相关注的回复。点一条填入回复框，不会自动发送。';
+  btn.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    handleGrokGenerate(btn, editable);
+  });
+  return btn;
 }
 
 function replyEditors() {

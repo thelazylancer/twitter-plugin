@@ -244,6 +244,7 @@ const DEFAULT_FEATURES = {
   grokTemporaryChat: true,
   grokEnterToReply: false,
   authorReplyPrompt: '',
+  inviteFollowPrompt: '',
   aiProvider: 'x-grok',
   aiOpenAIPlatform: 'openai',
   aiBaseUrl: 'https://api.openai.com/v1',
@@ -1428,6 +1429,7 @@ window.addEventListener('message', (event) => {
         grokTemporaryChat: DEFAULT_FEATURES.grokTemporaryChat,
         grokEnterToReply: DEFAULT_FEATURES.grokEnterToReply,
         authorReplyPrompt: DEFAULT_FEATURES.authorReplyPrompt,
+        inviteFollowPrompt: DEFAULT_FEATURES.inviteFollowPrompt,
         aiProvider: DEFAULT_FEATURES.aiProvider,
         aiOpenAIPlatform: DEFAULT_FEATURES.aiOpenAIPlatform,
         aiBaseUrl: DEFAULT_FEATURES.aiBaseUrl,
@@ -1452,6 +1454,7 @@ window.addEventListener('message', (event) => {
             aiLanguage: syncItems.aiLanguage || DEFAULT_FEATURES.aiLanguage,
             replyLanguage: ['post', 'zh', 'en', 'ja'].includes(syncItems.replyLanguage) ? syncItems.replyLanguage : 'post',
             authorReplyPrompt: syncItems.authorReplyPrompt || '',
+            inviteFollowPrompt: syncItems.inviteFollowPrompt || '',
             capturedTxId: localItems.xvmGrokCapturedTxId,
           }, '*');
         });
@@ -1542,7 +1545,7 @@ safeChromeCall(() => {
       window.postMessage({ type: 'XVM_THEME_UPDATE', pref }, '*');
     }
     const aiTouched = changes.aiProvider || changes.aiOpenAIPlatform || changes.aiBaseUrl || changes.aiModel || changes.aiReplyCount || changes.aiLanguage || changes.replyLanguage;
-    const grokTouched = changes.grokCommentPrompt || changes.grokPromptTemplates || changes.grokSelectedPromptId || changes.grokTemporaryChat || changes.grokEnterToReply || changes.authorReplyPrompt || changes.language || aiTouched;
+    const grokTouched = changes.grokCommentPrompt || changes.grokPromptTemplates || changes.grokSelectedPromptId || changes.grokTemporaryChat || changes.grokEnterToReply || changes.authorReplyPrompt || changes.inviteFollowPrompt || changes.language || aiTouched;
     const bookmarkTimelineInjectTouched = changes.featureBookmarkTimelineInject || changes.bookmarkTimelineInjectFolderIds || changes.bookmarkTimelineInjectEvery;
     if (!changes.trending && !changes.viral && !changes.featureVelocityLeaderboard && !changes.featureCopyAsMarkdown && !changes.featureStarChart && !changes.featureBookmarkFolders && !bookmarkTimelineInjectTouched && !changes.showBookmarkCount && !changes.leaderboardEdgeHideEnabled && !changes.badgeStyle && !changes.leaderboardCount && !changes.leaderboardColumns && !changes.language && !grokTouched) return;
 
@@ -1566,6 +1569,7 @@ safeChromeCall(() => {
           grokTemporaryChat: DEFAULT_FEATURES.grokTemporaryChat,
           grokEnterToReply: DEFAULT_FEATURES.grokEnterToReply,
         authorReplyPrompt: DEFAULT_FEATURES.authorReplyPrompt,
+        inviteFollowPrompt: DEFAULT_FEATURES.inviteFollowPrompt,
           aiProvider: DEFAULT_FEATURES.aiProvider,
           aiOpenAIPlatform: DEFAULT_FEATURES.aiOpenAIPlatform,
           aiBaseUrl: DEFAULT_FEATURES.aiBaseUrl,
@@ -1589,6 +1593,7 @@ safeChromeCall(() => {
             aiLanguage: items.aiLanguage || DEFAULT_FEATURES.aiLanguage,
             replyLanguage: ['post', 'zh', 'en', 'ja'].includes(items.replyLanguage) ? items.replyLanguage : 'post',
             authorReplyPrompt: items.authorReplyPrompt || '',
+            inviteFollowPrompt: items.inviteFollowPrompt || '',
           }, '*');
         });
       }

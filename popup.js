@@ -165,6 +165,7 @@ const DEFAULT_FEATURES = {
   grokTemporaryChat: true,
   grokEnterToReply: false,
   authorReplyPrompt: '',
+  inviteFollowPrompt: '',
   aiProvider: 'x-grok',
   aiOpenAIPlatform: 'openai',
   aiBaseUrl: 'https://api.openai.com/v1',
@@ -391,6 +392,19 @@ const grokEnterReplyToggle = document.getElementById('grok-enter-reply');
 const authorReplyPromptInput = document.getElementById('author-reply-prompt');
 const authorReplyResetBtn = document.getElementById('author-reply-reset');
 const authorReplyStatus = document.getElementById('author-reply-status');
+const inviteFollowPromptInput = document.getElementById('invite-follow-prompt');
+const inviteFollowResetBtn = document.getElementById('invite-follow-reset');
+const inviteFollowStatus = document.getElementById('invite-follow-status');
+const INVITE_FOLLOW_DEFAULT = `[推文内容]
+
+你要在对方的推文下留一条回复，邀请对方和你互相关注。要求：
+- 先接住这条推文的一个具体内容（观点、经历或细节）
+- 再自然提出邀请互相互关：不要写成商务邀约
+- 以小女子的身份去评论(不需要小女人人称)，一定要用网络用语，评论有梗
+- 生成3条候选，每条控制在20个字左右
+- 不要夸夸其谈，不要提粉丝数、流量、合作，不要用 emoji 堆砌
+- 跟这条推文使用的语言走
+- 只输出可直接发布的回复正文，用代码块包裹。`;
 const AUTHOR_REPLY_DEFAULT = `[推文内容]
 
 你是【主贴】的作者，正在回复【当前评论】。主贴是你已经公开说过的话，当前评论是别人留在这条主贴下面、你现在要回的那一条。
@@ -704,6 +718,7 @@ chrome.storage.sync.get(STORAGE_DEFAULTS, (items) => {
   if (grokTempChatToggle) grokTempChatToggle.checked = items.grokTemporaryChat !== false;
   if (grokEnterReplyToggle) grokEnterReplyToggle.checked = items.grokEnterToReply === true;
   if (authorReplyPromptInput) authorReplyPromptInput.value = String(items.authorReplyPrompt || '').trim() || AUTHOR_REPLY_DEFAULT;
+  if (inviteFollowPromptInput) inviteFollowPromptInput.value = String(items.inviteFollowPrompt || '').trim() || INVITE_FOLLOW_DEFAULT;
   setAiProviderValue(normalizeAiProvider(items.aiProvider));
   setCustomSelectValue(aiPlatformSelect, normalizeAiPlatform(items.aiOpenAIPlatform));
   if (aiBaseUrlInput) aiBaseUrlInput.value = items.aiBaseUrl || AI_PLATFORM_PRESETS[normalizeAiPlatform(items.aiOpenAIPlatform)].baseUrl;
@@ -841,6 +856,13 @@ function persistAuthorReplyPrompt(prompt) {
   chrome.storage.sync.set({ authorReplyPrompt: String(prompt || '').trim() }, showAuthorReplySaved);
 }
 
+function showInviteFollowSaved() {
+  if (!inviteFollowStatus) return;
+  inviteFollowStatus.dataset.on = '1';
+  clearTimeout(showInviteFollowSaved._t);
+  showInviteFollowSaved._t = setTimeout(() => { delete inviteFollowStatus.dataset.on; }, 1400);
+}
+
 authorReplyPromptInput?.addEventListener('input', () => {
   clearTimeout(persistAuthorReplyPrompt._t);
   persistAuthorReplyPrompt._t = setTimeout(() => persistAuthorReplyPrompt(authorReplyPromptInput.value), 400);
@@ -848,6 +870,19 @@ authorReplyPromptInput?.addEventListener('input', () => {
 authorReplyResetBtn?.addEventListener('click', () => {
   if (authorReplyPromptInput) authorReplyPromptInput.value = AUTHOR_REPLY_DEFAULT;
   persistAuthorReplyPrompt('');
+});
+
+function persistInviteFollowPrompt(prompt) {
+  chrome.storage.sync.set({ inviteFollowPrompt: String(prompt || '').trim() }, showInviteFollowSaved);
+}
+
+inviteFollowPromptInput?.addEventListener('input', () => {
+  clearTimeout(persistInviteFollowPrompt._t);
+  persistInviteFollowPrompt._t = setTimeout(() => persistInviteFollowPrompt(inviteFollowPromptInput.value), 400);
+});
+inviteFollowResetBtn?.addEventListener('click', () => {
+  if (inviteFollowPromptInput) inviteFollowPromptInput.value = INVITE_FOLLOW_DEFAULT;
+  persistInviteFollowPrompt('');
 });
 
 function persistGrokTemplates(messageKey = '') {
