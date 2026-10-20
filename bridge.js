@@ -11,6 +11,18 @@ const DEFAULT_COLUMNS = [
   { id: 'velocity', visible: true  },
 ];
 const KNOWN_COLUMN_IDS = DEFAULT_COLUMNS.map((c) => c.id);
+// Comment hotspot panel columns. Kept separate from the leaderboard's list:
+// the two panels rank different things and share no column semantics beyond
+// the preview cell.
+const DEFAULT_CB_COLUMNS = [
+  { id: 'rank',      visible: true },
+  { id: 'handle',    visible: true },
+  { id: 'preview',   visible: true },
+  { id: 'replies',   visible: true },
+  { id: 'followers', visible: true },
+  { id: 'relation',  visible: true },
+];
+const KNOWN_CB_COLUMN_IDS = DEFAULT_CB_COLUMNS.map((c) => c.id);
 const LANGUAGE_KEY = 'language';
 const SUPPORTED_LANGUAGE_IDS = ['auto', 'zh_CN', 'en', 'ja'];
 
@@ -119,6 +131,15 @@ const CONTENT_MESSAGE_KEYS = [
   'contentVelocity',
   'contentViralScore',
   'contentPosted',
+  'contentCommentBoardTitle',
+  'contentCommentBoardDragToMove',
+  'contentCommentBoardClose',
+  'contentCommentBoardReplies',
+  'contentCommentBoardFollowers',
+  'contentCommentBoardMutual',
+  'contentCommentBoardFollowing',
+  'contentCommentBoardFollowsYou',
+  'contentCommentBoardNotFollowing',
   'contentLeaderboardTitle',
   'contentLeaderboardDragToMove',
   'contentLeaderboardBackToPrevious',
@@ -273,6 +294,9 @@ const DEFAULT_FEATURES = {
   badgeStyle: 'pill-solid',
   leaderboardCount: 10,
   leaderboardColumns: DEFAULT_COLUMNS,
+  featureCommentBoard: false,
+  commentBoardCount: 10,
+  commentBoardColumns: DEFAULT_CB_COLUMNS,
   grokCommentPrompt: LOCALIZED_GROK_DEFAULTS.grokCommentPrompt,
   grokPromptTemplates: LOCALIZED_GROK_DEFAULTS.grokPromptTemplates,
   grokSelectedPromptId: LOCALIZED_GROK_DEFAULTS.grokSelectedPromptId,
@@ -410,6 +434,23 @@ function normalizeLeaderboardCount(v) {
   return Math.max(1, Math.min(50, n));
 }
 
+function normalizeCommentBoardColumns(raw) {
+  if (!Array.isArray(raw)) return DEFAULT_CB_COLUMNS.map((c) => ({ ...c }));
+  const seen = new Set();
+  const out = [];
+  for (const c of raw) {
+    if (!c || typeof c.id !== 'string') continue;
+    if (!KNOWN_CB_COLUMN_IDS.includes(c.id)) continue;
+    if (seen.has(c.id)) continue;
+    seen.add(c.id);
+    out.push({ id: c.id, visible: !!c.visible });
+  }
+  for (const def of DEFAULT_CB_COLUMNS) {
+    if (!seen.has(def.id)) out.push({ ...def });
+  }
+  return out;
+}
+
 function normalizeLeaderboardColumns(raw) {
   if (!Array.isArray(raw)) return DEFAULT_COLUMNS.map((c) => ({ ...c }));
   const seen = new Set();
@@ -499,6 +540,9 @@ async function pushSettings(raw) {
     leaderboardEdgeHideEnabled: raw?.leaderboardEdgeHideEnabled !== false,
     leaderboardCount: normalizeLeaderboardCount(raw?.leaderboardCount),
     leaderboardColumns: normalizeLeaderboardColumns(raw?.leaderboardColumns),
+    featureCommentBoard: raw?.featureCommentBoard === true,
+    commentBoardCount: normalizeLeaderboardCount(raw?.commentBoardCount),
+    commentBoardColumns: normalizeCommentBoardColumns(raw?.commentBoardColumns),
     badgeStyle: raw?.badgeStyle === 'inline-classic' ? 'inline-classic' : 'pill-solid',
     freshnessEnabled: raw?.freshnessEnabled !== false,
     freshnessHotMinutes: raw?.freshnessHotMinutes,
@@ -1358,6 +1402,33 @@ window.addEventListener('message', (event) => {
     return;
   }
 
+  // Comment hotspot panel: one blob for position + size, since all three are
+  // written together by the drag/resize handlers and never read separately.
+  if (type === 'XVM_CB_STATE_REQUEST') {
+    safeChromeCall(() => {
+      chrome.storage.local.get({ xvmCommentBoardState: null }, (items) => {
+        if (items.xvmCommentBoardState) {
+          window.postMessage({ type: 'XVM_CB_STATE_LOAD', state: items.xvmCommentBoardState }, '*');
+        }
+      });
+    });
+    return;
+  }
+
+  if (type === 'XVM_CB_STATE_SAVE' && event.data.state) {
+    safeChromeCall(() => {
+      chrome.storage.local.set({ xvmCommentBoardState: event.data.state });
+    });
+    return;
+  }
+
+  if (type === 'XVM_COMMENT_BOARD_DISABLE') {
+    safeChromeCall(() => {
+      chrome.storage.sync.set({ featureCommentBoard: false });
+    });
+    return;
+  }
+
   if (type === 'XVM_LEADERBOARD_DISABLE') {
     safeChromeCall(() => {
       chrome.storage.sync.set({ featureVelocityLeaderboard: false }, () => {
@@ -1537,7 +1608,7 @@ safeChromeCall(() => {
     const aiTouched = changes.aiProvider || changes.aiOpenAIPlatform || changes.aiBaseUrl || changes.aiModel || changes.aiReplyCount || changes.aiLanguage || changes.replyLanguage;
     const grokTouched = changes.grokCommentPrompt || changes.grokPromptTemplates || changes.grokSelectedPromptId || changes.grokEnterToReply || changes.authorReplyPrompt || changes.inviteFollowPrompt || changes.language || aiTouched;
     const bookmarkTimelineInjectTouched = changes.featureBookmarkTimelineInject || changes.bookmarkTimelineInjectFolderIds || changes.bookmarkTimelineInjectEvery;
-    if (!changes.trending && !changes.viral && !changes.featureVelocityLeaderboard && !changes.featureCopyAsMarkdown && !changes.featureStarChart && !changes.featureBookmarkFolders && !bookmarkTimelineInjectTouched && !changes.showBookmarkCount && !changes.leaderboardEdgeHideEnabled && !changes.badgeStyle && !changes.leaderboardCount && !changes.leaderboardColumns && !changes.language && !grokTouched) return;
+    if (!changes.trending && !changes.viral && !changes.featureVelocityLeaderboard && !changes.featureCommentBoard && !changes.commentBoardCount && !changes.commentBoardColumns && !changes.featureCopyAsMarkdown && !changes.featureStarChart && !changes.featureBookmarkFolders && !bookmarkTimelineInjectTouched && !changes.showBookmarkCount && !changes.leaderboardEdgeHideEnabled && !changes.badgeStyle && !changes.leaderboardCount && !changes.leaderboardColumns && !changes.language && !grokTouched) return;
 
     safeChromeCall(() => {
       chrome.storage.sync.get(STORAGE_DEFAULTS, (items) => {

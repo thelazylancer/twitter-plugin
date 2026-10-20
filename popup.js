@@ -148,6 +148,16 @@ const COLUMN_LABEL_KEYS = {
   velocity: 'popupColVelocity',
 };
 const KNOWN_COLUMN_IDS = DEFAULT_COLUMNS.map((c) => c.id);
+// Comment hotspot panel: separate column vocabulary from the leaderboard's,
+// since it ranks replies by engagement and author reach rather than velocity.
+const DEFAULT_CB_COLUMNS = [
+  { id: 'rank',      visible: true },
+  { id: 'handle',    visible: true },
+  { id: 'preview',   visible: true },
+  { id: 'replies',   visible: true },
+  { id: 'followers', visible: true },
+  { id: 'relation',  visible: true },
+];
 const DEFAULT_FEATURES = {
   featureVelocityBadges: false,
   featureVelocityLeaderboard: false,
@@ -159,6 +169,9 @@ const DEFAULT_FEATURES = {
   badgeStyle: 'pill-solid',
   leaderboardCount: 10,
   leaderboardColumns: DEFAULT_COLUMNS,
+  featureCommentBoard: false,
+  commentBoardCount: 10,
+  commentBoardColumns: DEFAULT_CB_COLUMNS,
   grokCommentPrompt: LOCALIZED_GROK_DEFAULTS.grokCommentPrompt,
   grokPromptTemplates: LOCALIZED_GROK_DEFAULTS.grokPromptTemplates,
   grokSelectedPromptId: LOCALIZED_GROK_DEFAULTS.grokSelectedPromptId,
@@ -377,6 +390,8 @@ const starChartToggle = document.getElementById('feat-starchart');
 const bookmarkFolderToggle = document.getElementById('feat-bookmark-folders');
 const bookmarkCountToggle = document.getElementById('feat-bookmark-count');
 const leaderboardCountInput = document.getElementById('lb-count');
+const commentBoardToggle = document.getElementById('feat-comment-board');
+const commentBoardCountInput = document.getElementById('cb-count');
 const badgeStyleSelect = document.getElementById('badge-style');
 const languageSelect = document.getElementById('language-select');
 const languageToggle = document.getElementById('language-toggle');
@@ -703,6 +718,8 @@ chrome.storage.sync.get(STORAGE_DEFAULTS, (items) => {
   if (bookmarkFolderToggle) bookmarkFolderToggle.checked = !!items.featureBookmarkFolders;
   bookmarkCountToggle.checked = items.showBookmarkCount !== false;
   leaderboardCountInput.value = normalizeCount(items.leaderboardCount);
+  if (commentBoardToggle) commentBoardToggle.checked = !!items.featureCommentBoard;
+  if (commentBoardCountInput) commentBoardCountInput.value = normalizeCount(items.commentBoardCount);
   setCustomSelectValue(badgeStyleSelect, items.badgeStyle === 'inline-classic' ? 'inline-classic' : 'pill-solid');
   const storedLanguage = normalizeLanguage(items.language || initialLanguagePref);
   if (storedLanguage !== initialLanguagePref) {
@@ -1008,6 +1025,18 @@ leaderboardEdgeHideToggle.addEventListener('change', () => {
   chrome.storage.sync.set({ leaderboardEdgeHideEnabled: leaderboardEdgeHideToggle.checked }, () => {
     flash(tr(leaderboardEdgeHideToggle.checked ? 'flashLeaderboardEdgeHideOn' : 'flashLeaderboardEdgeHideOff'));
   });
+});
+
+commentBoardToggle?.addEventListener('change', () => {
+  chrome.storage.sync.set({ featureCommentBoard: commentBoardToggle.checked }, () => {
+    flash(tr(commentBoardToggle.checked ? 'flashCommentBoardOn' : 'flashCommentBoardOff'));
+  });
+});
+
+commentBoardCountInput?.addEventListener('change', () => {
+  const n = normalizeCount(commentBoardCountInput.value);
+  commentBoardCountInput.value = n;
+  chrome.storage.sync.set({ commentBoardCount: n }, () => flash(tr('flashCommentBoardCountSaved', [String(n)])));
 });
 
 copyMdToggle.addEventListener('change', () => {

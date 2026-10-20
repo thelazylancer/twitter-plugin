@@ -658,5 +658,56 @@
   "contentAiTemplateMenuHead": { "message": "Reply templates" },
   "contentAiTimeout": { "message": "AI generation timed out. Check the service connection." },
   "contentAiToastRetry": { "message": "Please try again" },
-  "contentAiToastTitle": { "message": "⚠ AI generation failed" }
+  "contentAiToastTitle": { "message": "⚠ AI generation failed" },
+  "advCommentBoardTitle": {
+    "message": "Reply hotspots"
+  },
+  "featureCommentBoardTitle": {
+    "message": "💬 Reply hotspots"
+  },
+  "featureCommentBoardDesc": {
+    "message": "Same scope as the leaderboard: ranks the posts on this page by reply count, then the author's follower count, then recency."
+  },
+  "featureCommentBoardShowTop": {
+    "message": "Show top"
+  },
+  "featureCommentBoardComments": {
+    "message": "posts"
+  },
+  "contentCommentBoardTitle": {
+    "message": "Reply hotspots"
+  },
+  "contentCommentBoardDragToMove": {
+    "message": "Drag to move"
+  },
+  "contentCommentBoardClose": {
+    "message": "Close reply hotspots"
+  },
+  "contentCommentBoardReplies": {
+    "message": "Replies"
+  },
+  "contentCommentBoardFollowers": {
+    "message": "Author followers"
+  },
+  "contentCommentBoardMutual": {
+    "message": "Mutual"
+  },
+  "contentCommentBoardFollowing": {
+    "message": "Following"
+  },
+  "contentCommentBoardFollowsYou": {
+    "message": "Follows you"
+  },
+  "contentCommentBoardNotFollowing": {
+    "message": "Not following"
+  },
+  "flashCommentBoardOn": {
+    "message": "Reply hotspots on ✓"
+  },
+  "flashCommentBoardOff": {
+    "message": "Reply hotspots off"
+  },
+  "flashCommentBoardCountSaved": {
+    "message": "Showing {n} posts ✓"
+  }
 }

@@ -656,5 +656,56 @@
   "contentAiTemplateMenuHead": { "message": "评论模板" },
   "contentAiTimeout": { "message": "AI 生成超时，请检查服务连接" },
   "contentAiToastRetry": { "message": "请重试" },
-  "contentAiToastTitle": { "message": "⚠ AI 生成失败" }
+  "contentAiToastTitle": { "message": "⚠ AI 生成失败" },
+  "advCommentBoardTitle": {
+    "message": "回复热点"
+  },
+  "featureCommentBoardTitle": {
+    "message": "💬 回复热点"
+  },
+  "featureCommentBoardDesc": {
+    "message": "和流速榜范围一致，列出当前页面上回复数最多的推文；回复数相同时按作者粉丝数、发布时间排序。"
+  },
+  "featureCommentBoardShowTop": {
+    "message": "显示前"
+  },
+  "featureCommentBoardComments": {
+    "message": "条推文"
+  },
+  "contentCommentBoardTitle": {
+    "message": "回复热点"
+  },
+  "contentCommentBoardDragToMove": {
+    "message": "拖动以移动"
+  },
+  "contentCommentBoardClose": {
+    "message": "关闭回复热点"
+  },
+  "contentCommentBoardReplies": {
+    "message": "回复数"
+  },
+  "contentCommentBoardFollowers": {
+    "message": "作者粉丝数"
+  },
+  "contentCommentBoardMutual": {
+    "message": "互关"
+  },
+  "contentCommentBoardFollowing": {
+    "message": "已关注"
+  },
+  "contentCommentBoardFollowsYou": {
+    "message": "关注了你"
+  },
+  "contentCommentBoardNotFollowing": {
+    "message": "未关注"
+  },
+  "flashCommentBoardOn": {
+    "message": "回复热点已开启 ✓"
+  },
+  "flashCommentBoardOff": {
+    "message": "回复热点已关闭"
+  },
+  "flashCommentBoardCountSaved": {
+    "message": "回复热点显示 {n} 条 ✓"
+  }
 }

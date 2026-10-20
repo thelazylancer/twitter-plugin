@@ -102,6 +102,11 @@ function normalizeThresholds(raw) {
 }
 
 let leaderboardEnabled = false;
+// Comment hotspot panel: a sibling of the leaderboard that ranks the replies
+// under the current status page by engagement, so the busiest threads are the
+// easiest place to find people to follow back.
+let commentBoardEnabled = false;
+let commentBoardCount = 10;
 let leaderboardCount = 10;
 const DEFAULT_LB_COLUMNS = [
   { id: 'rank',     visible: true  },
@@ -328,6 +333,26 @@ window.addEventListener('message', (event) => {
     }
   } else if (leaderboardEnabled && (countChanged || colsChanged)) {
     renderLeaderboard();
+  }
+
+  const nextCb = event.data.featureCommentBoard === true;
+  const nextCbCount = Number.isFinite(event.data.commentBoardCount) ? event.data.commentBoardCount : 10;
+  const nextCbCols = Array.isArray(event.data.commentBoardColumns) && event.data.commentBoardColumns.length
+    ? event.data.commentBoardColumns
+    : commentBoardColumns;
+  const cbCountChanged = nextCbCount !== commentBoardCount;
+  const cbColsChanged = JSON.stringify(nextCbCols) !== JSON.stringify(commentBoardColumns);
+  commentBoardCount = nextCbCount;
+  commentBoardColumns = nextCbCols;
+  if (nextCb !== commentBoardEnabled) {
+    commentBoardEnabled = nextCb;
+    if (commentBoardEnabled) {
+      renderCommentBoard();
+    } else {
+      hideCommentBoard();
+    }
+  } else if (commentBoardEnabled && (cbCountChanged || cbColsChanged)) {
+    renderCommentBoard();
   }
 
   copyAsMarkdownEnabled = event.data.featureCopyAsMarkdown !== false;
@@ -838,8 +863,13 @@ function extractTweetData(result) {
   const legacy = tweet.legacy;
   if (!legacy) return null;
 
-  const viewCount = parseInt(tweet.views?.count, 10);
-  if (!viewCount || tweet.views?.state !== 'EnabledWithCount') return null;
+  // Replies routinely arrive without a view count, and the comment hotspot
+  // panel ranks them by engagement, not views. Dropping them here would empty
+  // that panel, so the views gate only applies to top-level posts. Everything
+  // downstream already treats views as optional (0).
+  const viewCount = parseInt(tweet.views?.count, 10) || 0;
+  const isReply = !!legacy.in_reply_to_status_id_str;
+  if (!isReply && (!viewCount || tweet.views?.state !== 'EnabledWithCount')) return null;
 
   if (legacy.promotedMetadata || tweet.promotedMetadata) return null;
 
@@ -1766,6 +1796,7 @@ function ensureLeaderboard() {
 function applyLeaderboardTheme(resolved) {
   const r = resolved || _resolvedTheme(_themePref);
   if (leaderboardEl) leaderboardEl.setAttribute('data-theme', r);
+  if (commentBoardEl) commentBoardEl.setAttribute('data-theme', r);
   if (leaderboardSettingsEl) leaderboardSettingsEl.setAttribute('data-theme', r);
   applyReleaseNotesTheme(r);
 }
@@ -2605,6 +2636,13 @@ function setLeaderboardEdgeHidden(hidden, edge = 'right', options = {}) {
   }
   setLeaderboardEdgeToggleState();
   if (linkState) updateLinkGeometry();
+  // The comment panel is stacked onto this one, so it follows it in and out of
+  // the edge. renderCommentBoard() hides it while leaderboardHiddenEdge is set
+  // and brings it back on expand.
+  if (commentBoardEnabled) {
+    if (leaderboardHiddenEdge) hideCommentBoard();
+    else renderCommentBoard();
+  }
 }
 
 function expandLeaderboardFromHiddenEdge(byHover = false) {
@@ -2684,6 +2722,7 @@ function applyLeaderboardWidth() {
   if (!leaderboardEl) return;
   leaderboardWidth = clampLeaderboardWidth(leaderboardWidth);
   leaderboardEl.style.width = leaderboardWidth + 'px';
+  repositionCommentBoardIfAnchored();
 }
 function clampLeaderboardHeight(height) {
   const safeHeight = Number.isFinite(height) ? height : LB_DEFAULT_HEIGHT;
@@ -2703,6 +2742,16 @@ function applyLeaderboardHeight() {
     list.style.minHeight = px;
     list.style.maxHeight = px;
   }
+  repositionCommentBoardIfAnchored();
+}
+// The comment panel defaults to sitting flush under the leaderboard. When that
+// panel grows, shrinks or is dragged, re-anchor so the two stay joined — but
+// only while the user has not placed it themselves.
+function repositionCommentBoardIfAnchored() {
+  if (!commentBoardEl || commentBoardPos) return;
+  applyCommentBoardSize();
+  applyCommentBoardPosition();
+  syncLeaderboardStacking();
 }
 function applyLeaderboardPosition() {
   if (!leaderboardEl) return;
@@ -2719,10 +2768,15 @@ function applyLeaderboardPosition() {
   } else {
     applyLeaderboardWidth();
   }
+  repositionCommentBoardIfAnchored();
 }
-function clampToViewport(v, axis) {
-  if (!leaderboardEl) return v;
-  const rect = leaderboardEl.getBoundingClientRect();
+// Clamp a desired position into the viewport. `el` defaults to the
+// leaderboard so the existing call sites keep working; the comment panel
+// passes its own element, otherwise its bounds would be measured against the
+// wrong panel.
+function clampToViewport(v, axis, el = leaderboardEl) {
+  if (!el) return v;
+  const rect = el.getBoundingClientRect();
   if (axis === 'x') return Math.max(8, Math.min(v, window.innerWidth - rect.width - 8));
   return Math.max(8, Math.min(v, window.innerHeight - rect.height - 8));
 }
@@ -2744,10 +2798,23 @@ window.addEventListener('message', (event) => {
     applyLeaderboardHeight();
     applyLeaderboardPosition();
   }
+  if (event.data?.type === 'XVM_CB_STATE_LOAD' && event.data.state) {
+    const state = event.data.state;
+    if (state.pos && Number.isFinite(state.pos.left) && Number.isFinite(state.pos.top)) {
+      commentBoardPos = { left: state.pos.left, top: state.pos.top };
+    }
+    if (Number.isFinite(state.width)) commentBoardWidth = Math.min(CB_MAX_WIDTH, Math.max(CB_MIN_WIDTH, state.width));
+    if (Number.isFinite(state.height)) commentBoardHeight = Math.min(CB_MAX_HEIGHT, Math.max(CB_MIN_HEIGHT, state.height));
+    if (commentBoardEl) {
+      applyCommentBoardSize();
+      applyCommentBoardPosition();
+    }
+  }
 });
 window.postMessage({ type: 'XVM_LB_POS_REQUEST' }, '*');
 window.postMessage({ type: 'XVM_LB_HEIGHT_REQUEST' }, '*');
 window.postMessage({ type: 'XVM_LB_SIZE_REQUEST' }, '*');
+window.postMessage({ type: 'XVM_CB_STATE_REQUEST' }, '*');
 
 function installLeaderboardDrag() {
   if (!leaderboardEl) return;
@@ -2781,6 +2848,7 @@ function installLeaderboardDrag() {
         height: rect.height,
       });
     if (linkState) updateLinkGeometry();
+    repositionCommentBoardIfAnchored();
   };
 
   head.addEventListener('pointerdown', (e) => {
@@ -3270,6 +3338,444 @@ const LB_COLUMN_RENDERERS = {
   velocity: (t) => `<span class="xvm-lb-vel">${formatVelocity(t.velocity)}/h</span>`,
 };
 
+// === Comment hotspot panel ===
+// Ranks the replies under the status page currently open. The user's goal is
+// finding people worth following back, so the ordering is deliberately
+// lexicographic rather than a blended score: busiest comment first, then the
+// largest account, then the most recent. Each key alone is meaningful, and a
+// blended score would let a quiet reply from a big account outrank a busy one
+// for reasons the user cannot see.
+
+let commentBoardEl = null;
+let commentBoardRaf = 0;
+const commentBoardItemMeta = new Map();
+// Same footprint as the velocity leaderboard — the two panels stack, so they
+// must read as one column. Aliased rather than duplicated so they cannot drift.
+const CB_DEFAULT_WIDTH = LB_DEFAULT_WIDTH;
+const CB_MIN_WIDTH = LB_MIN_WIDTH;
+const CB_MAX_WIDTH = LB_MAX_WIDTH;
+const CB_DEFAULT_HEIGHT = LB_DEFAULT_HEIGHT;
+const CB_MIN_HEIGHT = LB_MIN_HEIGHT;
+const CB_MAX_HEIGHT = LB_MAX_HEIGHT;
+let commentBoardWidth = CB_DEFAULT_WIDTH;
+let commentBoardHeight = CB_DEFAULT_HEIGHT;
+let commentBoardPos = null;
+
+// Ranks every mounted tweet by how many replies it drew. Scope matches the
+// leaderboard — whatever is on the page — but the sort key is reply count, so
+// busy threads surface regardless of how fast they are growing.
+function collectCommentRanked() {
+  const out = [];
+  const seen = new Set();
+  for (const article of document.querySelectorAll('article[data-testid="tweet"]')) {
+    if (isLeaderboardArticleHidden(article)) continue;
+    const id = getTweetIdFromArticle(article);
+    if (!id || seen.has(id)) continue;
+    if (promotedTweetIds.has(id) || isPromotedArticle(article)) continue;
+    const data = getTweetDataForArticle(article, id);
+    // Same scope as the leaderboard: every mounted tweet is a candidate. The
+    // panel ranks by reply count, it does not filter down to replies.
+    if (!data) continue;
+    seen.add(id);
+
+    const relation = relationForComment(article);
+    const { displayName, handle: authorHandle } = getAuthorInfo(article);
+    const handle = displayName || authorHandle || '';
+    const createdAt = data.createdAt ? new Date(data.createdAt) : null;
+    const entry = {
+      id,
+      article,
+      pageY: window.scrollY + article.getBoundingClientRect().top,
+      replies: Number(data.replies) || 0,
+      followers: Number.isFinite(relation?.followers) ? relation.followers : -1,
+      createdAtMs: createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt.getTime() : 0,
+      handle,
+      authorHandle: (relation?.screenName || authorHandle || '').replace(/^@/, ''),
+      text: data.text,
+      following: relation?.following,
+      followedBy: relation?.followedBy,
+      views: data.views || 0,
+    };
+    commentBoardItemMeta.set(id, entry);
+    out.push(entry);
+  }
+
+  // Busiest first, then biggest account, then newest. Unknown followers (-1)
+  // sink below any known count instead of pretending to be zero.
+  return out.sort((a, b) => (
+    b.replies - a.replies
+    || b.followers - a.followers
+    || b.createdAtMs - a.createdAtMs
+  ));
+}
+
+function commentRelationLabel(entry) {
+  if (entry.following === true && entry.followedBy === true) return i18n('contentCommentBoardMutual');
+  if (entry.following === true) return i18n('contentCommentBoardFollowing');
+  if (entry.followedBy === true) return i18n('contentCommentBoardFollowsYou');
+  if (entry.following === false) return i18n('contentCommentBoardNotFollowing');
+  return '';
+}
+
+const CB_COLUMN_RENDERERS = {
+  rank: (_t, i) => `<span class="xvm-lb-rank">${i + 1}</span>`,
+  handle: (t) => {
+    const handle = (t.handle || '').trim() || i18n('contentFallbackTweetLabel');
+    return `<span class="xvm-lb-handle" title="${lbEscapeHtml(handle)}">${lbEscapeHtml(handle)}</span>`;
+  },
+  preview: (t) => {
+    const text = (t.text || '').replace(/\s+/g, ' ').trim();
+    return `<span class="xvm-lb-preview" title="${lbEscapeHtml(text.slice(0, 280))}">${lbEscapeHtml(text)}</span>`;
+  },
+  replies: (t) => `<span class="xvm-lb-views" title="${i18n('contentCommentBoardReplies')}">\u{1F4AC} ${formatViews(t.replies)}</span>`,
+  followers: (t) => (t.followers >= 0
+    ? `<span class="xvm-lb-views" title="${i18n('contentCommentBoardFollowers')}">\u{1F465} ${formatViews(t.followers)}</span>`
+    : ''),
+  relation: (t) => {
+    const label = commentRelationLabel(t);
+    if (!label) return '';
+    const cls = t.following === true && t.followedBy === true ? 'xvm-cb-mutual'
+      : t.following === true ? 'xvm-cb-following'
+        : t.followedBy === true ? 'xvm-cb-follows-you'
+          : 'xvm-cb-none';
+    return `<span class="xvm-cb-relation ${cls}">${lbEscapeHtml(label)}</span>`;
+  },
+};
+
+const DEFAULT_CB_COLUMNS = [
+  { id: 'rank', visible: true },
+  { id: 'handle', visible: true },
+  { id: 'preview', visible: true },
+  { id: 'replies', visible: true },
+  { id: 'followers', visible: true },
+  { id: 'relation', visible: true },
+];
+let commentBoardColumns = DEFAULT_CB_COLUMNS.map((c) => ({ ...c }));
+
+function ensureCommentBoard() {
+  if (commentBoardEl) return commentBoardEl;
+  const el = document.createElement('div');
+  el.className = 'xvm-lb xvm-cb';
+  el.innerHTML = `
+    <div class="xvm-lb-head" title="${i18n('contentCommentBoardDragToMove')}">
+      <span class="xvm-lb-grip">⋮⋮</span>
+      <span class="xvm-lb-title">\u{1F4AC} ${i18n('contentCommentBoardTitle')}</span>
+      <div class="xvm-lb-controls">
+        <button class="xvm-lb-action xvm-cb-close" type="button" title="${i18n('contentCommentBoardClose')}" aria-label="${i18n('contentCommentBoardClose')}">
+          <svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M5 5l10 10M15 5L5 15"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <ul class="xvm-lb-list"></ul>
+    <div class="xvm-lb-resize" aria-hidden="true"></div>
+    <div class="xvm-lb-resize-v" aria-hidden="true"></div>
+  `;
+  el.querySelector('.xvm-cb-close')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    commentBoardEnabled = false;
+    hideCommentBoard();
+    window.postMessage({ type: 'XVM_COMMENT_BOARD_DISABLE' }, '*');
+  });
+  document.body.appendChild(el);
+  commentBoardEl = el;
+  applyCommentBoardSize();
+  applyCommentBoardPosition();
+  applyLeaderboardTheme();
+  syncLeaderboardStacking();
+  installCommentBoardDrag();
+  installCommentBoardResize();
+  installCommentBoardResizeHeight();
+  return el;
+}
+
+function hideCommentBoard() {
+  if (commentBoardRaf) {
+    cancelAnimationFrame(commentBoardRaf);
+    commentBoardRaf = 0;
+  }
+  if (commentBoardEl) commentBoardEl.style.display = 'none';
+  syncLeaderboardStacking();
+}
+
+function renderCommentBoard() {
+  cancelAnimationFrame(commentBoardRaf);
+  commentBoardRaf = requestAnimationFrame(() => {
+    commentBoardRaf = 0;
+    if (!commentBoardEnabled) {
+      hideCommentBoard();
+      return;
+    }
+    const el = ensureCommentBoard();
+    const list = el.querySelector('.xvm-lb-list');
+    const top = collectCommentRanked().slice(0, commentBoardCount);
+    // Same visibility rule as the leaderboard: no rows, no panel. And while
+    // the leaderboard is tucked against an edge, this panel goes with it —
+    // the two are one stack. A stale persisted edge on a disabled leaderboard
+    // must not keep this panel hidden.
+    if (!top.length || (leaderboardEnabled && leaderboardHiddenEdge)) {
+      if (list) list.innerHTML = '';
+      hideCommentBoard();
+      return;
+    }
+    el.style.display = 'block';
+    // Re-anchor on every render: the leaderboard can have moved, been hidden,
+    // or changed size since the last pass.
+    repositionCommentBoardIfAnchored();
+    const visibleCols = commentBoardColumns.filter((c) => c.visible && CB_COLUMN_RENDERERS[c.id]);
+    list.innerHTML = top.map((t, i) => {
+      const cells = visibleCols.map((c) => CB_COLUMN_RENDERERS[c.id](t, i)).join('');
+      return `<li class="xvm-lb-item xvm-cb-item" data-id="${lbEscapeHtml(t.id)}">${cells}</li>`;
+    }).join('');
+    list.querySelectorAll('.xvm-cb-item').forEach((li) => {
+      li.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const entry = commentBoardItemMeta.get(li.dataset.id);
+        if (!entry) return;
+        // The article may have been virtualized away while the panel stayed
+        // put; fall back to the recorded page offset in that case.
+        if (entry.article?.isConnected) {
+          entry.article.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+          window.scrollTo({ top: entry.pageY - 120, behavior: 'smooth' });
+        }
+      });
+    });
+  });
+}
+
+
+function installCommentBoardDrag() {
+  if (!commentBoardEl) return;
+  const head = commentBoardEl.querySelector('.xvm-lb-head');
+  if (!head) return;
+  let dragState = null;
+  let dragRaf = 0;
+  let pendingX = 0;
+  let pendingY = 0;
+
+  const flush = () => {
+    dragRaf = 0;
+    if (!dragState) return;
+    const left = clampToViewport(pendingX - dragState.offsetX, 'x', commentBoardEl);
+    const top = clampToViewport(pendingY - dragState.offsetY, 'y', commentBoardEl);
+    commentBoardEl.style.left = `${left}px`;
+    commentBoardEl.style.top = `${top}px`;
+    commentBoardEl.style.right = 'auto';
+    commentBoardPos = { left, top };
+    syncLeaderboardStacking();
+  };
+
+  head.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (e.isPrimary === false) return;
+    if (e.target?.closest?.('button, input, a')) return;
+    const rect = commentBoardEl.getBoundingClientRect();
+    dragState = { pointerId: e.pointerId, offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top };
+    pendingX = e.clientX;
+    pendingY = e.clientY;
+    commentBoardEl.classList.add('xvm-lb-dragging');
+    safeSetPointerCapture(head, e.pointerId);
+    e.preventDefault();
+  });
+  const onMove = (e) => {
+    if (!dragState || e.pointerId !== dragState.pointerId) return;
+    pendingX = e.clientX;
+    pendingY = e.clientY;
+    if (dragRaf) return;
+    dragRaf = requestAnimationFrame(flush);
+  };
+  document.addEventListener('pointermove', onMove, { capture: true, passive: true });
+  window.addEventListener('pointermove', onMove, { passive: true });
+
+  const stop = (e) => {
+    if (!dragState) return;
+    if (e?.pointerId != null && e.pointerId !== dragState.pointerId) return;
+    const pointerId = dragState.pointerId;
+    if (dragRaf) {
+      cancelAnimationFrame(dragRaf);
+      dragRaf = 0;
+    }
+    if (Number.isFinite(e?.clientX) && Number.isFinite(e?.clientY)) {
+      pendingX = e.clientX;
+      pendingY = e.clientY;
+      flush();
+    }
+    dragState = null;
+    commentBoardEl.classList.remove('xvm-lb-dragging');
+    safeReleasePointerCapture(head, pointerId);
+    saveCommentBoardState();
+  };
+  document.addEventListener('pointerup', stop, true);
+  document.addEventListener('pointercancel', stop, true);
+  window.addEventListener('pointerup', stop);
+  window.addEventListener('pointercancel', stop);
+}
+
+function clampCommentBoardWidth(width) {
+  const safeWidth = Number.isFinite(width) ? width : CB_DEFAULT_WIDTH;
+  const maxByViewport = Math.max(CB_MIN_WIDTH, Math.min(CB_MAX_WIDTH, window.innerWidth - 16));
+  const maxByPosition = commentBoardPos && Number.isFinite(commentBoardPos.left)
+    ? Math.max(CB_MIN_WIDTH, Math.min(maxByViewport, window.innerWidth - commentBoardPos.left - 8))
+    : maxByViewport;
+  return Math.max(CB_MIN_WIDTH, Math.min(safeWidth, maxByPosition));
+}
+function clampCommentBoardHeight(height) {
+  const safeHeight = Number.isFinite(height) ? height : CB_DEFAULT_HEIGHT;
+  const maxByViewport = Math.max(CB_MIN_HEIGHT, Math.min(CB_MAX_HEIGHT, window.innerHeight - 80));
+  // While anchored under the leaderboard the whole stack has to fit below it;
+  // otherwise the clamp would push this panel up over the leaderboard.
+  const anchor = !commentBoardPos && !leaderboardHiddenEdge && leaderboardEl?.isConnected
+    ? leaderboardEl.getBoundingClientRect()
+    : null;
+  const maxByPosition = commentBoardPos && Number.isFinite(commentBoardPos.top)
+    ? Math.max(CB_MIN_HEIGHT, Math.min(maxByViewport, window.innerHeight - commentBoardPos.top - 16))
+    : anchor && anchor.height > 0
+      ? Math.max(CB_MIN_HEIGHT, Math.min(maxByViewport, window.innerHeight - anchor.bottom - 8))
+      : maxByViewport;
+  return Math.max(CB_MIN_HEIGHT, Math.min(safeHeight, maxByPosition));
+}
+// Mirrors applyLeaderboardWidth/applyLeaderboardHeight: the panel is sized by
+// its list, so both boards have the same box model (head + list) instead of
+// one being sized directly and the other through its list. The applied height
+// is not written back to the preference — it is viewport-dependent while
+// anchored, and should recover when the leaderboard moves or shrinks.
+function applyCommentBoardSize() {
+  if (!commentBoardEl) return;
+  commentBoardWidth = clampCommentBoardWidth(commentBoardWidth);
+  commentBoardEl.style.width = `${commentBoardWidth}px`;
+  const list = commentBoardEl.querySelector('.xvm-lb-list');
+  if (list) {
+    const px = `${clampCommentBoardHeight(commentBoardHeight)}px`;
+    list.style.height = px;
+    list.style.minHeight = px;
+    list.style.maxHeight = px;
+  }
+}
+
+function applyCommentBoardPosition() {
+  if (!commentBoardEl) return;
+  if (commentBoardPos) {
+    const left = clampToViewport(commentBoardPos.left, 'x', commentBoardEl);
+    const top = clampToViewport(commentBoardPos.top, 'y', commentBoardEl);
+    commentBoardEl.style.left = `${left}px`;
+    commentBoardEl.style.top = `${top}px`;
+    commentBoardEl.style.right = 'auto';
+    syncLeaderboardStacking();
+    return;
+  }
+  // Default: flush against the bottom edge of the velocity leaderboard,
+  // right-aligned with it. The two panels answer different questions about the
+  // same page, so they read as one continuous stack. Falls back to the
+  // leaderboard's own anchor when that panel has never been created.
+  const lb = leaderboardEl?.isConnected ? leaderboardEl : null;
+  const anchor = lb?.getBoundingClientRect();
+  const width = commentBoardWidth;
+  if (anchor && anchor.height > 0) {
+    const left = clampToViewport(anchor.right - width, 'x', commentBoardEl);
+    // Overlap by the border width so the two 1px borders share one seam line
+    // instead of stacking into a 2px divider.
+    const top = clampToViewport(anchor.bottom - 1, 'y', commentBoardEl);
+    commentBoardEl.style.left = `${left}px`;
+    commentBoardEl.style.top = `${top}px`;
+    commentBoardEl.style.right = 'auto';
+    syncLeaderboardStacking();
+    return;
+  }
+  // No leaderboard on screen to stack under — take its own default slot.
+  commentBoardEl.style.left = 'auto';
+  commentBoardEl.style.right = '16px';
+  commentBoardEl.style.top = '72px';
+  syncLeaderboardStacking();
+}
+
+// Square the seam when the two panels are actually touching, so they read as
+// one continuous column. Recomputed on every position/size change rather than
+// assumed, because either panel can be dragged, hidden or resized. Reads the
+// inline display flag instead of getBoundingClientRect(): this runs inside the
+// leaderboard's per-frame drag flush, and four forced layouts per frame is a
+// needless jank risk.
+function syncLeaderboardStacking() {
+  const lbVisible = !!leaderboardEl && leaderboardEl.style.display !== 'none';
+  const cbVisible = !!commentBoardEl && commentBoardEl.style.display !== 'none';
+  const joined = !commentBoardPos && !(leaderboardEnabled && leaderboardHiddenEdge) && lbVisible && cbVisible;
+  leaderboardEl?.classList.toggle('xvm-lb-stacked', joined);
+  commentBoardEl?.classList.toggle('xvm-cb-stacked', joined);
+}
+
+function installCommentBoardResize() {
+  if (!commentBoardEl) return;
+  const handle = commentBoardEl.querySelector('.xvm-lb-resize');
+  if (!handle) return;
+  let state = null;
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    state = { pointerId: e.pointerId, startX: e.clientX, startWidth: commentBoardWidth };
+    safeSetPointerCapture(handle, e.pointerId);
+    e.preventDefault();
+  });
+  const onMove = (e) => {
+    if (!state || e.pointerId !== state.pointerId) return;
+    commentBoardWidth = state.startWidth + (e.clientX - state.startX);
+    applyCommentBoardSize();
+    // Keep it right-aligned with the leaderboard while it is anchored there.
+    applyCommentBoardPosition();
+  };
+  const stop = (e) => {
+    if (!state || (e?.pointerId != null && e.pointerId !== state.pointerId)) return;
+    safeReleasePointerCapture(handle, state.pointerId);
+    state = null;
+    saveCommentBoardState();
+  };
+  document.addEventListener('pointermove', onMove, { capture: true, passive: true });
+  document.addEventListener('pointerup', stop, true);
+  document.addEventListener('pointercancel', stop, true);
+}
+
+function installCommentBoardResizeHeight() {
+  if (!commentBoardEl) return;
+  const handle = commentBoardEl.querySelector('.xvm-lb-resize-v');
+  if (!handle) return;
+  let state = null;
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    // Start from the height actually on screen — while anchored under the
+    // leaderboard it can be clamped below the saved preference, and resizing
+    // must not jump by that difference.
+    const list = commentBoardEl.querySelector('.xvm-lb-list');
+    commentBoardHeight = list ? list.getBoundingClientRect().height : commentBoardHeight;
+    state = {
+      pointerId: e.pointerId,
+      startY: e.clientY,
+      startHeight: commentBoardHeight,
+    };
+    safeSetPointerCapture(handle, e.pointerId);
+    e.preventDefault();
+  });
+  const onMove = (e) => {
+    if (!state || e.pointerId !== state.pointerId) return;
+    commentBoardHeight = state.startHeight + (e.clientY - state.startY);
+    applyCommentBoardSize();
+  };
+  const stop = (e) => {
+    if (!state || (e?.pointerId != null && e.pointerId !== state.pointerId)) return;
+    safeReleasePointerCapture(handle, state.pointerId);
+    state = null;
+    saveCommentBoardState();
+  };
+  document.addEventListener('pointermove', onMove, { capture: true, passive: true });
+  document.addEventListener('pointerup', stop, true);
+  document.addEventListener('pointercancel', stop, true);
+}
+
+function saveCommentBoardState() {
+  window.postMessage({
+    type: 'XVM_CB_STATE_SAVE',
+    state: { pos: commentBoardPos, width: commentBoardWidth, height: commentBoardHeight },
+  }, '*');
+}
+
 function hideLeaderboard() {
   if (leaderboardRaf) {
     cancelAnimationFrame(leaderboardRaf);
@@ -3278,6 +3784,12 @@ function hideLeaderboard() {
   hideLeaderboardSettingsPanel();
   if (leaderboardEl) leaderboardEl.style.display = 'none';
   clearLink();
+  // The comment panel no longer has anything to stack under; drop it to its
+  // own default slot rather than leaving it floating mid-page.
+  if (commentBoardEl) {
+    applyCommentBoardPosition();
+    syncLeaderboardStacking();
+  }
 }
 
 function freshnessApi() {
@@ -3974,6 +4486,9 @@ setInterval(() => {
   } else if (leaderboardEnabled) {
     renderLeaderboard();
   }
+  // Its own trigger: the comment panel must not depend on badges being on,
+  // which the leaderboard's refresh chain effectively does.
+  if (commentBoardEnabled) renderCommentBoard();
   paintFreshness();
   paintUnfollowed();
   injectAuthorReplyButtons();
@@ -3982,9 +4497,14 @@ setInterval(() => {
 // Refresh leaderboard on scroll as virtualized articles come and go
 let lbScrollTick = false;
 window.addEventListener('scroll', () => {
-  if (!leaderboardEnabled || lbScrollTick) return;
+  if (!leaderboardEnabled && !commentBoardEnabled) return;
+  if (lbScrollTick) return;
   lbScrollTick = true;
-  setTimeout(() => { lbScrollTick = false; renderLeaderboard(); }, 250);
+  setTimeout(() => {
+    lbScrollTick = false;
+    if (leaderboardEnabled) renderLeaderboard();
+    if (commentBoardEnabled) renderCommentBoard();
+  }, 250);
 }, { passive: true });
 
 // === MutationObserver ===
