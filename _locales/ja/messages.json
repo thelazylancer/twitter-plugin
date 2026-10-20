@@ -711,5 +711,8 @@
   },
   "contentCommentBoardRatio": {
     "message": "フォロー数/フォロワー数"
+  },
+  "contentCommentBoardBlue": {
+    "message": "Blue会員"
   }
 }

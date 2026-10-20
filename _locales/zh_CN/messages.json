@@ -716,5 +716,8 @@
   },
   "contentCommentBoardRatio": {
     "message": "关注数/粉丝数"
+  },
+  "contentCommentBoardBlue": {
+    "message": "蓝V会员"
   }
 }

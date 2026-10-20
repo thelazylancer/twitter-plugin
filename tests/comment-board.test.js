@@ -87,6 +87,13 @@ describe('comment board scope', () => {
     expect(contentJs).toContain('function isCommentBoardStatusPage()');
     expect(contentJs).toContain("entry.score = statusPage ? cbStatusScore(entry) : cbFeedScore(entry);");
   });
+
+  it('reads blue membership through the shared resolver', () => {
+    // The 未关注 chip and this panel must never disagree about who is a
+    // member, so both go through unfollowedApi().isBlueMember.
+    expect(contentJs).toContain('unfollowedApi().isBlueMember(relation, blueVerifiedFromDom(article))');
+    expect(contentJs).toContain("const blue = entry.blueVerified === true ? 1 : 0;");
+  });
 });
 
 describe('comment ranking', () => {
@@ -136,6 +143,20 @@ describe('comment ranking', () => {
       expect(followsMe).toBeGreaterThan(stranger);
     });
 
+    it('lets no combination of the other signals outrank "follows you"', () => {
+      // The weight is above the sum of the other three, so this is structural
+      // rather than a lucky set of inputs.
+      const followsMeWorstCase = cbStatusScore({
+        followedBy: true, followingCount: 0, followers: 1_000_000,
+        blueVerified: false, createdAtMs: hoursAgo(200),
+      });
+      const strangerBestCase = cbStatusScore({
+        followedBy: false, followingCount: 1_000_000, followers: 100,
+        blueVerified: true, createdAtMs: hoursAgo(0),
+      });
+      expect(followsMeWorstCase).toBeGreaterThan(strangerBestCase);
+    });
+
     it('prefers a high following/followers ratio over a large follower count', () => {
       // 5k following / 800 followers beats 200 following / 100k followers:
       // the first follows liberally, the second almost never follows back.
@@ -153,6 +174,23 @@ describe('comment ranking', () => {
       const recent = cbStatusScore({ ...base, createdAtMs: hoursAgo(1) });
       const old = cbStatusScore({ ...base, createdAtMs: hoursAgo(48) });
       expect(recent).toBeGreaterThan(old);
+    });
+
+    it('prefers a blue member over a non-member, all else equal', () => {
+      // Paid accounts are active users rather than lurkers, so membership is
+      // its own weighted term.
+      const base = { followedBy: false, followingCount: 1000, followers: 1000, createdAtMs: hoursAgo(1) };
+      const blue = cbStatusScore({ ...base, blueVerified: true });
+      const plain = cbStatusScore({ ...base, blueVerified: false });
+      expect(blue).toBeGreaterThan(plain);
+    });
+
+    it('does not award the blue term when membership is unknown', () => {
+      // null means "X never told us"; it must score the same as a confirmed
+      // non-member rather than earning a free boost.
+      const base = { followedBy: false, followingCount: 1000, followers: 1000, createdAtMs: hoursAgo(1) };
+      expect(cbStatusScore({ ...base, blueVerified: null }))
+        .toBe(cbStatusScore({ ...base, blueVerified: false }));
     });
 
     it('floors the ratio denominator so a zero-follower account cannot win outright', () => {

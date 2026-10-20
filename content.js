@@ -3375,11 +3375,19 @@ let commentBoardPos = null;
 // deliberately short — the panel exists to find a crowd that is here *now*.
 const CB_FEED_HALF_LIFE_HOURS = 6;
 // Status score weights. They sum to 1 so the score stays comparable across
-// rows; the ratio term carries the most weight because it is the only signal
-// that actually predicts a follow-back.
-const CB_STATUS_W_FOLLOWS_YOU = 0.45;
-const CB_STATUS_W_RATIO = 0.35;
-const CB_STATUS_W_RECENCY = 0.20;
+// rows, and they are ordered by how much each signal actually means:
+//
+//   followsYou  they already follow you, so one click makes it mutual — the
+//               only certain outcome, and worth more than every guess combined.
+//               The weight is deliberately above the sum of the other three
+//               (0.45), so no combination of signals can outrank it.
+//   ratio       they follow far more people than follow them.
+//   blue        a paying account is an active user, not a lurker.
+//   recency     they were in this thread recently.
+const CB_STATUS_W_FOLLOWS_YOU = 0.55;
+const CB_STATUS_W_RATIO = 0.20;
+const CB_STATUS_W_BLUE = 0.15;
+const CB_STATUS_W_RECENCY = 0.10;
 const CB_STATUS_HALF_LIFE_HOURS = 12;
 // A 0-follower account would otherwise score an infinite ratio. 100 is the
 // floor used by the popup copy as well: below it, the ratio stops meaning
@@ -3423,13 +3431,17 @@ function cbFeedScore(entry) {
 // Status page: does this person look like someone who will follow back?
 //   - they already follow you  → the only certain one, hence the largest weight
 //   - they follow many people  → they follow liberally
+//   - they are a blue member   → paying users are active, not lurkers
 //   - they replied recently    → they are active right now
+// Unknown blue status scores 0: we do not award a signal we never read.
 function cbStatusScore(entry) {
   const followsYou = entry.followedBy === true ? 1 : 0;
   const ratio = cbFollowRatio(entry.followingCount, entry.followers);
+  const blue = entry.blueVerified === true ? 1 : 0;
   const recency = cbRecency(entry.createdAtMs, CB_STATUS_HALF_LIFE_HOURS);
   return CB_STATUS_W_FOLLOWS_YOU * followsYou
     + CB_STATUS_W_RATIO * ratio
+    + CB_STATUS_W_BLUE * blue
     + CB_STATUS_W_RECENCY * recency;
 }
 
@@ -3483,6 +3495,10 @@ function collectCommentRanked() {
       text: data.text,
       following: relation?.following,
       followedBy: relation?.followedBy,
+      // Blue membership comes from the payload first and falls back to the DOM
+      // badge; `unfollowedApi().isBlueMember` is the shared resolver, so the
+      // panel and the 未关注 chip can never disagree about who is a member.
+      blueVerified: unfollowedApi().isBlueMember(relation, blueVerifiedFromDom(article)),
       views: data.views || 0,
     };
     entry.score = statusPage ? cbStatusScore(entry) : cbFeedScore(entry);
@@ -3518,6 +3534,7 @@ const CB_COLUMN_PAGES = {
   preview: 'feed',
   replies: 'feed',
   relation: 'status',
+  blue: 'status',
   ratio: 'status',
   following: 'status',
   followers: 'both',
@@ -3552,6 +3569,9 @@ const CB_COLUMN_RENDERERS = {
     const ratio = t.followingCount / Math.max(t.followers, CB_RATIO_MIN_FOLLOWERS);
     return `<span class="xvm-lb-views xvm-cb-ratio" title="${i18n('contentCommentBoardRatio')}">${ratio.toFixed(1)}x</span>`;
   },
+  blue: (t) => (t.blueVerified === true
+    ? `<span class="xvm-cb-blue" title="${i18n('contentCommentBoardBlue')}" aria-label="${i18n('contentCommentBoardBlue')}">✔</span>`
+    : ''),
   relation: (t) => {
     const label = commentRelationLabel(t);
     if (!label) return '';
@@ -3569,6 +3589,7 @@ const DEFAULT_CB_COLUMNS = [
   { id: 'preview', visible: true },
   { id: 'replies', visible: true },
   { id: 'relation', visible: true },
+  { id: 'blue', visible: true },
   { id: 'ratio', visible: true },
   { id: 'following', visible: true },
   { id: 'followers', visible: true },

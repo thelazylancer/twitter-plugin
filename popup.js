@@ -156,6 +156,7 @@ const DEFAULT_CB_COLUMNS = [
   { id: 'preview',   visible: true },
   { id: 'replies',   visible: true },
   { id: 'relation',  visible: true },
+  { id: 'blue',      visible: true },
   { id: 'ratio',     visible: true },
   { id: 'following', visible: true },
   { id: 'followers', visible: true },

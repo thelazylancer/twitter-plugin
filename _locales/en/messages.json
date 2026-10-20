@@ -718,5 +718,8 @@
   },
   "contentCommentBoardRatio": {
     "message": "Following / followers"
+  },
+  "contentCommentBoardBlue": {
+    "message": "Blue member"
   }
 }
