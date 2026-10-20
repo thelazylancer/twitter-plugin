@@ -659,16 +659,13 @@
     "message": "💬 返信注目"
   },
   "featureCommentBoardDesc": {
-    "message": "流速ランキングと同じ範囲で、このページの投稿を返信数の多い順に並べます。同数なら投稿者のフォロワー数、次に投稿時刻で並べます。"
+    "message": "ホームと検索では返信数と新しさで並べ、人が集まる場所を見つけます。スレッド内では「未フォロー + フォロー数/フォロワー数 + 返信の新しさ」を重み付けし、フォローバックされやすい人を上位に出します。"
   },
   "featureCommentBoardShowTop": {
     "message": "表示件数"
   },
   "featureCommentBoardComments": {
-    "message": "件の投稿"
-  },
-  "contentCommentBoardTitle": {
-    "message": "返信注目"
+    "message": "件"
   },
   "contentCommentBoardDragToMove": {
     "message": "ドラッグで移動"
@@ -702,5 +699,17 @@
   },
   "flashCommentBoardCountSaved": {
     "message": "{n} 件表示 ✓"
+  },
+  "contentCommentBoardTitleFeed": {
+    "message": "返信注目"
+  },
+  "contentCommentBoardTitleStatus": {
+    "message": "相互フォロー候補"
+  },
+  "contentCommentBoardFollowingCount": {
+    "message": "フォロー数"
+  },
+  "contentCommentBoardRatio": {
+    "message": "フォロー数/フォロワー数"
   }
 }

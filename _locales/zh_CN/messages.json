@@ -664,16 +664,13 @@
     "message": "💬 回复热点"
   },
   "featureCommentBoardDesc": {
-    "message": "和流速榜范围一致，列出当前页面上回复数最多的推文；回复数相同时按作者粉丝数、发布时间排序。"
+    "message": "首页和搜索页按回复数和新鲜度排，找到人多的地方；进入帖子详情后按「是否未关注 + 关注数/粉丝数 + 回复时间」加权，挑出最可能回关你的人。"
   },
   "featureCommentBoardShowTop": {
     "message": "显示前"
   },
   "featureCommentBoardComments": {
-    "message": "条推文"
-  },
-  "contentCommentBoardTitle": {
-    "message": "回复热点"
+    "message": "条"
   },
   "contentCommentBoardDragToMove": {
     "message": "拖动以移动"
@@ -707,5 +704,17 @@
   },
   "flashCommentBoardCountSaved": {
     "message": "回复热点显示 {n} 条 ✓"
+  },
+  "contentCommentBoardTitleFeed": {
+    "message": "回复热点"
+  },
+  "contentCommentBoardTitleStatus": {
+    "message": "互关机会"
+  },
+  "contentCommentBoardFollowingCount": {
+    "message": "关注数"
+  },
+  "contentCommentBoardRatio": {
+    "message": "关注数/粉丝数"
   }
 }

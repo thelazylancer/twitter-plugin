@@ -666,16 +666,13 @@
     "message": "💬 Reply hotspots"
   },
   "featureCommentBoardDesc": {
-    "message": "Same scope as the leaderboard: ranks the posts on this page by reply count, then the author's follower count, then recency."
+    "message": "On the home feed and search, ranks posts by reply count and freshness to find where the crowds are. Inside a thread, weights \"not yet followed + following/followers ratio + reply recency\" to surface the people most likely to follow back."
   },
   "featureCommentBoardShowTop": {
     "message": "Show top"
   },
   "featureCommentBoardComments": {
-    "message": "posts"
-  },
-  "contentCommentBoardTitle": {
-    "message": "Reply hotspots"
+    "message": "items"
   },
   "contentCommentBoardDragToMove": {
     "message": "Drag to move"
@@ -709,5 +706,17 @@
   },
   "flashCommentBoardCountSaved": {
     "message": "Showing {n} posts ✓"
+  },
+  "contentCommentBoardTitleFeed": {
+    "message": "Reply hotspots"
+  },
+  "contentCommentBoardTitleStatus": {
+    "message": "Follow-back chances"
+  },
+  "contentCommentBoardFollowingCount": {
+    "message": "Following"
+  },
+  "contentCommentBoardRatio": {
+    "message": "Following / followers"
   }
 }

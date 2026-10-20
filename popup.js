@@ -148,15 +148,17 @@ const COLUMN_LABEL_KEYS = {
   velocity: 'popupColVelocity',
 };
 const KNOWN_COLUMN_IDS = DEFAULT_COLUMNS.map((c) => c.id);
-// Comment hotspot panel: separate column vocabulary from the leaderboard's,
-// since it ranks replies by engagement and author reach rather than velocity.
+// Comment hotspot panel: separate column vocabulary from the leaderboard's.
+// The feed and the status page show different columns from this same list.
 const DEFAULT_CB_COLUMNS = [
   { id: 'rank',      visible: true },
   { id: 'handle',    visible: true },
   { id: 'preview',   visible: true },
   { id: 'replies',   visible: true },
-  { id: 'followers', visible: true },
   { id: 'relation',  visible: true },
+  { id: 'ratio',     visible: true },
+  { id: 'following', visible: true },
+  { id: 'followers', visible: true },
 ];
 const DEFAULT_FEATURES = {
   featureVelocityBadges: false,

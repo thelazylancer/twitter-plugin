@@ -777,6 +777,13 @@ html[data-xvm-badge-style="inline-classic"] .xvm-badge--red { color: #f44336; ba
 .xvm-cb-follows-you { background: rgba(191, 90, 42, 0.14);  color: #bf5a2a; }
 .xvm-cb-none        { background: rgba(110, 91, 77, 0.12);  color: #6e5b4d; }
 
+/* The follow-back ratio is the reason a status row is where it is, so it gets
+   the leaderboard's emphasis treatment rather than the muted counter colour. */
+.xvm-cb .xvm-cb-ratio {
+  color: #bf5a2a;
+  font-weight: 700;
+}
+
 /* Stacked directly under the leaderboard: square the seam so the two panels
    read as one continuous column instead of two rounded boxes touching. */
 .xvm-lb.xvm-lb-stacked { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
@@ -786,6 +793,7 @@ html[data-xvm-badge-style="inline-classic"] .xvm-badge--red { color: #f44336; ba
 .xvm-lb[data-theme="dark"] .xvm-cb-following   { background: rgba(6, 182, 212, 0.18);   color: #67e8f9; }
 .xvm-lb[data-theme="dark"] .xvm-cb-follows-you { background: rgba(251, 146, 60, 0.18);  color: #fb923c; }
 .xvm-lb[data-theme="dark"] .xvm-cb-none        { background: rgba(148, 163, 184, 0.16); color: #94a3b8; }
+.xvm-lb[data-theme="dark"] .xvm-cb .xvm-cb-ratio { color: #fb923c; }
 
 article[data-testid="tweet"].xvm-article-linked {
   outline: 2px solid #bf5a2a;

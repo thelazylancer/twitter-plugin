@@ -12,7 +12,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const contentJs = readFileSync(resolve(here, '..', 'content.js'), 'utf8');
 const bridgeJs = readFileSync(resolve(here, '..', 'bridge.js'), 'utf8');
 
-// Pull the pure helper out of the monolith and run it for real.
+// Pull the pure helpers out of the monolith and run them for real.
 function loadHelpers() {
   const names = ['collectCommentRanked'];
   const ctx = {};
@@ -33,11 +33,39 @@ function loadHelpers() {
   return ctx;
 }
 
+// The scoring block is a run of top-level function declarations plus a few
+// constants. Slice from the first constant to the end of cbStatusScore and run
+// the whole thing, so the tests see the shipped weights and half-lives.
+function loadScoring() {
+  const start = contentJs.indexOf('const CB_FEED_HALF_LIFE_HOURS');
+  const endMarker = 'function cbStatusScore(entry) {';
+  const endStart = contentJs.indexOf(endMarker);
+  expect(start, 'scoring block should exist').toBeGreaterThan(-1);
+  expect(endStart, 'cbStatusScore should exist').toBeGreaterThan(-1);
+  let depth = 0;
+  let end = endStart;
+  for (let i = contentJs.indexOf('{', endStart); i < contentJs.length; i += 1) {
+    if (contentJs[i] === '{') depth += 1;
+    else if (contentJs[i] === '}') {
+      depth -= 1;
+      if (depth === 0) { end = i + 1; break; }
+    }
+  }
+  const src = contentJs.slice(start, end);
+  const ctx = {};
+  vm.runInNewContext(
+    `${src}; this.cbFeedScore = cbFeedScore; this.cbStatusScore = cbStatusScore;`
+    + ' this.cbFollowRatio = cbFollowRatio; this.cbRecency = cbRecency;',
+    ctx,
+  );
+  return ctx;
+}
+
 describe('comment board scope', () => {
   it('ranks every mounted tweet, not just replies', () => {
-    // The panel is "which post drew the most replies", so a top-level post is
-    // a candidate exactly like a reply is. Filtering on inReplyToStatusId was
-    // a misreading of the requirement.
+    // The feed side of the panel is "which post drew the most replies", so a
+    // top-level post is a candidate exactly like a reply is. Filtering on
+    // inReplyToStatusId was a misreading of the requirement.
     expect(contentJs).not.toContain('function isCommentData(');
     expect(contentJs).not.toContain('if (!isCommentData(data)) continue;');
     expect(contentJs).toContain('if (!data) continue;');
@@ -47,48 +75,97 @@ describe('comment board scope', () => {
     expect(contentJs).toContain('if (isLeaderboardArticleHidden(article)) continue;');
     expect(contentJs).toContain('if (promotedTweetIds.has(id) || isPromotedArticle(article)) continue;');
   });
+
+  it('drops yourself and people you already follow on a status page', () => {
+    // In a thread the panel is a list of people to act on; a row you cannot
+    // follow is a wasted slot.
+    expect(contentJs).toContain('if (selfHandle && author && author === selfHandle) continue;');
+    expect(contentJs).toContain('if (relation?.following === true) continue;');
+  });
+
+  it('switches scoring by page type', () => {
+    expect(contentJs).toContain('function isCommentBoardStatusPage()');
+    expect(contentJs).toContain("entry.score = statusPage ? cbStatusScore(entry) : cbFeedScore(entry);");
+  });
 });
 
 describe('comment ranking', () => {
-  // Mirror of the comparator inside collectCommentRanked, exercised directly so
-  // the precedence between the three keys is pinned rather than implied.
-  const cmp = (a, b) => (
-    b.replies - a.replies
-    || b.followers - a.followers
-    || b.createdAtMs - a.createdAtMs
-  );
+  // Pull the real scoring helpers out of content.js rather than reimplementing
+  // them here, so the weights and the decay curve are exercised as shipped.
+  const ctx = loadScoring();
+  const { cbFeedScore, cbStatusScore, cbFollowRatio, cbRecency } = ctx;
+  const hoursAgo = (h) => Date.now() - h * 3_600_000;
 
-  it('puts the most-commented reply first', () => {
-    const rows = [
-      { replies: 1, followers: 9000, createdAtMs: 300 },
-      { replies: 50, followers: 10, createdAtMs: 100 },
-    ].sort(cmp);
-    expect(rows[0].replies).toBe(50);
+  describe('feed / search', () => {
+    it('puts a busy fresh post above an older post with more replies', () => {
+      // The whole point on the feed is "where is the crowd right now". A
+      // 3-day-old post with 500 replies is a dead room.
+      const fresh = cbFeedScore({ replies: 80, createdAtMs: hoursAgo(2) });
+      const stale = cbFeedScore({ replies: 500, createdAtMs: hoursAgo(72) });
+      expect(fresh).toBeGreaterThan(stale);
+    });
+
+    it('puts a busier post above a quieter one of the same age', () => {
+      const busy = cbFeedScore({ replies: 50, createdAtMs: hoursAgo(1) });
+      const quiet = cbFeedScore({ replies: 5, createdAtMs: hoursAgo(1) });
+      expect(busy).toBeGreaterThan(quiet);
+    });
+
+    it('scores an unknown timestamp at zero rather than assuming it is fresh', () => {
+      expect(cbFeedScore({ replies: 500, createdAtMs: 0 })).toBe(0);
+    });
+
+    it('halves the score every six hours', () => {
+      const now = cbRecency(hoursAgo(0), 6);
+      const six = cbRecency(hoursAgo(6), 6);
+      expect(now).toBeCloseTo(1, 5);
+      expect(six).toBeCloseTo(0.5, 5);
+    });
   });
 
-  it('breaks a comment-count tie by follower count', () => {
-    const rows = [
-      { replies: 5, followers: 100, createdAtMs: 300 },
-      { replies: 5, followers: 8000, createdAtMs: 100 },
-    ].sort(cmp);
-    expect(rows[0].followers).toBe(8000);
-  });
+  describe('status page', () => {
+    it('ranks someone who already follows you above a bigger account who does not', () => {
+      // followedBy is the only certain follow-back, so it carries the most
+      // weight — even against a much friendlier ratio.
+      const followsMe = cbStatusScore({
+        followedBy: true, followingCount: 300, followers: 5000, createdAtMs: hoursAgo(1),
+      });
+      const stranger = cbStatusScore({
+        followedBy: false, followingCount: 4000, followers: 800, createdAtMs: hoursAgo(1),
+      });
+      expect(followsMe).toBeGreaterThan(stranger);
+    });
 
-  it('breaks a followers tie by recency', () => {
-    const rows = [
-      { replies: 5, followers: 100, createdAtMs: 100 },
-      { replies: 5, followers: 100, createdAtMs: 900 },
-    ].sort(cmp);
-    expect(rows[0].createdAtMs).toBe(900);
-  });
+    it('prefers a high following/followers ratio over a large follower count', () => {
+      // 5k following / 800 followers beats 200 following / 100k followers:
+      // the first follows liberally, the second almost never follows back.
+      const liberal = cbStatusScore({
+        followedBy: false, followingCount: 5000, followers: 800, createdAtMs: hoursAgo(1),
+      });
+      const celebrity = cbStatusScore({
+        followedBy: false, followingCount: 200, followers: 100_000, createdAtMs: hoursAgo(1),
+      });
+      expect(liberal).toBeGreaterThan(celebrity);
+    });
 
-  it('sinks rows with unknown follower counts below known ones', () => {
-    // -1 is the "X never told us" sentinel; it must not read as "zero followers".
-    const rows = [
-      { replies: 5, followers: -1, createdAtMs: 900 },
-      { replies: 5, followers: 0, createdAtMs: 100 },
-    ].sort(cmp);
-    expect(rows[0].followers).toBe(0);
+    it('prefers a recent reply over an old one, all else equal', () => {
+      const base = { followedBy: false, followingCount: 1000, followers: 1000 };
+      const recent = cbStatusScore({ ...base, createdAtMs: hoursAgo(1) });
+      const old = cbStatusScore({ ...base, createdAtMs: hoursAgo(48) });
+      expect(recent).toBeGreaterThan(old);
+    });
+
+    it('floors the ratio denominator so a zero-follower account cannot win outright', () => {
+      // Without the floor this would be Infinity.
+      expect(cbFollowRatio(1000, 0)).toBe(1);
+      expect(cbFollowRatio(1000, 100)).toBe(1);
+      expect(cbFollowRatio(100, 1000)).toBeCloseTo(0.02, 5);
+    });
+
+    it('scores an unknown ratio as zero, not as a perfect one', () => {
+      expect(cbFollowRatio(-1, -1)).toBe(0);
+      expect(cbFollowRatio(undefined, 500)).toBe(0);
+    });
   });
 });
 

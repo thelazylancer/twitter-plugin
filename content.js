@@ -3339,12 +3339,22 @@ const LB_COLUMN_RENDERERS = {
 };
 
 // === Comment hotspot panel ===
-// Ranks the replies under the status page currently open. The user's goal is
-// finding people worth following back, so the ordering is deliberately
-// lexicographic rather than a blended score: busiest comment first, then the
-// largest account, then the most recent. Each key alone is meaningful, and a
-// blended score would let a quiet reply from a big account outrank a busy one
-// for reasons the user cannot see.
+// One panel, two jobs, chosen by what page the user is on:
+//
+//   Feed / search  — "where are the crowds?" Rank posts by how many replies
+//                    they drew recently. A busy, fresh post is where the most
+//                    people (and therefore the most strangers) are gathered.
+//
+//   Status page    — "who can I actually follow back?" The candidates are the
+//                    people in the thread, and the ranking is a weighted score
+//                    of the signals that predict a reply-follow: whether they
+//                    already follow you, how many people they follow relative
+//                    to their own followers, and how recently they replied.
+//
+// Both scores are blended rather than lexicographic: the user asked for
+// weights, and a pure first-key sort would let one extreme value (an ancient
+// post with 10k replies, or a 0-follower account with a huge ratio) sit on top
+// forever.
 
 let commentBoardEl = null;
 let commentBoardRaf = 0;
@@ -3361,34 +3371,113 @@ let commentBoardWidth = CB_DEFAULT_WIDTH;
 let commentBoardHeight = CB_DEFAULT_HEIGHT;
 let commentBoardPos = null;
 
-// Ranks every mounted tweet by how many replies it drew. Scope matches the
-// leaderboard — whatever is on the page — but the sort key is reply count, so
-// busy threads surface regardless of how fast they are growing.
+// Feed score: how many replies a post drew, decayed by age. The half-life is
+// deliberately short — the panel exists to find a crowd that is here *now*.
+const CB_FEED_HALF_LIFE_HOURS = 6;
+// Status score weights. They sum to 1 so the score stays comparable across
+// rows; the ratio term carries the most weight because it is the only signal
+// that actually predicts a follow-back.
+const CB_STATUS_W_FOLLOWS_YOU = 0.45;
+const CB_STATUS_W_RATIO = 0.35;
+const CB_STATUS_W_RECENCY = 0.20;
+const CB_STATUS_HALF_LIFE_HOURS = 12;
+// A 0-follower account would otherwise score an infinite ratio. 100 is the
+// floor used by the popup copy as well: below it, the ratio stops meaning
+// anything.
+const CB_RATIO_MIN_FOLLOWERS = 100;
+// Ratio (following / followers) at which the term saturates at 1.0. Following
+// 5x your follower count is already "follows almost anyone".
+const CB_RATIO_SATURATION = 5;
+
+function cbHoursSince(createdAtMs) {
+  if (!Number.isFinite(createdAtMs) || createdAtMs <= 0) return null;
+  return Math.max(0, (Date.now() - createdAtMs) / 3_600_000);
+}
+
+// Exponential decay in [0, 1]. Returns 0 when the timestamp is unknown, which
+// is the honest score for "we have no idea how fresh this is".
+function cbRecency(createdAtMs, halfLifeHours) {
+  const hours = cbHoursSince(createdAtMs);
+  if (hours === null) return 0;
+  return Math.pow(0.5, hours / halfLifeHours);
+}
+
+// following / max(followers, 100), normalised to [0, 1]. Unknown counts are
+// stored as -1, which is finite, so the >= 0 guard matters: without it the
+// sentinel computes a negative ratio instead of scoring 0.
+function cbFollowRatio(followingCount, followers) {
+  if (!Number.isFinite(followingCount) || !Number.isFinite(followers)) return 0;
+  if (followingCount < 0 || followers < 0) return 0;
+  const ratio = followingCount / Math.max(followers, CB_RATIO_MIN_FOLLOWERS);
+  return Math.max(0, Math.min(1, ratio / CB_RATIO_SATURATION));
+}
+
+// Feed / search: reply count with a short recency decay. A 3-day-old post with
+// 500 replies scores below a 2-hour-old post with 80.
+function cbFeedScore(entry) {
+  const age = cbHoursSince(entry.createdAtMs);
+  if (age === null) return 0;
+  return entry.replies * cbRecency(entry.createdAtMs, CB_FEED_HALF_LIFE_HOURS);
+}
+
+// Status page: does this person look like someone who will follow back?
+//   - they already follow you  → the only certain one, hence the largest weight
+//   - they follow many people  → they follow liberally
+//   - they replied recently    → they are active right now
+function cbStatusScore(entry) {
+  const followsYou = entry.followedBy === true ? 1 : 0;
+  const ratio = cbFollowRatio(entry.followingCount, entry.followers);
+  const recency = cbRecency(entry.createdAtMs, CB_STATUS_HALF_LIFE_HOURS);
+  return CB_STATUS_W_FOLLOWS_YOU * followsYou
+    + CB_STATUS_W_RATIO * ratio
+    + CB_STATUS_W_RECENCY * recency;
+}
+
+// A status page is any URL carrying /status/<id>; everything else (home,
+// search, profile, lists) is a feed. Profiles are deliberately treated as a
+// feed: the user said the ordering there does not matter.
+function isCommentBoardStatusPage() {
+  return /\/status\/\d+/.test(location.pathname);
+}
+
+// Ranks whatever is mounted. Scope matches the leaderboard, but the sort key
+// depends on the page: crowd-finding on feeds, person-finding in a thread.
 function collectCommentRanked() {
   const out = [];
   const seen = new Set();
+  const statusPage = isCommentBoardStatusPage();
+  const selfHandle = getLoggedInHandle();
   for (const article of document.querySelectorAll('article[data-testid="tweet"]')) {
     if (isLeaderboardArticleHidden(article)) continue;
     const id = getTweetIdFromArticle(article);
     if (!id || seen.has(id)) continue;
     if (promotedTweetIds.has(id) || isPromotedArticle(article)) continue;
     const data = getTweetDataForArticle(article, id);
-    // Same scope as the leaderboard: every mounted tweet is a candidate. The
-    // panel ranks by reply count, it does not filter down to replies.
+    // Same scope as the leaderboard: every mounted tweet is a candidate.
     if (!data) continue;
     seen.add(id);
 
     const relation = relationForComment(article);
     const { displayName, handle: authorHandle } = getAuthorInfo(article);
     const handle = displayName || authorHandle || '';
+    const author = (relation?.screenName || authorHandle || '').replace(/^@/, '').toLowerCase();
+    // In a thread the panel is a list of people. You cannot follow yourself,
+    // and you cannot follow someone you already follow — both would waste a
+    // row on an action the panel exists to prompt.
+    if (statusPage) {
+      if (selfHandle && author && author === selfHandle) continue;
+      if (relation?.following === true) continue;
+    }
     const createdAt = data.createdAt ? new Date(data.createdAt) : null;
+    const createdAtMs = createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt.getTime() : 0;
     const entry = {
       id,
       article,
       pageY: window.scrollY + article.getBoundingClientRect().top,
       replies: Number(data.replies) || 0,
       followers: Number.isFinite(relation?.followers) ? relation.followers : -1,
-      createdAtMs: createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt.getTime() : 0,
+      followingCount: Number.isFinite(relation?.followingCount) ? relation.followingCount : -1,
+      createdAtMs,
       handle,
       authorHandle: (relation?.screenName || authorHandle || '').replace(/^@/, ''),
       text: data.text,
@@ -3396,14 +3485,16 @@ function collectCommentRanked() {
       followedBy: relation?.followedBy,
       views: data.views || 0,
     };
+    entry.score = statusPage ? cbStatusScore(entry) : cbFeedScore(entry);
     commentBoardItemMeta.set(id, entry);
     out.push(entry);
   }
 
-  // Busiest first, then biggest account, then newest. Unknown followers (-1)
-  // sink below any known count instead of pretending to be zero.
+  // Highest score first. Ties fall back to the old visible ordering so the
+  // list is stable across renders instead of shuffling every two seconds.
   return out.sort((a, b) => (
-    b.replies - a.replies
+    b.score - a.score
+    || b.replies - a.replies
     || b.followers - a.followers
     || b.createdAtMs - a.createdAtMs
   ));
@@ -3415,6 +3506,26 @@ function commentRelationLabel(entry) {
   if (entry.followedBy === true) return i18n('contentCommentBoardFollowsYou');
   if (entry.following === false) return i18n('contentCommentBoardNotFollowing');
   return '';
+}
+
+// Which columns mean anything on which page. A feed row is a post ("how many
+// replies, how fresh"); a status row is a person ("do they follow me, do they
+// follow liberally"). Showing the wrong set is noise, so each column declares
+// its page and the renderer drops the rest.
+const CB_COLUMN_PAGES = {
+  rank: 'both',
+  handle: 'both',
+  preview: 'feed',
+  replies: 'feed',
+  relation: 'status',
+  ratio: 'status',
+  following: 'status',
+  followers: 'both',
+};
+
+function cbColumnApplies(id, statusPage) {
+  const page = CB_COLUMN_PAGES[id] || 'both';
+  return page === 'both' || page === (statusPage ? 'status' : 'feed');
 }
 
 const CB_COLUMN_RENDERERS = {
@@ -3431,6 +3542,16 @@ const CB_COLUMN_RENDERERS = {
   followers: (t) => (t.followers >= 0
     ? `<span class="xvm-lb-views" title="${i18n('contentCommentBoardFollowers')}">\u{1F465} ${formatViews(t.followers)}</span>`
     : ''),
+  following: (t) => (t.followingCount >= 0
+    ? `<span class="xvm-lb-views" title="${i18n('contentCommentBoardFollowingCount')}">\u{2192} ${formatViews(t.followingCount)}</span>`
+    : ''),
+  // The follow-back signal, shown as the actual ratio rather than the score so
+  // the user can see why a row outranks another.
+  ratio: (t) => {
+    if (t.followingCount < 0 || t.followers < 0) return '';
+    const ratio = t.followingCount / Math.max(t.followers, CB_RATIO_MIN_FOLLOWERS);
+    return `<span class="xvm-lb-views xvm-cb-ratio" title="${i18n('contentCommentBoardRatio')}">${ratio.toFixed(1)}x</span>`;
+  },
   relation: (t) => {
     const label = commentRelationLabel(t);
     if (!label) return '';
@@ -3447,8 +3568,10 @@ const DEFAULT_CB_COLUMNS = [
   { id: 'handle', visible: true },
   { id: 'preview', visible: true },
   { id: 'replies', visible: true },
-  { id: 'followers', visible: true },
   { id: 'relation', visible: true },
+  { id: 'ratio', visible: true },
+  { id: 'following', visible: true },
+  { id: 'followers', visible: true },
 ];
 let commentBoardColumns = DEFAULT_CB_COLUMNS.map((c) => ({ ...c }));
 
@@ -3459,7 +3582,7 @@ function ensureCommentBoard() {
   el.innerHTML = `
     <div class="xvm-lb-head" title="${i18n('contentCommentBoardDragToMove')}">
       <span class="xvm-lb-grip">⋮⋮</span>
-      <span class="xvm-lb-title">\u{1F4AC} ${i18n('contentCommentBoardTitle')}</span>
+      <span class="xvm-lb-title xvm-cb-title"></span>
       <div class="xvm-lb-controls">
         <button class="xvm-lb-action xvm-cb-close" type="button" title="${i18n('contentCommentBoardClose')}" aria-label="${i18n('contentCommentBoardClose')}">
           <svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
@@ -3509,6 +3632,7 @@ function renderCommentBoard() {
     }
     const el = ensureCommentBoard();
     const list = el.querySelector('.xvm-lb-list');
+    const statusPage = isCommentBoardStatusPage();
     const top = collectCommentRanked().slice(0, commentBoardCount);
     // Same visibility rule as the leaderboard: no rows, no panel. And while
     // the leaderboard is tucked against an edge, this panel goes with it —
@@ -3520,10 +3644,19 @@ function renderCommentBoard() {
       return;
     }
     el.style.display = 'block';
+    // The panel does two different jobs, so it says which one it is doing.
+    const titleEl = el.querySelector('.xvm-cb-title');
+    if (titleEl) {
+      titleEl.textContent = statusPage
+        ? `\u{1F91D} ${i18n('contentCommentBoardTitleStatus')}`
+        : `\u{1F4AC} ${i18n('contentCommentBoardTitleFeed')}`;
+    }
     // Re-anchor on every render: the leaderboard can have moved, been hidden,
     // or changed size since the last pass.
     repositionCommentBoardIfAnchored();
-    const visibleCols = commentBoardColumns.filter((c) => c.visible && CB_COLUMN_RENDERERS[c.id]);
+    const visibleCols = commentBoardColumns.filter((c) => (
+      c.visible && CB_COLUMN_RENDERERS[c.id] && cbColumnApplies(c.id, statusPage)
+    ));
     list.innerHTML = top.map((t, i) => {
       const cells = visibleCols.map((c) => CB_COLUMN_RENDERERS[c.id](t, i)).join('');
       return `<li class="xvm-lb-item xvm-cb-item" data-id="${lbEscapeHtml(t.id)}">${cells}</li>`;

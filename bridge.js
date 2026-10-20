@@ -13,14 +13,17 @@ const DEFAULT_COLUMNS = [
 const KNOWN_COLUMN_IDS = DEFAULT_COLUMNS.map((c) => c.id);
 // Comment hotspot panel columns. Kept separate from the leaderboard's list:
 // the two panels rank different things and share no column semantics beyond
-// the preview cell.
+// the handle cell. Each id is shown on only the page where it means something
+// (see CB_COLUMN_PAGES in content.js).
 const DEFAULT_CB_COLUMNS = [
   { id: 'rank',      visible: true },
   { id: 'handle',    visible: true },
   { id: 'preview',   visible: true },
   { id: 'replies',   visible: true },
-  { id: 'followers', visible: true },
   { id: 'relation',  visible: true },
+  { id: 'ratio',     visible: true },
+  { id: 'following', visible: true },
+  { id: 'followers', visible: true },
 ];
 const KNOWN_CB_COLUMN_IDS = DEFAULT_CB_COLUMNS.map((c) => c.id);
 const LANGUAGE_KEY = 'language';
@@ -131,11 +134,14 @@ const CONTENT_MESSAGE_KEYS = [
   'contentVelocity',
   'contentViralScore',
   'contentPosted',
-  'contentCommentBoardTitle',
+  'contentCommentBoardTitleFeed',
+  'contentCommentBoardTitleStatus',
   'contentCommentBoardDragToMove',
   'contentCommentBoardClose',
   'contentCommentBoardReplies',
   'contentCommentBoardFollowers',
+  'contentCommentBoardFollowingCount',
+  'contentCommentBoardRatio',
   'contentCommentBoardMutual',
   'contentCommentBoardFollowing',
   'contentCommentBoardFollowsYou',
