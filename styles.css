@@ -784,6 +784,18 @@ html[data-xvm-badge-style="inline-classic"] .xvm-badge--red { color: #f44336; ba
   font-weight: 700;
 }
 
+/* Ratio at or above CB_RATIO_HOT: this person follows nearly as many people as
+   follow them, which is the best follow-back bet the row can carry. Filled
+   solid rather than tinted so it separates from the tinted relation chip in the
+   same row — at 10px, two pale pills next to each other read as one blur. */
+.xvm-cb .xvm-cb-ratio--hot {
+  background: #177638;
+  color: #fff;
+  padding: 0 5px;
+  border-radius: 999px;
+  line-height: 16px;
+}
+
 /* Blue membership: the same check X uses, in the same blue, so a row reads
    the same way as the badge on the tweet itself. */
 .xvm-cb .xvm-cb-blue {
@@ -803,6 +815,7 @@ html[data-xvm-badge-style="inline-classic"] .xvm-badge--red { color: #f44336; ba
 .xvm-lb[data-theme="dark"] .xvm-cb-follows-you { background: rgba(251, 146, 60, 0.18);  color: #fb923c; }
 .xvm-lb[data-theme="dark"] .xvm-cb-none        { background: rgba(148, 163, 184, 0.16); color: #94a3b8; }
 .xvm-lb[data-theme="dark"] .xvm-cb .xvm-cb-ratio { color: #fb923c; }
+.xvm-lb[data-theme="dark"] .xvm-cb .xvm-cb-ratio--hot { background: #15803d; color: #ecfdf5; }
 .xvm-lb[data-theme="dark"] .xvm-cb .xvm-cb-blue { color: #60a5fa; }
 
 article[data-testid="tweet"].xvm-article-linked {

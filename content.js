@@ -3396,6 +3396,12 @@ const CB_RATIO_MIN_FOLLOWERS = 100;
 // Ratio (following / followers) at which the term saturates at 1.0. Following
 // 5x your follower count is already "follows almost anyone".
 const CB_RATIO_SATURATION = 5;
+// Ratio at which a row is marked as a likely follow-back. At 0.9 they follow
+// nearly as many people as follow them, which almost nobody does by accident —
+// it is the strongest tell the row itself can carry. Kept well below
+// CB_RATIO_SATURATION because the two answer different questions: saturation is
+// "how much of the ratio term has this earned", this is "is it worth a look".
+const CB_RATIO_HOT = 0.9;
 
 function cbHoursSince(createdAtMs) {
   if (!Number.isFinite(createdAtMs) || createdAtMs <= 0) return null;
@@ -3418,6 +3424,24 @@ function cbFollowRatio(followingCount, followers) {
   if (followingCount < 0 || followers < 0) return 0;
   const ratio = followingCount / Math.max(followers, CB_RATIO_MIN_FOLLOWERS);
   return Math.max(0, Math.min(1, ratio / CB_RATIO_SATURATION));
+}
+
+// The ratio as the panel prints it — the same floor the score uses, so the
+// badge and the number next to it can never disagree. null means "unknown":
+// the counts are stored as -1, which is finite, so the guard is load-bearing.
+function cbDisplayRatio(entry) {
+  if (!Number.isFinite(entry?.followingCount) || !Number.isFinite(entry?.followers)) return null;
+  if (entry.followingCount < 0 || entry.followers < 0) return null;
+  return entry.followingCount / Math.max(entry.followers, CB_RATIO_MIN_FOLLOWERS);
+}
+
+// Marked or not is decided on the *printed* number, not the raw one. The cell
+// shows one decimal, so a raw 0.89 renders as "0.9x" — comparing the raw value
+// would print 0.9x without the highlight, which reads as a bug. Tying the
+// marker to the same rounding the reader sees makes the rule checkable by eye:
+// a filled pill is exactly a cell reading 0.9x or more.
+function cbRatioIsHot(ratio) {
+  return ratio !== null && Number(ratio.toFixed(1)) >= CB_RATIO_HOT;
 }
 
 // Feed / search: reply count with a short recency decay. A 3-day-old post with
@@ -3563,11 +3587,17 @@ const CB_COLUMN_RENDERERS = {
     ? `<span class="xvm-lb-views" title="${i18n('contentCommentBoardFollowingCount')}">\u{2192} ${formatViews(t.followingCount)}</span>`
     : ''),
   // The follow-back signal, shown as the actual ratio rather than the score so
-  // the user can see why a row outranks another.
+  // the user can see why a row outranks another. At or above CB_RATIO_HOT the
+  // cell fills in — a solid pill reads at a glance in a 24px row, where a
+  // tinted one would blur into the relation chip beside it.
   ratio: (t) => {
-    if (t.followingCount < 0 || t.followers < 0) return '';
-    const ratio = t.followingCount / Math.max(t.followers, CB_RATIO_MIN_FOLLOWERS);
-    return `<span class="xvm-lb-views xvm-cb-ratio" title="${i18n('contentCommentBoardRatio')}">${ratio.toFixed(1)}x</span>`;
+    const ratio = cbDisplayRatio(t);
+    if (ratio === null) return '';
+    const hot = cbRatioIsHot(ratio);
+    const title = hot
+      ? `${i18n('contentCommentBoardRatio')} · ${i18n('contentCommentBoardRatioHot')}`
+      : i18n('contentCommentBoardRatio');
+    return `<span class="xvm-lb-views xvm-cb-ratio${hot ? ' xvm-cb-ratio--hot' : ''}" title="${lbEscapeHtml(title)}">${ratio.toFixed(1)}x</span>`;
   },
   blue: (t) => (t.blueVerified === true
     ? `<span class="xvm-cb-blue" title="${i18n('contentCommentBoardBlue')}" aria-label="${i18n('contentCommentBoardBlue')}">✔</span>`

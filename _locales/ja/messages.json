@@ -712,6 +712,9 @@
   "contentCommentBoardRatio": {
     "message": "フォロー数/フォロワー数"
   },
+  "contentCommentBoardRatioHot": {
+    "message": "フォローバックされやすい"
+  },
   "contentCommentBoardBlue": {
     "message": "Blue会員"
   }

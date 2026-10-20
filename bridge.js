@@ -143,6 +143,7 @@ const CONTENT_MESSAGE_KEYS = [
   'contentCommentBoardFollowers',
   'contentCommentBoardFollowingCount',
   'contentCommentBoardRatio',
+  'contentCommentBoardRatioHot',
   'contentCommentBoardBlue',
   'contentCommentBoardMutual',
   'contentCommentBoardFollowing',

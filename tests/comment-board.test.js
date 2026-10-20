@@ -11,6 +11,7 @@ import vm from 'node:vm';
 const here = dirname(fileURLToPath(import.meta.url));
 const contentJs = readFileSync(resolve(here, '..', 'content.js'), 'utf8');
 const bridgeJs = readFileSync(resolve(here, '..', 'bridge.js'), 'utf8');
+const styles = readFileSync(resolve(here, '..', 'styles.css'), 'utf8');
 
 // Pull the pure helpers out of the monolith and run them for real.
 function loadHelpers() {
@@ -55,7 +56,9 @@ function loadScoring() {
   const ctx = {};
   vm.runInNewContext(
     `${src}; this.cbFeedScore = cbFeedScore; this.cbStatusScore = cbStatusScore;`
-    + ' this.cbFollowRatio = cbFollowRatio; this.cbRecency = cbRecency;',
+    + ' this.cbFollowRatio = cbFollowRatio; this.cbRecency = cbRecency;'
+    + ' this.cbDisplayRatio = cbDisplayRatio; this.cbRatioIsHot = cbRatioIsHot;'
+    + ' this.CB_RATIO_HOT = CB_RATIO_HOT;',
     ctx,
   );
   return ctx;
@@ -100,7 +103,7 @@ describe('comment ranking', () => {
   // Pull the real scoring helpers out of content.js rather than reimplementing
   // them here, so the weights and the decay curve are exercised as shipped.
   const ctx = loadScoring();
-  const { cbFeedScore, cbStatusScore, cbFollowRatio, cbRecency } = ctx;
+  const { cbFeedScore, cbStatusScore, cbFollowRatio, cbRecency, cbDisplayRatio, cbRatioIsHot, CB_RATIO_HOT } = ctx;
   const hoursAgo = (h) => Date.now() - h * 3_600_000;
 
   describe('feed / search', () => {
@@ -203,6 +206,50 @@ describe('comment ranking', () => {
     it('scores an unknown ratio as zero, not as a perfect one', () => {
       expect(cbFollowRatio(-1, -1)).toBe(0);
       expect(cbFollowRatio(undefined, 500)).toBe(0);
+    });
+  });
+
+  describe('likely follow-back marker', () => {
+    it('marks the ratio at the threshold, not just above it', () => {
+      expect(CB_RATIO_HOT).toBe(0.9);
+      expect(cbRatioIsHot(0.9)).toBe(true);
+      expect(cbRatioIsHot(1.4)).toBe(true);
+      expect(cbRatioIsHot(0.8)).toBe(false);
+    });
+
+    it('never prints 0.9x without the marker', () => {
+      // 890/1000 is a raw 0.89, which the cell rounds to "0.9x". Deciding the
+      // highlight on the raw value would leave that cell reading 0.9x unmarked
+      // — indistinguishable from a bug to anyone looking at the panel.
+      const shown = cbDisplayRatio({ followingCount: 890, followers: 1000 });
+      expect(shown.toFixed(1)).toBe('0.9');
+      expect(cbRatioIsHot(shown)).toBe(true);
+      // And the converse: a cell that reads 0.8x is never filled.
+      expect(cbRatioIsHot(cbDisplayRatio({ followingCount: 849, followers: 1000 }))).toBe(false);
+    });
+
+    it('prints the ratio it scored, floor included', () => {
+      // 90 following / 50 followers is a raw 1.8, but the panel shows the
+      // floored 0.9 it actually ranked on. The marker follows the number on
+      // screen, so a reader can always re-derive why a row is highlighted.
+      expect(cbDisplayRatio({ followingCount: 90, followers: 50 })).toBeCloseTo(0.9, 5);
+      expect(cbDisplayRatio({ followingCount: 90, followers: 100 })).toBeCloseTo(0.9, 5);
+    });
+
+    it('returns null rather than the -1 sentinel for unknown counts', () => {
+      // The counts are stored as -1 when X never told us. -1 is finite, so
+      // without the guard this would render "-0.0x" and mark it hot.
+      expect(cbDisplayRatio({ followingCount: -1, followers: 1000 })).toBeNull();
+      expect(cbDisplayRatio({ followingCount: 1000, followers: -1 })).toBeNull();
+      expect(cbDisplayRatio({})).toBeNull();
+      expect(cbRatioIsHot(null)).toBe(false);
+    });
+
+    it('renders the filled pill only when the ratio clears the bar', () => {
+      expect(contentJs).toContain('const hot = cbRatioIsHot(ratio);');
+      expect(contentJs).toContain("${hot ? ' xvm-cb-ratio--hot' : ''}");
+      expect(styles).toContain('.xvm-cb .xvm-cb-ratio--hot {');
+      expect(styles).toContain('.xvm-lb[data-theme="dark"] .xvm-cb .xvm-cb-ratio--hot');
     });
   });
 });

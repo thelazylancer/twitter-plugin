@@ -717,6 +717,9 @@
   "contentCommentBoardRatio": {
     "message": "关注数/粉丝数"
   },
+  "contentCommentBoardRatioHot": {
+    "message": "很可能回关"
+  },
   "contentCommentBoardBlue": {
     "message": "蓝V会员"
   }

@@ -719,6 +719,9 @@
   "contentCommentBoardRatio": {
     "message": "Following / followers"
   },
+  "contentCommentBoardRatioHot": {
+    "message": "likely to follow back"
+  },
   "contentCommentBoardBlue": {
     "message": "Blue member"
   }
