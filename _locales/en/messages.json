@@ -382,7 +382,7 @@
     "message": "Grok comment prompt"
   },
   "popupGrokPromptHint": {
-    "message": "Write only the instructions — [推文内容] and the \"one code block per reply\" rule are added automatically if missing. Put [推文内容] yourself to control where the source tweet goes. Click AI Generate in a reply box, choose a template, then pick one generated option."
+    "message": "Write only the instructions — {推文内容} and the \"one code block per reply\" rule are added automatically if missing. Put {推文内容} yourself to control where the source tweet goes. Slots: {作者}, {关注状态}, {主贴}, {当前评论}, {原推文}, {对该推文的回复}, {数据}; a slot with no value disappears entirely. Click AI Generate in a reply box, choose a template, then pick one generated option."
   },
   "flashGrokPromptSaved": {
     "message": "Grok prompt saved ✓"
@@ -615,10 +615,10 @@
   "replyLanguageEn": { "message": "English" },
   "replyLanguageJa": { "message": "Japanese" },
   "authorReplyTitle": { "message": "AI home replies" },
-  "authorReplyDesc": { "message": "Used only when replying to comments on your own post. The main post and current comment replace [推文内容]." },
+  "authorReplyDesc": { "message": "Used only when replying to comments on your own post. The main post, current comment, follow status and engagement stats fill {主贴}, {当前评论}, {关注状态} and {数据}." },
   "authorReplyReset": { "message": "Restore default reply prompt" },
   "inviteFollowTitle": { "message": "AI mutual follow" },
-  "inviteFollowDesc": { "message": "The 邀关 button in a reply box uses this prompt to draft one invite to follow each other. The language follows the post." },
+  "inviteFollowDesc": { "message": "The 邀关 button in a reply box uses this prompt to draft one invite to follow each other. The language follows the post. Available: {推文内容}, {作者}, {关注状态}." },
   "inviteFollowReset": { "message": "Restore default mutual-follow prompt" },
   "unfollowedBlueTitle": { "message": "Blue check only" },
   "unfollowedBlueDesc": { "message": "On by default. Only mark unfollowed commenters with a blue check. Turn it off to mark everyone you do not follow." },

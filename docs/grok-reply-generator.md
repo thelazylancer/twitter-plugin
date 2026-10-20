@@ -4,11 +4,11 @@
 
 - Entry point: add an `AI 生成` button inside X reply composers only.
 - Source tweet: prefer the cached tweet data collected for badges/GraphQL; fall back to the visible tweet DOM only if cache is unavailable.
-- Prompt templates: support multiple user-defined templates in the extension popup. Each template may use `[推文内容]` as the source tweet placeholder.
+- Prompt templates: support multiple user-defined templates in the extension popup. Each template may use `{推文内容}` as the source tweet placeholder.
 - Default template:
 
 ```text
-[推文内容]
+{推文内容}
 
 为我生成针对该推文的10条评论,每条评论用代码块包裹
 ```

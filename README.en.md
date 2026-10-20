@@ -58,7 +58,7 @@ A **✦ AI 生成** button appears in every reply composer. Click it to:
 
 Nested-reply aware: when replying to a comment underneath someone else's tweet, the prompt context is composed as 「original tweet + the reply being responded to」 so Grok sees the full conversation, not just an isolated comment.
 
-Templates can be edited in the extension popup. **Tweet templates** and **article templates** are stored separately. The `[推文内容]` placeholder gets replaced with the source text; if your custom prompt has no placeholder, the source is prepended automatically.
+Templates can be edited in the extension popup. **Tweet templates** and **article templates** are stored separately. The `{推文内容}` placeholder gets replaced with the source text; if your custom prompt has no placeholder, the source is prepended automatically.
 
 ## Install
 

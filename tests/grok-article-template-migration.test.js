@@ -13,7 +13,7 @@ const ctx = {};
 vm.runInNewContext(`${block}\nthis.merge = mergeLegacyArticleTemplates; this.bundled = LEGACY_BUNDLED_ARTICLE_PROMPTS;`, ctx);
 const { merge, bundled } = ctx;
 
-const DEFAULTS = [{ id: 'default', name: '默认', prompt: '[推文内容]\n\n默认' }];
+const DEFAULTS = [{ id: 'default', name: '默认', prompt: '{推文内容}\n\n默认' }];
 const bundledPrompt = [...bundled][0];
 
 describe('mergeLegacyArticleTemplates', () => {
@@ -28,8 +28,8 @@ describe('mergeLegacyArticleTemplates', () => {
   });
 
   it('appends a user-written long-post template to the existing list', () => {
-    const mine = [{ id: 'default', name: '我的', prompt: '[推文内容]\n\n我的短评' }];
-    const out = merge(mine, [{ id: 'article-default', name: '文章评论', prompt: bundledPrompt }, { id: 'custom-1', name: '长文毒舌', prompt: '[推文内容]\n\n毒舌点评长文' }], DEFAULTS);
+    const mine = [{ id: 'default', name: '我的', prompt: '{推文内容}\n\n我的短评' }];
+    const out = merge(mine, [{ id: 'article-default', name: '文章评论', prompt: bundledPrompt }, { id: 'custom-1', name: '长文毒舌', prompt: '{推文内容}\n\n毒舌点评长文' }], DEFAULTS);
     expect(out.map((t) => t.name)).toEqual(['我的', '长文毒舌']);
   });
 
@@ -40,8 +40,8 @@ describe('mergeLegacyArticleTemplates', () => {
 
   it('falls back to the defaults when the user never saved a short list, and never duplicates ids or prompts', () => {
     const out = merge([], [
-      { id: 'default', name: '同 id', prompt: '[推文内容]\n\n不同内容' },
-      { id: 'x', name: '重复内容', prompt: '[推文内容]\n\n默认' },
+      { id: 'default', name: '同 id', prompt: '{推文内容}\n\n不同内容' },
+      { id: 'x', name: '重复内容', prompt: '{推文内容}\n\n默认' },
     ], DEFAULTS);
     expect(out.map((t) => t.id)).toEqual(['default', 'default-legacy']);
   });

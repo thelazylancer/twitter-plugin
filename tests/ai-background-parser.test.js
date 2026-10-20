@@ -34,7 +34,7 @@ describe('AI background comment parser', () => {
   it('sanitizes incompatible control and Unicode code units before rendering the AI prompt', () => {
     const { renderPrompt } = loadBackgroundDebug();
 
-    const prompt = renderPrompt('\uFEFFCafe\u0301\u0000\n\t正文\u000B\uD800', '[推文内容]', 1);
+    const prompt = renderPrompt('\uFEFFCafe\u0301\u0000\n\t正文\u000B\uD800', '{推文内容}', 1);
 
     expect(prompt).toContain('Café\n\t正文\uFFFD');
     const english = renderPrompt('This post is in English.', '为该推文生成3条评论', 3, { replyLanguage: 'post' });
@@ -105,7 +105,7 @@ describe('AI background comment parser', () => {
       apiKey: 'test-key',
     }, {
       tweetText: 'tweet',
-      promptTemplate: '[推文内容]',
+      promptTemplate: '{推文内容}',
     }, (items) => progress.push(items));
 
     expect(comments).toHaveLength(10);

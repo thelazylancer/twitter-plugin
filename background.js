@@ -1,4 +1,4 @@
-const PLACEHOLDER = '[推文内容]';
+const PLACEHOLDER = '{推文内容}';
 const DEFAULT_PROVIDER = 'openai-compatible';
 const DEFAULT_PLATFORM = 'openai';
 const DEFAULT_REPLY_COUNT = 3;
@@ -146,6 +146,8 @@ function textBeingRepliedTo(text) {
   const comment = raw.split('【当前评论】')[1] || raw.split('【对该推文的回复】')[1] || raw;
   // The 【关注状态】 note content.js appends is Chinese by construction;
   // leaving it in would make an English or Japanese post detect as zh.
+  // Slot values are expanded into the template, not into this text, so they
+  // never reach the detector.
   return comment
     .replace(/【关注状态】[^\n]*/g, ' ')
     .replace(/【(?:主贴|当前评论|原推文|对该推文的回复|对方的评论|我的原帖)】/g, '');
@@ -197,9 +199,15 @@ function outputHint(text, replyCount, options = {}) {
 function renderPrompt(tweetText, templateText, replyCount, options = {}) {
   const text = sanitizeAiPromptText(tweetText);
   const tpl = sanitizeAiPromptText(templateText);
-  const rendered = tpl
-    ? (tpl.includes(PLACEHOLDER) ? tpl.split(PLACEHOLDER).join(text) : `${text}\n\n${tpl}`)
-    : `${text}\n\nGenerate ${replyCount} natural replies. Output only ready-to-post reply text, each inside its own code block.`;
+  // content.js renders named slots in the page, where the DOM-derived values
+  // live. When it has already done so the template is final — expanding
+  // {推文内容} again here would splice the whole block in a second time. An
+  // empty template still falls through to the built-in default.
+  const rendered = options.preRendered && tpl
+    ? tpl
+    : (tpl
+      ? (tpl.includes(PLACEHOLDER) ? tpl.split(PLACEHOLDER).join(text) : `${text}\n\n${tpl}`)
+      : `${text}\n\nGenerate ${replyCount} natural replies. Output only ready-to-post reply text, each inside its own code block.`);
   return `${rendered}\n\n${outputHint(text, replyCount, options)}`;
 }
 
@@ -333,6 +341,7 @@ async function generateWithOllama(config, payload, onProgress) {
   const model = config.model || 'llama3.1';
   const prompt = renderPrompt(payload.tweetText, payload.promptTemplate, config.replyCount, {
     replyLanguage: payload.replyLanguage,
+    preRendered: payload.promptPreRendered === true,
   });
   let generated = '';
   let pending = '';
@@ -385,6 +394,7 @@ async function generateWithOpenAICompatible(config, payload, onProgress) {
   if (!config.apiKey && !isLocalHttpUrl(baseUrl)) throw new Error('请先填写 API Key');
   const prompt = renderPrompt(payload.tweetText, payload.promptTemplate, config.replyCount, {
     replyLanguage: payload.replyLanguage,
+    preRendered: payload.promptPreRendered === true,
   });
   const headers = { 'content-type': 'application/json' };
   if (config.apiKey) headers.authorization = `Bearer ${config.apiKey}`;

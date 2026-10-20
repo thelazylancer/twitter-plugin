@@ -380,7 +380,7 @@
     "message": "Grok 评论提示词"
   },
   "popupGrokPromptHint": {
-    "message": "只写要求就行 —— 缺少 [推文内容] 和「每条评论用代码块包裹」时会自动补上。想指定原推文插入位置就自己写 [推文内容]。点击回复框里的 AI 生成后选择模板，生成完成后再从 Options 中选择一条填入。"
+    "message": "只写要求就行 —— 缺少 {推文内容} 和「每条评论用代码块包裹」时会自动补上。想指定原推文插入位置就自己写 {推文内容}。可用槽位：{作者}、{关注状态}、{主贴}、{当前评论}、{原推文}、{对该推文的回复}、{数据}；没内容的槽位会整段消失。点击回复框里的 AI 生成后选择模板，生成完成后再从 Options 中选择一条填入。"
   },
   "flashGrokPromptSaved": {
     "message": "Grok 提示词已保存 ✓"
@@ -613,10 +613,10 @@
   "replyLanguageEn": { "message": "英文" },
   "replyLanguageJa": { "message": "日语" },
   "authorReplyTitle": { "message": "AI 主页回评" },
-  "authorReplyDesc": { "message": "只用于你自己帖子下的回评。生成时会把主贴和当前评论填进 [推文内容]。" },
+  "authorReplyDesc": { "message": "只用于你自己帖子下的回评。主贴、当前评论、关注状态和互动数据会分别填进 {主贴}、{当前评论}、{关注状态}、{数据}。" },
   "authorReplyReset": { "message": "恢复默认回评提示词" },
   "inviteFollowTitle": { "message": "AI 邀关" },
-  "inviteFollowDesc": { "message": "回复框里的「邀关」按钮用这段提示词生成邀请互相关注的文案，只生成 1 条。语言跟随对方帖子。" },
+  "inviteFollowDesc": { "message": "回复框里的「邀关」按钮用这段提示词生成邀请互相关注的文案，只生成 1 条。语言跟随对方帖子。可用 {推文内容}、{作者}、{关注状态}。" },
   "inviteFollowReset": { "message": "恢复默认邀关提示词" },
   "unfollowedBlueTitle": { "message": "只标蓝 V" },
   "unfollowedBlueDesc": { "message": "默认勾选。只给带蓝勾的会员显示未关注。取消后，所有未关注的评论者都会标。" },

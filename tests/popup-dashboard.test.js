@@ -469,14 +469,21 @@ describe('#45 i18n keys (mock A + dual theme)', () => {
   });
 
   it('keeps the original Chinese Grok default prompt templates', () => {
-    expect(popupJs).toContain("id: 'short-cn', name: '中文短评'");
-    expect(popupJs).toContain("id: 'tieba-laoge', name: '贴吧老哥'");
-    expect(popupJs).toContain('为我生成针对该推文的3条评论,每条评论只包含可直接发布的评论正文，用代码块包裹。');
-    expect(popupJs).toContain('用贴吧老哥的语气为该推文生成3条评论。整体阴阳怪气，但不带脏字、不人身攻击；保持口语感，不要装文艺、不要写得像新闻评论；每条评论控制在 30 字以内，简短精悍。');
-    expect(bridgeJs).toContain("id: 'short-cn', name: '中文短评'");
-    expect(bridgeJs).toContain("id: 'tieba-laoge', name: '贴吧老哥'");
-    expect(bridgeJs).toContain('用贴吧老哥的语气为该推文生成3条评论。整体阴阳怪气，但不带脏字、不人身攻击；保持口语感，不要装文艺、不要写得像新闻评论；每条评论控制在 30 字以内，简短精悍。');
-    expect(bridgeJs).toContain('为我生成针对该推文的3条评论, 每条评论只包含可直接发布的评论正文，用代码块包裹。');
+    // Template ids and names are stable; the bodies are now written in the same
+    // {推文内容} + {关注状态} + 要求：-list shape as the author-reply and
+    // invite-follow prompts.
+    for (const src of [popupJs, bridgeJs]) {
+      expect(src).toContain("id: 'short-cn', name: '中文短评'");
+      expect(src).toContain("id: 'tieba-laoge', name: '贴吧老哥'");
+      expect(src).toContain('用贴吧老哥的语气为该推文生成3条评论。');
+      expect(src).toContain('整体阴阳怪气，但不带脏字、不人身攻击');
+      expect(src).toContain('每条评论控制在 30 字以内，简短精悍');
+    }
+    // Every bundled quick-reply template carries the slot and the guard rail.
+    expect(popupJs).toContain('{推文内容}\\n\\n{关注状态}\\n\\n');
+    expect(bridgeJs).toContain('{推文内容}\\n\\n{关注状态}\\n\\n');
+    expect(popupJs).toContain('关注状态只用来判断该用什么分寸，不要把它写进回复里');
+    expect(bridgeJs).toContain('关注状态只用来判断该用什么分寸，不要把它写进回复里');
   });
 });
 

@@ -89,10 +89,16 @@ describe('follow relation wiring', () => {
     expect(contentJs).toContain('followedBy: base.followedBy === true || base.followedBy === false ? base.followedBy : extra.followedBy');
   });
 
-  it('carries the note into both reply contexts', () => {
+  it('carries the note into both reply contexts as a named slot', () => {
+    // The note is no longer baked into the {推文内容} block — it is exposed as
+    // {关注状态} so a template that places the slot does not print it twice.
     expect(contentJs).toContain('const relationNote = describeFollowRelation(commentArticle, who);');
     expect(contentJs).toContain('const relationNote = describeFollowRelation(article);');
-    expect(contentJs).toContain('if (relationNote) tweetText = `${tweetText}\\n\\n${relationNote}`;');
+    expect(contentJs).toContain('关注状态: stripSlotLabel(relationNote),');
+    expect(contentJs).toContain('关注状态: stripSlotLabel(describeFollowRelation(article)),');
+    // And the block must NOT contain it any more.
+    expect(contentJs).not.toContain('if (relationNote) tweetText = `${tweetText}\\n\\n${relationNote}`;');
+    expect(contentJs).not.toContain('].filter(Boolean).join(\'\\n\\n\'),\n      relationNote,');
   });
 
   it('blocks 邀关 once the account is already followed', () => {

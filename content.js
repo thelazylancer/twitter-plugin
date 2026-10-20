@@ -361,14 +361,14 @@ window.postMessage({ type: 'XVM_REQUEST_SETTINGS' }, '*');
 
 // === Request Interception (fetch + XHR) ===
 const GRAPHQL_RE = /\/(?:i\/api\/)?graphql\//;
-const DEFAULT_GROK_COMMENT_PROMPT = '[推文内容]\n\n为我生成针对该推文的3条评论,每条评论用代码块包裹';
+const DEFAULT_GROK_COMMENT_PROMPT = '{推文内容}\n\n{关注状态}\n\n为我生成针对这条推文的3条评论。\n\n要求：\n- 每条评论只包含可直接发布的评论正文\n- 用代码块包裹\n- 关注状态只用来判断该用什么分寸，不要把它写进回复里';
 const DEFAULT_GROK_PROMPT_TEMPLATES = [
   { id: 'default', name: '默认评论', prompt: DEFAULT_GROK_COMMENT_PROMPT },
-  { id: 'short-cn', name: '中文短评', prompt: '[推文内容]\n\n为该推文生成3条自然、简短、像真人回复的中文评论,每条评论用代码块包裹' },
-  { id: 'sharp', name: '犀利观点', prompt: '[推文内容]\n\n为该推文生成3条有观点、有信息密度、但不人身攻击的评论,每条评论用代码块包裹' },
-  { id: 'tieba-laoge', name: '贴吧老哥', prompt: '[推文内容]\n\n用贴吧老哥的语气为该推文生成3条评论。要求：\n- 每条评论用代码块包裹' },
-  { id: 'point-by-point', name: '针对性回应', prompt: '[推文内容]\n\n为该推文生成3条评论。要求：每条都针对推文里的一个具体观点、论据或例子回应（赞同/质疑/补充），不要笼统夸奖；语气自然像真人；每条评论只包含可直接发布的评论正文，用代码块包裹。' },
-  { id: 'deep-dive', name: '深度回应', prompt: '[推文内容]\n\n挑出这条推文里最值得讨论的3-5个点，围绕这些点生成3条有信息密度的评论（延伸思考、反例、或个人经验），每条评论只包含可直接发布的评论正文，用代码块包裹。' },
+  { id: 'short-cn', name: '中文短评', prompt: '{推文内容}\n\n{关注状态}\n\n为该推文生成3条自然、简短、像真人回复的中文评论。\n\n要求：\n- 每条评论只包含可直接发布的评论正文\n- 用代码块包裹\n- 关注状态只用来判断该用什么分寸，不要把它写进回复里' },
+  { id: 'sharp', name: '犀利观点', prompt: '{推文内容}\n\n{关注状态}\n\n为该推文生成3条有观点、有信息密度的评论。\n\n要求：\n- 不人身攻击\n- 每条评论只包含可直接发布的评论正文\n- 用代码块包裹\n- 关注状态只用来判断该用什么分寸，不要把它写进回复里' },
+  { id: 'tieba-laoge', name: '贴吧老哥', prompt: '{推文内容}\n\n{关注状态}\n\n用贴吧老哥的语气为该推文生成3条评论。\n\n要求：\n- 整体阴阳怪气，但不带脏字、不人身攻击\n- 保持口语感，不要装文艺、不要写得像新闻评论\n- 每条评论控制在 30 字以内，简短精悍\n- 每条评论只包含可直接发布的评论正文，用代码块包裹\n- 关注状态只用来判断该用什么分寸，不要把它写进回复里' },
+  { id: 'point-by-point', name: '针对性回应', prompt: '{推文内容}\n\n{关注状态}\n\n为该推文生成3条评论。\n\n要求：\n- 每条都针对推文里的一个具体观点、论据或例子回应（赞同/质疑/补充），不要笼统夸奖\n- 语气自然像真人\n- 每条评论只包含可直接发布的评论正文，用代码块包裹\n- 关注状态只用来判断该用什么分寸，不要把它写进回复里' },
+  { id: 'deep-dive', name: '深度回应', prompt: '{推文内容}\n\n{关注状态}\n\n挑出这条推文里最值得讨论的3-5个点，围绕这些点生成3条有信息密度的评论（延伸思考、反例、或个人经验）。\n\n要求：\n- 每条评论只包含可直接发布的评论正文，用代码块包裹\n- 关注状态只用来判断该用什么分寸，不要把它写进回复里' },
 ];
 
 // --- prompt-normalize:start ---
@@ -376,7 +376,20 @@ const DEFAULT_GROK_PROMPT_TEMPLATES = [
 // are patched in here instead of being the user's problem: the tweet
 // placeholder (so the source post has a defined position) and the
 // "one code block per reply" instruction (the reply parser keys off it).
-const GROK_TWEET_PLACEHOLDER = '[推文内容]';
+const GROK_TWEET_PLACEHOLDER = '{推文内容}';
+// Named slots let a prompt place each piece of context itself instead of only
+// being able to reference the whole block. The tokens stay Chinese in every
+// locale on purpose: the bundled en/ja templates already write {推文内容}, so
+// one vocabulary covers all three languages.
+const GROK_CONTEXT_SLOTS = ['作者', '关注状态', '主贴', '当前评论', '原推文', '对该推文的回复', '数据'];
+// Slots that carry the post body itself. {作者} / {关注状态} / {数据} are
+// metadata, so a template using only those still needs the text spliced in.
+const GROK_BODY_SLOT_RE = /\{(?:主贴|当前评论|原推文|对该推文的回复)\}/;
+// Braces, not brackets: {var} is what every other prompt tool uses, and it
+// keeps the tokens clear of Markdown link syntax.
+const GROK_SLOT_ALT = [...GROK_CONTEXT_SLOTS, '推文内容'].join('|');
+const GROK_ANY_TOKEN_RE = new RegExp(`\\{(?:${GROK_SLOT_ALT})\\}`, 'g');
+const GROK_HAS_TWEET_PLACEHOLDER_RE = /\{推文内容\}/;
 const GROK_CODE_BLOCK_RE = /代码块|代碼區塊|コードブロック|code block/i;
 const GROK_CODE_BLOCK_HINT = {
   ja: '各返信は、そのまま投稿できる本文だけをコードブロックで囲んで出力してください。',
@@ -387,15 +400,37 @@ const GROK_CODE_BLOCK_HINT = {
 function normalizeGrokPromptText(prompt) {
   let out = String(prompt || '').trim();
   if (!out) return out;
-  if (!out.includes(GROK_TWEET_PLACEHOLDER)) out = `${GROK_TWEET_PLACEHOLDER}\n\n${out}`;
+  // Any body slot counts as "the post has a home", so a prompt written around
+  // {主贴}/{当前评论} must not get a second, duplicate {推文内容} block. A
+  // metadata-only slot such as {关注状态} does not.
+  if (!GROK_HAS_TWEET_PLACEHOLDER_RE.test(out) && !GROK_BODY_SLOT_RE.test(out)) {
+    out = `${GROK_TWEET_PLACEHOLDER}\n\n${out}`;
+  }
   if (!GROK_CODE_BLOCK_RE.test(out)) {
     // Match the template's own language so the appended line doesn't read
-    // like a second prompt bolted on.
-    const body = out.slice(GROK_TWEET_PLACEHOLDER.length);
-    const lang = /[\u3040-\u30ff]/.test(body) ? 'ja' : /[\u4e00-\u9fff]/.test(body) ? 'zh' : 'en';
+    // like a second prompt bolted on. Slot tokens are stripped first: they
+    // are Chinese in every locale and would otherwise force the zh hint onto
+    // an English prompt that uses {作者}.
+    const body = out.replace(GROK_ANY_TOKEN_RE, ' ');
+    const lang = /[぀-ヿ]/.test(body) ? 'ja' : /[一-鿿]/.test(body) ? 'zh' : 'en';
     out += `\n\n${GROK_CODE_BLOCK_HINT[lang]}`;
   }
   return out;
+}
+
+// Replaces the context tokens with the parts content.js actually collected.
+// A slot with no value removes its own line rather than leaving an empty
+// 【当前评论】 label the model would read as "there is a comment, it is blank".
+// {推文内容} stays a single block for templates written before slots existed.
+function renderGrokContext(prompt, parts = {}) {
+  const src = String(prompt || '');
+  const value = (key) => String(parts[key] || '').trim();
+  // One pass over the template, never over the substituted values: a post
+  // whose text happens to contain "{当前评论}" must not be expanded again.
+  const out = src.replace(GROK_ANY_TOKEN_RE, (token) => value(token.slice(1, -1)));
+  // Collapse the blank lines an emptied slot leaves behind, but keep a single
+  // paragraph break so the remaining sections stay visually separate.
+  return out.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 // --- prompt-normalize:end ---
 
@@ -4197,14 +4232,21 @@ function ownFocalArticle() {
   return focal?.article || null;
 }
 
-const AUTHOR_REPLY_PROMPT = `[推文内容]
+const AUTHOR_REPLY_PROMPT = `{主贴}
 
-你是【主贴】的作者，正在回复【当前评论】。主贴是你已经公开说过的话，当前评论是别人留在这条主贴下面、你现在要回的那一条。
+{当前评论}
+
+{关注状态}
+
+{数据}
+
+你是主贴的作者，正在回复下面那条当前评论。主贴是你已经公开说过的话，当前评论是别人留在这条主贴下面、你现在要回的那一条。
 
 请生成3条可直接发送的回复。要求：
 - 先看当前评论在问、补充还是反驳主贴里的哪一点，只回应这一点
 - 回答必须和主贴对得上：评论问到主贴里的说法，就用主贴里的立场来答，不要另起一套
 - 不要复述整条主贴，不要夸自己的主贴，不要写成路人在评论别人的帖子
+- 关注状态只用来判断该用什么分寸，不要把它写进回复里
 - 语气像本人回评：简短、口语、不端着。有问题就答，有补充就补一句，有感谢就短谢
 - 跟当前评论使用的语言走
 - 每条只包含可直接发布的回复正文，用代码块包裹。`;
@@ -4214,7 +4256,10 @@ function currentAuthorReplyPrompt() {
   return custom || AUTHOR_REPLY_PROMPT;
 }
 
-const INVITE_FOLLOW_PROMPT = `[推文内容]
+const INVITE_FOLLOW_PROMPT = `{推文内容}
+
+{作者}
+{关注状态}
 
 你要在对方的推文下留一条回复，邀请对方和你互相关注。要求：
 - 先接住这条推文的一个具体内容（观点、经历或细节）
@@ -4222,6 +4267,7 @@ const INVITE_FOLLOW_PROMPT = `[推文内容]
 - 以小女子的身份去评论(不需要小女人人称)，一定要用网络用语，评论有梗
 - 生成3条候选，每条控制在20个字左右
 - 不要夸夸其谈，不要提粉丝数、流量、合作，不要用 emoji 堆砌
+- 关注状态只用来判断该用什么分寸，不要把它写进回复里
 - 跟这条推文使用的语言走
 - 只输出可直接发布的回复正文，用代码块包裹。`;
 
@@ -4255,17 +4301,53 @@ function buildAuthorReplyPayload(commentArticle, mainArticle) {
   const handle = articleHandle(commentArticle);
   const who = handle ? `@${handle}` : '对方';
   const relationNote = describeFollowRelation(commentArticle, who);
+  // No relation note inside the block: it is exposed as {关注状态} so a
+  // template that places the slot does not print it twice.
+  const context = [
+    `【主贴】\n${mainText}`,
+    `【当前评论】\n${who}：${commentText}`,
+  ].filter(Boolean).join('\n\n');
   return {
     mainText,
     commentText,
     who,
     relationNote,
-    context: [
-      `【主贴】\n${mainText}`,
-      `【当前评论】\n${who}：${commentText}`,
-      relationNote,
-    ].filter(Boolean).join('\n\n'),
+    context,
+    slots: {
+      作者: who,
+      关注状态: stripSlotLabel(relationNote),
+      主贴: mainText,
+      当前评论: `${who}：${commentText}`,
+      推文内容: context,
+      数据: describeTweetStats(mainArticle || commentArticle),
+    },
   };
+}
+
+// The note is stored with its 【关注状态】 label so the block context reads
+// right. A template that asks for {关注状态} supplies its own framing, so the
+// label would only be repeated.
+function stripSlotLabel(note) {
+  return String(note || '').replace(/^【[^】]+】/, '').trim();
+}
+
+// Engagement numbers are context for "is this worth a careful reply", not UI.
+// Returns '' when the post was never captured, so the slot disappears instead
+// of asserting zeros.
+function describeTweetStats(article) {
+  const id = article ? getTweetIdFromArticle(article) : getStatusIdFromLocation();
+  const data = id ? tweetDataStore.get(id) : null;
+  if (!data) return '';
+  const bits = [];
+  if (data.views > 0) bits.push(`浏览 ${formatViews(data.views)}`);
+  if (data.likes > 0) bits.push(`点赞 ${formatViews(data.likes)}`);
+  if (data.retweets > 0) bits.push(`转推 ${formatViews(data.retweets)}`);
+  if (data.replies > 0) bits.push(`回复 ${formatViews(data.replies)}`);
+  const created = data.createdAt ? new Date(data.createdAt) : null;
+  if (created && !Number.isNaN(created.getTime())) {
+    bits.push(`发布于 ${formatLocalDateTime(created)}`);
+  }
+  return bits.join(' · ');
 }
 
 function resolveAuthorReplyPair(fallbackArticle) {
@@ -5165,6 +5247,10 @@ async function handleGrokGenerate(btn, editable, promptTemplate = null, authorJo
   let authorMode = false;
   let authorNote = '';
   let tweetText = '';
+  // Named-slot values for templates that place context themselves. The block
+  // form (tweetText) is still built in every branch: it is what the language
+  // detector reads and what {推文内容} expands to.
+  let contextSlots = {};
   if (inviteMode) {
     const root = findReplyComposerRoot(editable);
     const article = findReplyArticleForAiComposer(root);
@@ -5183,9 +5269,18 @@ async function handleGrokGenerate(btn, editable, promptTemplate = null, authorJo
       return;
     }
     tweetText = replyText;
+    contextSlots = {
+      作者: articleHandle(article) ? `@${articleHandle(article)}` : '',
+      关注状态: stripSlotLabel(describeFollowRelation(article)),
+      数据: describeTweetStats(article),
+      推文内容: replyText,
+    };
   } else if (authorJob?.context) {
     authorMode = true;
     tweetText = authorJob.context;
+    // A job built before slots existed carries only the block; without this
+    // fallback every slot would render empty and the post would vanish.
+    contextSlots = authorJob.slots || { 推文内容: authorJob.context };
     authorNote = authorJob.who
       ? i18n('contentAiNoteAuthorReply').replace('{who}', authorJob.who)
       : i18n('contentAiNoteContext');
@@ -5202,6 +5297,7 @@ async function handleGrokGenerate(btn, editable, promptTemplate = null, authorJo
       }
       authorMode = true;
       tweetText = payload.context;
+      contextSlots = payload.slots;
       authorNote = i18n('contentAiNoteAuthorReply').replace('{who}', payload.who);
     } else {
       const replyText = getTweetTextFromArticle(article);
@@ -5214,13 +5310,22 @@ async function handleGrokGenerate(btn, editable, promptTemplate = null, authorJo
         ? grokLastReplyThreadOg
         : null;
       const ogText = ogArticle ? getTweetTextFromArticle(ogArticle) : '';
+      // The relationship note is no longer baked into the block: templates get
+      // it as {关注状态}, so one that already places the slot must not see it
+      // twice. tweetText stays note-free and is only what the language
+      // detector and {推文内容} read.
       tweetText = (ogText && ogText !== replyText)
         ? `【原推文】\n${ogText}\n\n【对该推文的回复】\n${replyText}`
         : replyText;
-      // Same relationship context as 回评: without it the model writes to a
-      // stranger and a mutual the same way.
       const relationNote = describeFollowRelation(article);
-      if (relationNote) tweetText = `${tweetText}\n\n${relationNote}`;
+      contextSlots = {
+        作者: articleHandle(article) ? `@${articleHandle(article)}` : '',
+        关注状态: stripSlotLabel(relationNote),
+        原推文: ogText && ogText !== replyText ? ogText : '',
+        对该推文的回复: replyText,
+        数据: describeTweetStats(article),
+        推文内容: tweetText,
+      };
     }
   }
   // inviteMode keeps its own label; writing 'comment' here would flip the
@@ -5260,9 +5365,13 @@ async function handleGrokGenerate(btn, editable, promptTemplate = null, authorJo
       return !Array.isArray(running) || running.length < replyLimit;
     };
     showGrokOptions([], editable, { ...panelOpts, streaming: true });
+    // Slots are expanded here, in the page, because this is the only place
+    // that has the DOM-derived values. A prompt with no slot tokens renders
+    // exactly as before, so existing templates keep working unchanged.
     const comments = await requestExternalAiGeneration({
       tweetText,
-      promptTemplate: normalizeGrokPromptText(tpl?.prompt || tpl),
+      promptTemplate: renderGrokContext(normalizeGrokPromptText(tpl?.prompt || tpl), contextSlots),
+      promptPreRendered: true,
     }, onProgress);
     if (epoch !== grokGenEpoch) return;
     showGrokOptions(
