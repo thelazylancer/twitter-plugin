@@ -162,11 +162,10 @@ const DEFAULT_FEATURES = {
   grokCommentPrompt: LOCALIZED_GROK_DEFAULTS.grokCommentPrompt,
   grokPromptTemplates: LOCALIZED_GROK_DEFAULTS.grokPromptTemplates,
   grokSelectedPromptId: LOCALIZED_GROK_DEFAULTS.grokSelectedPromptId,
-  grokTemporaryChat: true,
   grokEnterToReply: false,
   authorReplyPrompt: '',
   inviteFollowPrompt: '',
-  aiProvider: 'x-grok',
+  aiProvider: 'openai-compatible',
   aiOpenAIPlatform: 'openai',
   aiBaseUrl: 'https://api.openai.com/v1',
   aiModel: 'gpt-4o-mini',
@@ -387,7 +386,6 @@ const grokTemplateNameInput = document.getElementById('grok-template-name');
 const grokPromptInput = document.getElementById('grok-prompt');
 const grokPromptResetBtn = document.getElementById('grok-prompt-reset');
 const grokTplStatus = document.getElementById('grok-tpl-status');
-const grokTempChatToggle = document.getElementById('grok-temp-chat');
 const grokEnterReplyToggle = document.getElementById('grok-enter-reply');
 const authorReplyPromptInput = document.getElementById('author-reply-prompt');
 const authorReplyResetBtn = document.getElementById('author-reply-reset');
@@ -432,7 +430,6 @@ const aiModelInput = document.getElementById('ai-model');
 const aiReplyCountInput = document.getElementById('ai-reply-count');
 const replyLanguageSelect = document.getElementById('reply-language');
 const aiApiKeyInput = document.getElementById('ai-api-key');
-const aiGrokSummary = document.getElementById('ai-grok-summary');
 const aiConnectionGrid = document.getElementById('ai-connection-grid');
 const aiProviderHint = document.getElementById('ai-provider-hint');
 const aiProviderSaveBtn = document.getElementById('ai-provider-save');
@@ -505,7 +502,7 @@ let grokTemplatesState = DEFAULT_FEATURES.grokPromptTemplates.map((tpl) => ({ ..
 let grokSelectedTemplateId = DEFAULT_FEATURES.grokSelectedPromptId;
 
 function normalizeAiProvider(raw) {
-  return ['x-grok', 'ollama', 'openai-compatible'].includes(raw) ? raw : DEFAULT_FEATURES.aiProvider;
+  return ['ollama', 'openai-compatible'].includes(raw) ? raw : DEFAULT_FEATURES.aiProvider;
 }
 
 function normalizeAiPlatform(raw) {
@@ -548,31 +545,25 @@ function applyAiPlatformPreset(platform, overwrite = true) {
 
 function updateAiProviderFields() {
   const provider = normalizeAiProvider(aiProviderSelect?.value);
-  const isGrok = provider === 'x-grok';
   const isOllama = provider === 'ollama';
   const isOpenAI = provider === 'openai-compatible';
   const platform = normalizeAiPlatform(aiPlatformSelect?.value);
   const preset = AI_PLATFORM_PRESETS[platform];
 
   setAiProviderValue(provider);
-  if (aiGrokSummary) aiGrokSummary.hidden = !isGrok;
-  if (aiConnectionGrid) aiConnectionGrid.hidden = isGrok;
+  if (aiConnectionGrid) aiConnectionGrid.hidden = false;
   setFieldVisible(aiPlatformSelect, isOpenAI);
-  setFieldVisible(aiBaseUrlInput, !isGrok);
-  setFieldVisible(aiModelInput, !isGrok);
+  setFieldVisible(aiBaseUrlInput, true);
+  setFieldVisible(aiModelInput, true);
   setFieldVisible(aiApiKeyInput, isOpenAI && !preset?.local);
   if (aiTestConnectionBtn) {
-    aiTestConnectionBtn.textContent = isGrok
-      ? (tr('aiCheckLoginStatus') || 'Check login status')
-      : (tr('aiTestConnection') || 'Test connection');
+    aiTestConnectionBtn.textContent = tr('aiTestConnection') || 'Test connection';
   }
   if (aiProviderHint) {
-    aiProviderHint.hidden = isGrok;
-    aiProviderHint.textContent = isGrok
-      ? (tr('aiProviderHintGrok') || 'X Grok uses your current X login state. No API key is needed.')
-      : isOllama
-        ? (tr('aiProviderHintOllama') || 'Ollama runs locally. Make sure Ollama is running and the model has been downloaded.')
-        : (tr('aiProviderHintCloud') || 'Cloud providers send tweet text and reply context to the selected AI service.');
+    aiProviderHint.hidden = false;
+    aiProviderHint.textContent = isOllama
+      ? (tr('aiProviderHintOllama') || 'Ollama runs locally. Make sure Ollama is running and the model has been downloaded.')
+      : (tr('aiProviderHintCloud') || 'Cloud providers send tweet text and reply context to the selected AI service.');
   }
 }
 
@@ -715,7 +706,6 @@ chrome.storage.sync.get(STORAGE_DEFAULTS, (items) => {
   if (!grokTemplatesState.some((tpl) => tpl.id === grokSelectedTemplateId)) {
     grokSelectedTemplateId = grokTemplatesState[0]?.id || 'default';
   }
-  if (grokTempChatToggle) grokTempChatToggle.checked = items.grokTemporaryChat !== false;
   if (grokEnterReplyToggle) grokEnterReplyToggle.checked = items.grokEnterToReply === true;
   if (authorReplyPromptInput) authorReplyPromptInput.value = String(items.authorReplyPrompt || '').trim() || AUTHOR_REPLY_DEFAULT;
   if (inviteFollowPromptInput) inviteFollowPromptInput.value = String(items.inviteFollowPrompt || '').trim() || INVITE_FOLLOW_DEFAULT;
@@ -1030,12 +1020,6 @@ bookmarkFolderToggle?.addEventListener('change', () => {
 bookmarkCountToggle.addEventListener('change', () => {
   chrome.storage.sync.set({ showBookmarkCount: bookmarkCountToggle.checked }, () => {
     flash(tr(bookmarkCountToggle.checked ? 'flashBookmarkCountOn' : 'flashBookmarkCountOff'));
-  });
-});
-
-grokTempChatToggle?.addEventListener('change', () => {
-  chrome.storage.sync.set({ grokTemporaryChat: grokTempChatToggle.checked }, () => {
-    flash(tr(grokTempChatToggle.checked ? 'flashGrokTempChatOn' : 'flashGrokTempChatOff'));
   });
 });
 

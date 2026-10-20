@@ -211,10 +211,9 @@ describe('#45 popup tabs structure (mock A)', () => {
     expect(stylesCss).toContain('.xvm-grok-template-menu-list');
   });
 
-  it('AI tab owns the current Grok reply template controls for future provider settings', () => {
+  it('AI tab owns the reply template and provider controls', () => {
     const ai = html.match(/data-tab-panel="ai"[\s\S]*?(?=<\/section>\s*<!-- ============ Tab: About)/)?.[0] || '';
     expect(/id="ai-provider"/.test(ai)).toBe(true);
-    expect(/data-ai-provider-option="x-grok"/.test(ai)).toBe(true);
     expect(/data-ai-provider-option="openai-compatible"/.test(ai)).toBe(true);
     expect(/data-ai-provider-option="ollama"/.test(ai)).toBe(true);
     expect(/role="radiogroup"/.test(ai)).toBe(true);
@@ -441,10 +440,10 @@ describe('#45 i18n keys (mock A + dual theme)', () => {
       'grokDefaultTemplateName', 'grokCustomTemplateName',
       'aiProviderTitle', 'aiProviderLabel', 'aiPlatformLabel', 'aiBaseUrlLabel',
       'aiModelLabel', 'aiReplyCountLabel', 'aiApiKeyLabel', 'aiProviderHint',
-      'aiProviderHintGrok', 'aiProviderHintOllama', 'aiProviderHintCloud',
-      'aiProviderXGrok', 'aiProviderOllama', 'aiProviderOpenAICompatible',
-      'aiProviderXGrokDesc', 'aiProviderOllamaDesc', 'aiProviderOpenAICompatibleDesc',
-      'aiServiceConfigTitle', 'aiGenerationSettingsTitle', 'aiCheckLoginStatus',
+      'aiProviderHintOllama', 'aiProviderHintCloud',
+      'aiProviderOllama', 'aiProviderOpenAICompatible',
+      'aiProviderOllamaDesc', 'aiProviderOpenAICompatibleDesc',
+      'aiServiceConfigTitle', 'aiGenerationSettingsTitle',
       'aiTestConnection', 'aiTestRunning', 'aiTestOk', 'aiTestFailed',
       'flashAiProviderSaved', 'btnSaved',
     ];
@@ -494,7 +493,6 @@ describe('#59 popup polish controls', () => {
       'feat-starchart',
       'feat-bookmark-folders',
       'feat-bookmark-count',
-      'grok-temp-chat',
     ]) {
       const pattern = new RegExp(`class="switch"[\\s\\S]*?<input id="${id}" type="checkbox"[\\s\\S]*?<span class="slider"></span>`);
       expect(pattern.test(html), `${id} must be wrapped in the common pill switch`).toBe(true);
@@ -801,11 +799,10 @@ describe('#15 AI comment provider contract', () => {
     expect(bridgeJs).not.toContain('xvmAiApiKey');
   });
 
-  it('routes non-Grok AI generation through bridge → background with request IDs', () => {
+  it('routes AI generation through bridge → background with request IDs', () => {
     expect(contentJs).toContain("type: 'XVM_AI_GENERATE'");
     expect(contentJs).toContain('XVM_AI_GENERATE_RESULT');
     expect(contentJs).toContain('XVM_AI_GENERATE_PROGRESS');
-    expect(contentJs).toContain("aiProvider === 'x-grok'");
     expect(contentJs).toContain('requestExternalAiGeneration');
     expect(contentJs).toContain('onProgress');
     expect(bridgeJs).toContain('XVM_AI_GENERATE_PROGRESS');
@@ -821,8 +818,8 @@ describe('#15 AI comment provider contract', () => {
     expect(backgroundJs).toContain("message.type === 'XVM_AI_GENERATE'");
   });
 
-  it('supports X Grok, Ollama, and OpenAI-compatible presets in popup and background', () => {
-    for (const value of ['x-grok', 'ollama', 'openai-compatible']) {
+  it('supports Ollama and OpenAI-compatible presets in popup and background', () => {
+    for (const value of ['ollama', 'openai-compatible']) {
       expect(popupJs).toContain(value);
       expect(backgroundJs).toContain(value);
     }

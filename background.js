@@ -1,5 +1,5 @@
 const PLACEHOLDER = '[推文内容]';
-const DEFAULT_PROVIDER = 'x-grok';
+const DEFAULT_PROVIDER = 'openai-compatible';
 const DEFAULT_PLATFORM = 'openai';
 const DEFAULT_REPLY_COUNT = 3;
 const LICENSE_PROXY_URL = 'https://xvm-license.lengkuxiaomao.workers.dev';
@@ -67,7 +67,7 @@ function trimTrailingSlash(value) {
 }
 
 function normalizeProvider(value) {
-  return ['x-grok', 'ollama', 'openai-compatible'].includes(value) ? value : DEFAULT_PROVIDER;
+  return ['ollama', 'openai-compatible'].includes(value) ? value : DEFAULT_PROVIDER;
 }
 
 function normalizeReplyCount(value) {
@@ -144,7 +144,11 @@ function sanitizeAiPromptText(value) {
 function textBeingRepliedTo(text) {
   const raw = String(text || '');
   const comment = raw.split('【当前评论】')[1] || raw.split('【对该推文的回复】')[1] || raw;
-  return comment.replace(/【(?:主贴|当前评论|原推文|对该推文的回复|对方的评论|我的原帖)】/g, '');
+  // The 【关注状态】 note content.js appends is Chinese by construction;
+  // leaving it in would make an English or Japanese post detect as zh.
+  return comment
+    .replace(/【关注状态】[^\n]*/g, ' ')
+    .replace(/【(?:主贴|当前评论|原推文|对该推文的回复|对方的评论|我的原帖)】/g, '');
 }
 
 function replyLanguageOf(text) {
@@ -493,15 +497,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           });
         } catch (_) {}
       };
-      if (config.provider === 'ollama') {
-        sendResponse({ ok: true, comments: await generateWithOllama(config, message.payload || {}, emitProgress) });
-        return;
-      }
-      if (config.provider === 'openai-compatible') {
-        sendResponse({ ok: true, comments: await generateWithOpenAICompatible(config, message.payload || {}, emitProgress) });
-        return;
-      }
-      sendResponse({ ok: false, error: '当前 Provider 使用 X Grok，请走页面内 Grok 生成路径' });
+      const comments = config.provider === 'ollama'
+        ? await generateWithOllama(config, message.payload || {}, emitProgress)
+        : await generateWithOpenAICompatible(config, message.payload || {}, emitProgress);
+      sendResponse({ ok: true, comments });
     })().catch((err) => sendResponse({ ok: false, error: err?.message || 'AI 生成失败' }));
     return true;
   }
@@ -509,18 +508,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'XVM_AI_TEST_CONNECTION') {
     (async () => {
       const config = await loadConfig();
-      if (config.provider === 'x-grok') {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (!tab?.id) throw new Error('请在当前窗口打开 X 页面后再检查 Grok。');
-        let result;
-        try {
-          result = await chrome.tabs.sendMessage(tab.id, { type: 'XVM_GROK_CHECK' });
-        } catch (_) {
-          throw new Error('请切换到 X 页面并刷新后，再检查 Grok 就绪状态。');
-        }
-        sendResponse(result || { ok: false, error: '未收到 Grok 就绪检查结果，请刷新 X 后重试。' });
-        return;
-      }
       const result = config.provider === 'ollama'
         ? await testOllama(config)
         : await testOpenAICompatible(config);

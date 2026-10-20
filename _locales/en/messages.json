@@ -384,15 +384,6 @@
   "popupGrokPromptHint": {
     "message": "Write only the instructions — [推文内容] and the \"one code block per reply\" rule are added automatically if missing. Put [推文内容] yourself to control where the source tweet goes. Click AI Generate in a reply box, choose a template, then pick one generated option."
   },
-  "popupGrokTempChatLabel": {
-    "message": "Use temporary chat (don't pollute Grok history)"
-  },
-  "flashGrokTempChatOn": {
-    "message": "Temporary chat enabled ✓"
-  },
-  "flashGrokTempChatOff": {
-    "message": "Temporary chat disabled"
-  },
   "flashGrokPromptSaved": {
     "message": "Grok prompt saved ✓"
   },
@@ -499,18 +490,14 @@
   "aiReplyCountLabel": { "message": "Replies" },
   "aiApiKeyLabel": { "message": "API Key" },
   "aiProviderHint": { "message": "Cloud providers send tweet context to the selected AI service. Ollama runs on your local machine." },
-  "aiProviderHintGrok": { "message": "X Grok uses your current X login state. No API key is needed." },
   "aiProviderHintOllama": { "message": "Ollama runs locally. Make sure Ollama is running and the model has been downloaded." },
   "aiProviderHintCloud": { "message": "Cloud providers send tweet text and reply context to the selected AI service." },
-  "aiProviderXGrok": { "message": "X Grok" },
-  "aiProviderXGrokDesc": { "message": "Use the current X session" },
   "aiProviderOllama": { "message": "Ollama" },
   "aiProviderOllamaDesc": { "message": "Local model service" },
   "aiProviderOpenAICompatible": { "message": "OpenAI compatible" },
   "aiProviderOpenAICompatibleDesc": { "message": "OpenAI, DeepSeek, OpenRouter" },
   "aiServiceConfigTitle": { "message": "Service configuration" },
   "aiGenerationSettingsTitle": { "message": "Generation settings" },
-  "aiCheckLoginStatus": { "message": "Check Grok readiness" },
   "aiTestConnection": { "message": "Test connection" },
   "aiTestRunning": { "message": "Testing connection..." },
   "aiTestOk": { "message": "Connection test passed" },
@@ -636,5 +623,40 @@
   "unfollowedBlueTitle": { "message": "Blue check only" },
   "unfollowedBlueDesc": { "message": "On by default. Only mark unfollowed commenters with a blue check. Turn it off to mark everyone you do not follow." },
   "unfollowedTitle": { "message": "Not following" },
-  "unfollowedDesc": { "message": "On replies only, mark people you do not follow and show their following and follower counts. No extra requests." }
+  "unfollowedDesc": { "message": "On replies only, mark people you do not follow and show their following and follower counts. No extra requests." },
+  "contentAiAuthorEntryTitle": { "message": "Read the main post and this comment, then draft a reply. Nothing is sent automatically." },
+  "contentAiBtnAuthor": { "message": "Author reply" },
+  "contentAiBtnComment": { "message": "Quick reply" },
+  "contentAiBtnGenerating": { "message": "Generating" },
+  "contentAiBtnInvite": { "message": "Invite follow" },
+  "contentAiClose": { "message": "Close" },
+  "contentAiErrGenerateFailed": { "message": "AI generation failed" },
+  "contentAiErrNoAuthorBtn": { "message": "The reply box opened, but the author-reply button was not found" },
+  "contentAiErrNoContext": { "message": "Could not read the main post or the comment" },
+  "contentAiErrNoReplyButton": { "message": "This comment has no reply button" },
+  "contentAiErrNoReplyComposer": { "message": "The reply box did not open" },
+  "contentAiErrNoTweet": { "message": "Could not read the post text" },
+  "contentAiErrNotOwnThread": { "message": "This comment is not under your own post" },
+  "contentAiFillNoComposer": { "message": "Could not find the reply box; nothing was filled" },
+  "contentAiFillTitle": { "message": "Fill into the reply box" },
+  "contentAiFilled": { "message": "Reply filled in" },
+  "contentAiGenerateTitleAuthor": { "message": "Reply as the author of the post. Pick one to fill it in — nothing is sent automatically." },
+  "contentAiGenerateTitleComment": { "message": "Generate a reply with the current template. Pick one to fill the reply box — nothing is sent automatically." },
+  "contentAiInviteFollowedTitle": { "message": "You already follow this account — no invite needed." },
+  "contentAiInviteFollowedToast": { "message": "You already follow this account" },
+  "contentAiInviteTitle": { "message": "Generate a reply inviting the other person to follow each other. Pick one to fill the reply box — nothing is sent automatically." },
+  "contentAiNoteAuthorReply": { "message": "Read the main post; replying to {who}" },
+  "contentAiNoteContext": { "message": "Read the main post and the current comment" },
+  "contentAiPanelTitleAuthor": { "message": "Author reply candidates" },
+  "contentAiPanelTitleComment": { "message": "Reply candidates" },
+  "contentAiPanelTitleInvite": { "message": "Follow-invite drafts" },
+  "contentAiRefreshAria": { "message": "Refresh candidates" },
+  "contentAiRefreshTitle": { "message": "New batch" },
+  "contentAiStatusDone": { "message": "{n} candidates" },
+  "contentAiStatusStreaming": { "message": "Generating {n}…" },
+  "contentAiTemplateCaret": { "message": "Switch template" },
+  "contentAiTemplateMenuHead": { "message": "Reply templates" },
+  "contentAiTimeout": { "message": "AI generation timed out. Check the service connection." },
+  "contentAiToastRetry": { "message": "Please try again" },
+  "contentAiToastTitle": { "message": "⚠ AI generation failed" }
 }

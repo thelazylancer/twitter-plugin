@@ -28,7 +28,42 @@ function i18n(key) { return localizedStrings[key] || key; }
 function i18nOr(key, fallback) { return localizedStrings[key] || fallback; }
 const PRODUCT_SITE_PRO_URL = 'https://xvm.icy-cat.com/#pro';
 
+// The AI buttons are injected before the localizedStrings push usually lands,
+// so i18n() can have handed back a raw key at build time. Re-apply on every
+// settings update; the mutation pass in injectGrokReplyButtons covers the rest.
+function applyAiLocalizedUi() {
+  document.querySelectorAll('.xvm-grok-generate-btn').forEach((btn) => {
+    // Mid-generation the label is "生成中" and the loading class drives the
+    // spinner — resetting it here would clobber both.
+    if (btn.classList.contains('xvm-grok-generate-btn--loading')) return;
+    setGrokButtonLabel(btn);
+    btn.title = grokGenerateTitle(btn.dataset.xvmMode);
+  });
+  document.querySelectorAll('.xvm-grok-template-caret').forEach((caret) => {
+    caret.title = i18n('contentAiTemplateCaret');
+    caret.setAttribute('aria-label', i18n('contentAiTemplateCaret'));
+  });
+  document.querySelectorAll('.xvm-grok-invite-btn').forEach((btn) => {
+    btn.title = btn.classList.contains('xvm-grok-invite-btn--followed')
+      ? i18n('contentAiInviteFollowedTitle')
+      : i18n('contentAiInviteTitle');
+  });
+  document.querySelectorAll('.xvm-author-reply-btn').forEach((btn) => {
+    btn.textContent = i18n('contentAiBtnAuthor');
+    btn.title = i18n('contentAiAuthorEntryTitle');
+  });
+  const panel = document.querySelector('.xvm-grok-options');
+  const refreshBtn = panel?.querySelector('.xvm-grok-refresh');
+  if (refreshBtn) {
+    refreshBtn.title = i18n('contentAiRefreshTitle');
+    refreshBtn.setAttribute('aria-label', i18n('contentAiRefreshAria'));
+  }
+  const closeBtn = panel?.querySelector('.xvm-grok-close');
+  if (closeBtn) closeBtn.setAttribute('aria-label', i18n('contentAiClose'));
+}
+
 function applyLocalizedUi() {
+  applyAiLocalizedUi();
   if (!leaderboardEl) return;
   const head = leaderboardEl.querySelector('.xvm-lb-head');
   const title = leaderboardEl.querySelector('.xvm-lb-title');
@@ -369,7 +404,6 @@ let grokPromptTemplates = DEFAULT_GROK_PROMPT_TEMPLATES.map((tpl) => ({ ...tpl }
 let authorReplyPrompt = '';
 let inviteFollowPrompt = '';
 let grokSelectedTemplateId = 'default';
-let grokTemporaryChat = true;
 let grokEnterToReply = false;
 let grokLastReplyArticle = null;
 let aiProvider = '';
@@ -383,8 +417,6 @@ let replyLanguage = 'post';
 let aiRequestSeq = 0;
 const aiPendingRequests = new Map();
 
-// Do not touch Grok signing until settings say the provider is X Grok.
-window.__xvmSkipGrok = true;
 window.postMessage({ type: 'XVM_GROK_SETTINGS_REQUEST' }, '*');
 
 window.addEventListener('message', (event) => {
@@ -402,9 +434,6 @@ window.addEventListener('message', (event) => {
   if (typeof event.data.selectedPromptId === 'string' && event.data.selectedPromptId) {
     grokSelectedTemplateId = event.data.selectedPromptId;
   }
-  if (typeof event.data.temporaryChat === 'boolean') {
-    grokTemporaryChat = event.data.temporaryChat;
-  }
   if (typeof event.data.enterToReply === 'boolean') {
     grokEnterToReply = event.data.enterToReply;
   }
@@ -414,10 +443,9 @@ window.addEventListener('message', (event) => {
   if (typeof event.data.inviteFollowPrompt === 'string') {
     inviteFollowPrompt = event.data.inviteFollowPrompt;
   }
-  if (['x-grok', 'ollama', 'openai-compatible'].includes(event.data.aiProvider)) {
+  if (['ollama', 'openai-compatible'].includes(event.data.aiProvider)) {
     aiProvider = event.data.aiProvider;
     aiSettingsReady = true;
-    window.__xvmSkipGrok = aiProvider !== 'x-grok';
   }
   if (typeof event.data.aiOpenAIPlatform === 'string' && event.data.aiOpenAIPlatform) {
     aiOpenAIPlatform = event.data.aiOpenAIPlatform;
@@ -861,6 +889,11 @@ function readAuthorRelation(user, tweetLegacy) {
   const following = booleanOrNull(
     userLegacy.following ?? perspective.following ?? user.following ?? user.super_following,
   );
+  // `following` = do I follow them, `followed_by` = do they follow me. Only
+  // some X payloads carry the second one; null means "unknown", never "no".
+  const followedBy = booleanOrNull(
+    perspective.followed_by ?? userLegacy.followed_by ?? user.followed_by,
+  );
   const followers = [userLegacy.followers_count, userLegacy.normal_followers_count, user.followers_count, user.public_metrics?.followers_count]
     .map((value) => Number(value))
     .find((value) => Number.isFinite(value) && value >= 0);
@@ -872,10 +905,11 @@ function readAuthorRelation(user, tweetLegacy) {
   if (verifiedType === 'business' || verifiedType === 'government') blueVerified = false;
   else if (user.is_blue_verified === true || userLegacy.is_blue_verified === true) blueVerified = true;
   else if (user.is_blue_verified === false || userLegacy.is_blue_verified === false) blueVerified = false;
-  if (!screenName && following === null && !Number.isFinite(followers) && blueVerified === null) return null;
+  if (!screenName && following === null && followedBy === null && !Number.isFinite(followers) && blueVerified === null) return null;
   return {
     screenName,
     following,
+    followedBy,
     followers,
     followingCount,
     blueVerified,
@@ -3332,6 +3366,7 @@ function relationForComment(article) {
   const merged = {
     screenName: handle || byHandle?.screenName || byId?.screenName || fiber?.screenName || '',
     following: booleanOrNull(byId?.following ?? byHandle?.following ?? fiber?.following),
+    followedBy: booleanOrNull(byId?.followedBy ?? byHandle?.followedBy ?? fiber?.followedBy),
     followers: [byId?.followers, byHandle?.followers, fiber?.followers].find((value) => Number.isFinite(value)),
     followingCount: [byId?.followingCount, byHandle?.followingCount, fiber?.followingCount].find((value) => Number.isFinite(value)),
     blueVerified: [byId?.blueVerified, byHandle?.blueVerified, fiber?.blueVerified].find((value) => value === true || value === false) ?? null,
@@ -3341,12 +3376,44 @@ function relationForComment(article) {
   return merged;
 }
 
+// One-line relationship note appended to the AI context so the model stops
+// guessing how close it is to the person it is replying to. Deliberately
+// single-line: the language detector in background.js
+// strips it by that shape, otherwise this Chinese line would flip a Japanese
+// or English post to zh. Returns '' when X never told us the direction.
+function describeFollowRelation(article, who = '') {
+  if (!article) return '';
+  const relation = relationForComment(article);
+  const iFollow = relation?.following;
+  if (iFollow !== true && iFollow !== false) return '';
+  const theyFollow = relation.followedBy === true ? true : relation.followedBy === false ? false : null;
+  // No padding spaces: they read wrong around the 对方 fallback, and the
+  // note is context for a model, not UI copy.
+  const name = who || (relation.screenName ? `@${relation.screenName}` : '对方');
+  if (iFollow && theyFollow === true) {
+    return `【关注状态】你和${name}是互相关注`;
+  }
+  if (!iFollow && theyFollow === true) {
+    return `【关注状态】${name}关注了你，你还没有关注对方`;
+  }
+  if (iFollow && theyFollow === false) {
+    return `【关注状态】你已经关注了${name}，对方还没有关注你`;
+  }
+  if (!iFollow && theyFollow === false) {
+    return `【关注状态】你和${name}互不关注`;
+  }
+  return iFollow
+    ? `【关注状态】你已经关注了${name}`
+    : `【关注状态】你还没有关注${name}`;
+}
+
 function mergeAuthorRelation(base, extra) {
   if (!extra) return base || null;
   if (!base) return extra;
   return {
     screenName: base.screenName || extra.screenName,
     following: base.following === true || base.following === false ? base.following : extra.following,
+    followedBy: base.followedBy === true || base.followedBy === false ? base.followedBy : extra.followedBy,
     followers: Number.isFinite(base.followers) ? base.followers : extra.followers,
     followingCount: Number.isFinite(base.followingCount) ? base.followingCount : extra.followingCount,
     blueVerified: base.blueVerified === true || base.blueVerified === false ? base.blueVerified : extra.blueVerified,
@@ -4187,11 +4254,17 @@ function buildAuthorReplyPayload(commentArticle, mainArticle) {
   if (!mainText || !commentText || mainText === commentText) return null;
   const handle = articleHandle(commentArticle);
   const who = handle ? `@${handle}` : '对方';
+  const relationNote = describeFollowRelation(commentArticle, who);
   return {
     mainText,
     commentText,
     who,
-    context: `【主贴】\n${mainText}\n\n【当前评论】\n${who}：${commentText}`,
+    relationNote,
+    context: [
+      `【主贴】\n${mainText}`,
+      `【当前评论】\n${who}：${commentText}`,
+      relationNote,
+    ].filter(Boolean).join('\n\n'),
   };
 }
 
@@ -4491,11 +4564,11 @@ function showGrokErrorToast(msg) {
   toast.className = 'xvm-toast xvm-toast--error xvm-toast--top';
   const title = document.createElement('div');
   title.style.fontWeight = '700';
-  title.textContent = '⚠ AI 生成失败';
+  title.textContent = i18n('contentAiToastTitle');
   const detail = document.createElement('div');
   detail.style.fontSize = '12px';
   detail.style.marginTop = '4px';
-  detail.textContent = String(msg || '请重试');
+  detail.textContent = String(msg || i18n('contentAiToastRetry'));
   toast.append(title, detail);
   document.body.appendChild(toast);
   requestAnimationFrame(() => toast.classList.add('xvm-toast--show'));
@@ -4779,7 +4852,7 @@ function showGrokTemplateMenu(anchor, editable) {
   const menu = document.createElement('div');
   menu.className = 'xvm-grok-template-menu';
   menu.innerHTML = `
-    <div class="xvm-grok-template-menu-head">评论模板</div>
+    <div class="xvm-grok-template-menu-head">${i18n('contentAiTemplateMenuHead')}</div>
     <div class="xvm-grok-template-menu-list"></div>
   `;
   const list = menu.querySelector('.xvm-grok-template-menu-list');
@@ -4822,11 +4895,11 @@ function showGrokOptions(comments, editable, opts = {}) {
     panel.className = 'xvm-grok-options';
     panel.innerHTML = `
       <div class="xvm-grok-options-head">
-        <strong>评论候选</strong>
+        <strong>${i18n('contentAiPanelTitleComment')}</strong>
         <span class="xvm-grok-options-status" aria-live="polite"></span>
         <div class="xvm-grok-options-actions">
-          <button type="button" class="xvm-grok-refresh" aria-label="刷新候选" title="换一批">↻</button>
-          <button type="button" class="xvm-grok-close" aria-label="Close">×</button>
+          <button type="button" class="xvm-grok-refresh" aria-label="${i18n('contentAiRefreshAria')}" title="${i18n('contentAiRefreshTitle')}">↻</button>
+          <button type="button" class="xvm-grok-close" aria-label="${i18n('contentAiClose')}">×</button>
         </div>
       </div>
       <div class="xvm-grok-options-note" hidden></div>
@@ -4844,7 +4917,11 @@ function showGrokOptions(comments, editable, opts = {}) {
   const refreshBtn = panel.querySelector('.xvm-grok-refresh');
   if (refreshBtn) refreshBtn.classList.toggle('xvm-grok-refresh--busy', !!opts.streaming);
   const title = panel.querySelector('.xvm-grok-options-head strong');
-  if (title) title.textContent = opts.inviteMode ? '邀关文案' : opts.authorMode ? '回评候选' : '评论候选';
+  if (title) {
+    title.textContent = opts.inviteMode
+      ? i18n('contentAiPanelTitleInvite')
+      : opts.authorMode ? i18n('contentAiPanelTitleAuthor') : i18n('contentAiPanelTitleComment');
+  }
   const note = panel.querySelector('.xvm-grok-options-note');
   if (note) {
     note.hidden = !opts.authorNote;
@@ -4852,9 +4929,12 @@ function showGrokOptions(comments, editable, opts = {}) {
   }
   const status = panel.querySelector('.xvm-grok-options-status');
   if (status) {
+    // {n} is substituted here rather than via chrome.i18n placeholders: the
+    // content-script push reads messages with chrome.i18n.getMessage(key) and
+    // no substitutions, so a $N$ placeholder would arrive unresolved.
     status.textContent = opts.streaming
-      ? `生成中 ${comments.length}…`
-      : (comments.length ? `共 ${comments.length} 条` : '');
+      ? i18n('contentAiStatusStreaming').replace('{n}', String(comments.length))
+      : (comments.length ? i18n('contentAiStatusDone').replace('{n}', String(comments.length)) : '');
   }
   const list = panel.querySelector('.xvm-grok-options-list');
   list.innerHTML = '';
@@ -4863,16 +4943,16 @@ function showGrokOptions(comments, editable, opts = {}) {
     btn.type = 'button';
     btn.className = 'xvm-grok-choice';
     btn.textContent = comment;
-    btn.title = '填充到回复框';
+    btn.title = i18n('contentAiFillTitle');
     btn.addEventListener('click', () => {
       const target = opts.resolveEditor?.() || editable;
       if (!target) {
-        showGrokErrorToast('没有找到回评弹窗，未填入主贴');
+        showGrokErrorToast(i18n('contentAiFillNoComposer'));
         return;
       }
       insertTextIntoReply(target, comment);
       closeGrokOptions();
-      showToast('已填充评论');
+      showToast(i18n('contentAiFilled'));
     });
     btn.dataset.idx = String(idx + 1);
     list.appendChild(btn);
@@ -5015,9 +5095,18 @@ function showGrokOptions(comments, editable, opts = {}) {
   }
 }
 
+function grokModeLabel(mode) {
+  if (mode === 'author') return i18n('contentAiBtnAuthor');
+  if (mode === 'invite') return i18n('contentAiBtnInvite');
+  return i18n('contentAiBtnComment');
+}
+
+function grokGenerateTitle(mode) {
+  return mode === 'author' ? i18n('contentAiGenerateTitleAuthor') : i18n('contentAiGenerateTitleComment');
+}
+
 function setGrokButtonLabel(btn, label = '', loading = false) {
-  const mode = btn?.dataset?.xvmMode;
-  const text = label || (mode === 'author' ? '回评' : mode === 'invite' ? '邀关' : '快回');
+  const text = label || grokModeLabel(btn?.dataset?.xvmMode);
   btn.classList.toggle('xvm-grok-generate-btn--loading', loading);
   btn.innerHTML = `<span class="xvm-grok-spark" aria-hidden="true">✦</span><span>${text}</span>`;
 }
@@ -5027,7 +5116,7 @@ function requestExternalAiGeneration(payload, onProgress = null) {
     const requestId = `ai-${Date.now()}-${++aiRequestSeq}`;
     const timer = setTimeout(() => {
       aiPendingRequests.delete(requestId);
-      reject(new Error('AI 生成超时，请检查服务连接'));
+      reject(new Error(i18n('contentAiTimeout')));
     }, 65000);
     aiPendingRequests.set(requestId, { resolve, reject, timer, onProgress });
     window.postMessage({
@@ -5079,9 +5168,17 @@ async function handleGrokGenerate(btn, editable, promptTemplate = null, authorJo
   if (inviteMode) {
     const root = findReplyComposerRoot(editable);
     const article = findReplyArticleForAiComposer(root);
+    // 邀关 only makes sense towards someone you have not followed yet. Checked
+    // here rather than on the button so it also covers a state that changed
+    // after the button was injected.
+    if (article && relationForComment(article).following === true) {
+      showGrokErrorToast(i18n('contentAiInviteFollowedToast'));
+      delete btn.dataset.xvmBusy;
+      return;
+    }
     const replyText = getTweetTextFromArticle(article);
     if (!replyText) {
-      showGrokErrorToast('未找到推文内容');
+      showGrokErrorToast(i18n('contentAiErrNoTweet'));
       delete btn.dataset.xvmBusy;
       return;
     }
@@ -5090,8 +5187,8 @@ async function handleGrokGenerate(btn, editable, promptTemplate = null, authorJo
     authorMode = true;
     tweetText = authorJob.context;
     authorNote = authorJob.who
-      ? `已读取主贴，并按 ${authorJob.who} 的当前评论来回`
-      : '已读取主贴和当前评论';
+      ? i18n('contentAiNoteAuthorReply').replace('{who}', authorJob.who)
+      : i18n('contentAiNoteContext');
   } else {
     const root = findReplyComposerRoot(editable);
     const article = findReplyArticleForAiComposer(root);
@@ -5099,17 +5196,17 @@ async function handleGrokGenerate(btn, editable, promptTemplate = null, authorJo
     if (pair) {
       const payload = buildAuthorReplyPayload(pair.comment, pair.main);
       if (!payload) {
-        showGrokErrorToast('没读到主贴或当前评论');
+        showGrokErrorToast(i18n('contentAiErrNoContext'));
         delete btn.dataset.xvmBusy;
         return;
       }
       authorMode = true;
       tweetText = payload.context;
-      authorNote = `已读取主贴，并按 ${payload.who} 的当前评论来回`;
+      authorNote = i18n('contentAiNoteAuthorReply').replace('{who}', payload.who);
     } else {
       const replyText = getTweetTextFromArticle(article);
       if (!replyText) {
-        showGrokErrorToast('未找到推文内容');
+        showGrokErrorToast(i18n('contentAiErrNoTweet'));
         delete btn.dataset.xvmBusy;
         return;
       }
@@ -5120,13 +5217,17 @@ async function handleGrokGenerate(btn, editable, promptTemplate = null, authorJo
       tweetText = (ogText && ogText !== replyText)
         ? `【原推文】\n${ogText}\n\n【对该推文的回复】\n${replyText}`
         : replyText;
+      // Same relationship context as 回评: without it the model writes to a
+      // stranger and a mutual the same way.
+      const relationNote = describeFollowRelation(article);
+      if (relationNote) tweetText = `${tweetText}\n\n${relationNote}`;
     }
   }
   // inviteMode keeps its own label; writing 'comment' here would flip the
   // button back to 快回 after the first run.
   if (!inviteMode) btn.dataset.xvmMode = authorMode ? 'author' : 'comment';
   btn.disabled = true;
-  setGrokButtonLabel(btn, '生成中', true);
+  setGrokButtonLabel(btn, i18n('contentAiBtnGenerating'), true);
   const epoch = ++grokGenEpoch;
   const replyLimit = inviteMode ? INVITE_FOLLOW_REPLY_COUNT : aiReplyCount;
   try {
@@ -5159,24 +5260,10 @@ async function handleGrokGenerate(btn, editable, promptTemplate = null, authorJo
       return !Array.isArray(running) || running.length < replyLimit;
     };
     showGrokOptions([], editable, { ...panelOpts, streaming: true });
-    const comments = aiProvider === 'x-grok' && aiSettingsReady
-      ? await (async () => {
-        if (!window.__xvmGrok) {
-          throw new Error('插件未正确加载（lib/grok-reply.js 缺失），请重载扩展');
-        }
-        return window.__xvmGrok.generate({
-          tweetText,
-          promptTemplate: normalizeGrokPromptText(tpl?.prompt || tpl),
-          temporaryChat: grokTemporaryChat,
-          replyCount: replyLimit,
-          replyLanguage,
-          onProgress,
-        });
-      })()
-      : await requestExternalAiGeneration({
-        tweetText,
-        promptTemplate: normalizeGrokPromptText(tpl?.prompt || tpl),
-      }, onProgress);
+    const comments = await requestExternalAiGeneration({
+      tweetText,
+      promptTemplate: normalizeGrokPromptText(tpl?.prompt || tpl),
+    }, onProgress);
     if (epoch !== grokGenEpoch) return;
     showGrokOptions(
       Array.isArray(comments) ? comments.slice(0, replyLimit) : comments,
@@ -5187,7 +5274,7 @@ async function handleGrokGenerate(btn, editable, promptTemplate = null, authorJo
     console.debug('[XVM-AI] generation failed', err);
     if (epoch !== grokGenEpoch) return;
     closeGrokOptions();
-    showGrokErrorToast(err?.message || 'AI 生成失败');
+    showGrokErrorToast(err?.message || i18n('contentAiErrGenerateFailed'));
   } finally {
     btn.disabled = false;
     setGrokButtonLabel(btn);
@@ -5217,7 +5304,16 @@ function injectGrokReplyButtons(root = document) {
     // button was added after it, so backfill it instead of bailing out.
     const existingGenerate = composerRoot.querySelector('.xvm-grok-generate-btn');
     if (existingGenerate) {
-      if (!composerRoot.querySelector('.xvm-grok-invite-btn')) {
+      // Also self-heal copy that was built before the localizedStrings push
+      // arrived (i18n() returns the raw key until then).
+      if (!existingGenerate.classList.contains('xvm-grok-generate-btn--loading')) {
+        setGrokButtonLabel(existingGenerate);
+        existingGenerate.title = grokGenerateTitle(existingGenerate.dataset.xvmMode);
+      }
+      const existingInvite = composerRoot.querySelector('.xvm-grok-invite-btn');
+      if (existingInvite) {
+        refreshInviteFollowButton(existingInvite, editable);
+      } else {
         const anchorEl = existingGenerate.nextElementSibling?.classList?.contains('xvm-grok-template-caret')
           ? existingGenerate.nextElementSibling
           : existingGenerate;
@@ -5244,9 +5340,7 @@ function injectGrokReplyButtons(root = document) {
       || isAuthorReplyTarget(findReplyArticleForAiComposer(composerRoot));
     btn.dataset.xvmMode = authorMode ? 'author' : 'comment';
     setGrokButtonLabel(btn);
-    btn.title = authorMode
-      ? '以原帖作者的身份回复这条评论。点一条填入，不会自动发送。'
-      : '用当前模板生成评论。点一条填入回复框，不会自动发送。';
+    btn.title = grokGenerateTitle(authorMode ? 'author' : 'comment');
     btn.addEventListener('click', (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
@@ -5256,8 +5350,8 @@ function injectGrokReplyButtons(root = document) {
     caret.type = 'button';
     caret.className = 'xvm-grok-template-caret';
     caret.textContent = '▾';
-    caret.title = '更换评论模板';
-    caret.setAttribute('aria-label', '更换评论模板');
+    caret.title = i18n('contentAiTemplateCaret');
+    caret.setAttribute('aria-label', i18n('contentAiTemplateCaret'));
     caret.addEventListener('click', (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
@@ -5278,18 +5372,30 @@ function injectGrokReplyButtons(root = document) {
   }
 }
 
+// The relation arrives from GraphQL interception or the React fiber, either of
+// which can land after the button was injected — so this is re-run on every
+// injection pass, and the click path re-checks on its own.
+function refreshInviteFollowButton(btn, editable) {
+  if (!btn) return;
+  const article = findReplyArticleForAiComposer(findReplyComposerRoot(editable));
+  const followed = !!article && relationForComment(article).following === true;
+  btn.classList.toggle('xvm-grok-invite-btn--followed', followed);
+  btn.title = followed ? i18n('contentAiInviteFollowedTitle') : i18n('contentAiInviteTitle');
+}
+
 function createInviteFollowButton(editable) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'xvm-grok-invite-btn';
   btn.dataset.xvmMode = 'invite';
   setGrokButtonLabel(btn);
-  btn.title = '生成一条邀请对方互相关注的回复。点一条填入回复框，不会自动发送。';
+  btn.title = i18n('contentAiInviteTitle');
   btn.addEventListener('click', (ev) => {
     ev.preventDefault();
     ev.stopPropagation();
     handleGrokGenerate(btn, editable);
   });
+  refreshInviteFollowButton(btn, editable);
   return btn;
 }
 
@@ -5323,13 +5429,13 @@ async function startAuthorReply(article, replyBtn) {
   replyBtn.dataset.xvmAuthorBusy = '1';
   const mainArticle = ownFocalArticle();
   if (!isAuthorReplyTarget(article) || (!mainArticle && !knownOwnMainText)) {
-    showGrokErrorToast('这不是你主贴下的评论');
+    showGrokErrorToast(i18n('contentAiErrNotOwnThread'));
     delete replyBtn.dataset.xvmAuthorBusy;
     return;
   }
   const payload = buildAuthorReplyPayload(article, mainArticle);
   if (!payload) {
-    showGrokErrorToast('没读到主贴或当前评论');
+    showGrokErrorToast(i18n('contentAiErrNoContext'));
     delete replyBtn.dataset.xvmAuthorBusy;
     return;
   }
@@ -5343,14 +5449,14 @@ async function startAuthorReply(article, replyBtn) {
     const editable = await waitForNewReplyComposer(authorReplyEditorsBefore);
     authorReplyFillEditor = editable;
     if (!editable) {
-      showGrokErrorToast('没有打开回复框');
+      showGrokErrorToast(i18n('contentAiErrNoReplyComposer'));
       return;
     }
     injectGrokReplyButtons();
     const composerRoot = findReplyComposerRoot(editable);
     const btn = composerRoot?.querySelector('.xvm-grok-generate-btn');
     if (!btn) {
-      showGrokErrorToast('回复框已打开，但没有找到回评按钮');
+      showGrokErrorToast(i18n('contentAiErrNoAuthorBtn'));
       return;
     }
     handleGrokGenerate(btn, editable, { id: 'author-reply', name: '回评', prompt: currentAuthorReplyPrompt() }, payload);
@@ -5368,13 +5474,13 @@ function placeAuthorReplyEntry(article) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'xvm-author-reply-btn';
-  btn.textContent = '回评';
-  btn.title = '读取主贴和这条评论，再生成回复草稿。不会自动发送';
+  btn.textContent = i18n('contentAiBtnAuthor');
+  btn.title = i18n('contentAiAuthorEntryTitle');
   btn.addEventListener('click', (ev) => {
     ev.preventDefault();
     ev.stopPropagation();
     if (!replyBtn) {
-      showGrokErrorToast('这条评论没有回复按钮');
+      showGrokErrorToast(i18n('contentAiErrNoReplyButton'));
       return;
     }
     startAuthorReply(article, replyBtn);

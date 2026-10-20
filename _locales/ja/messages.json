@@ -382,15 +382,6 @@
   "popupGrokPromptHint": {
     "message": "指示だけ書けば十分です。[推文内容] と「各返信をコードブロックで囲む」指示は、無ければ自動で補われます。挿入位置を指定したいときだけ [推文内容] を書いてください。返信欄の AI 生成をクリックしてテンプレートを選び、生成後に Options から1件を選びます。"
   },
-  "popupGrokTempChatLabel": {
-    "message": "一時チャットを使う（Grok 履歴を汚さない）"
-  },
-  "flashGrokTempChatOn": {
-    "message": "一時チャットを有効にしました ✓"
-  },
-  "flashGrokTempChatOff": {
-    "message": "一時チャットを無効にしました"
-  },
   "flashGrokPromptSaved": {
     "message": "Grok プロンプトを保存しました ✓"
   },
@@ -497,18 +488,14 @@
   "aiReplyCountLabel": { "message": "返信数" },
   "aiApiKeyLabel": { "message": "API Key" },
   "aiProviderHint": { "message": "クラウドプロバイダーには投稿の文脈が送信されます。Ollama はローカルで動作します。" },
-  "aiProviderHintGrok": { "message": "X Grok は現在の X ログイン状態を使います。API Key は不要です。" },
   "aiProviderHintOllama": { "message": "Ollama はローカルで動作します。Ollama が起動済みで、モデルがダウンロード済みであることを確認してください。" },
   "aiProviderHintCloud": { "message": "クラウドプロバイダーには投稿本文と返信の文脈が送信されます。" },
-  "aiProviderXGrok": { "message": "X Grok" },
-  "aiProviderXGrokDesc": { "message": "現在の X ログイン状態を使用" },
   "aiProviderOllama": { "message": "Ollama" },
   "aiProviderOllamaDesc": { "message": "ローカルモデルサービス" },
   "aiProviderOpenAICompatible": { "message": "OpenAI 互換" },
   "aiProviderOpenAICompatibleDesc": { "message": "OpenAI、DeepSeek、OpenRouter など" },
   "aiServiceConfigTitle": { "message": "サービス設定" },
   "aiGenerationSettingsTitle": { "message": "生成設定" },
-  "aiCheckLoginStatus": { "message": "Grok の準備状態を確認" },
   "aiTestConnection": { "message": "接続をテスト" },
   "aiTestRunning": { "message": "接続をテスト中..." },
   "aiTestOk": { "message": "接続テストに成功しました" },
@@ -629,5 +616,40 @@
   "unfollowedBlueTitle": { "message": "青バッジのみ" },
   "unfollowedBlueDesc": { "message": "初期状態はオンです。青バッジの未フォローだけ表示します。オフにすると未フォロー全員を表示します。" },
   "unfollowedTitle": { "message": "未フォロー" },
-  "unfollowedDesc": { "message": "返信だけに、フォローしていない人のフォロー数とフォロワー数を表示します。追加リクエストはしません。" }
+  "unfollowedDesc": { "message": "返信だけに、フォローしていない人のフォロー数とフォロワー数を表示します。追加リクエストはしません。" },
+  "contentAiAuthorEntryTitle": { "message": "元の投稿とこのコメントを読み、返信の下書きを作成します（自動送信はしません）" },
+  "contentAiBtnAuthor": { "message": "作者返信" },
+  "contentAiBtnComment": { "message": "クイック返信" },
+  "contentAiBtnGenerating": { "message": "生成中" },
+  "contentAiBtnInvite": { "message": "相互フォロー" },
+  "contentAiClose": { "message": "閉じる" },
+  "contentAiErrGenerateFailed": { "message": "AI 生成に失敗しました" },
+  "contentAiErrNoAuthorBtn": { "message": "返信欄は開きましたが、作者返信ボタンが見つかりません" },
+  "contentAiErrNoContext": { "message": "元の投稿またはコメントを取得できませんでした" },
+  "contentAiErrNoReplyButton": { "message": "このコメントには返信ボタンがありません" },
+  "contentAiErrNoReplyComposer": { "message": "返信欄が開きませんでした" },
+  "contentAiErrNoTweet": { "message": "投稿本文を取得できませんでした" },
+  "contentAiErrNotOwnThread": { "message": "これは自分の投稿へのコメントではありません" },
+  "contentAiFillNoComposer": { "message": "返信欄が見つからず、入力できませんでした" },
+  "contentAiFillTitle": { "message": "返信欄に入力" },
+  "contentAiFilled": { "message": "コメントを入力しました" },
+  "contentAiGenerateTitleAuthor": { "message": "投稿者としてこのコメントに返信します。1つ選ぶと入力されます（自動送信はしません）。" },
+  "contentAiGenerateTitleComment": { "message": "現在のテンプレートでコメントを生成します。1つ選ぶと返信欄に入力されます（自動送信はしません）。" },
+  "contentAiInviteFollowedTitle": { "message": "すでにフォロー済みです（誘いは不要）。" },
+  "contentAiInviteFollowedToast": { "message": "すでにフォローしています" },
+  "contentAiInviteTitle": { "message": "相互フォローを誘う返信を生成します。1つ選ぶと返信欄に入力されます（自動送信はしません）。" },
+  "contentAiNoteAuthorReply": { "message": "元の投稿と {who} のコメントを読み込みました" },
+  "contentAiNoteContext": { "message": "元の投稿と現在のコメントを読み込みました" },
+  "contentAiPanelTitleAuthor": { "message": "返信候補" },
+  "contentAiPanelTitleComment": { "message": "コメント候補" },
+  "contentAiPanelTitleInvite": { "message": "相互フォロー誘い文案" },
+  "contentAiRefreshAria": { "message": "候補を更新" },
+  "contentAiRefreshTitle": { "message": "別の候補" },
+  "contentAiStatusDone": { "message": "{n} 件" },
+  "contentAiStatusStreaming": { "message": "生成中 {n}…" },
+  "contentAiTemplateCaret": { "message": "テンプレートを変更" },
+  "contentAiTemplateMenuHead": { "message": "コメントテンプレート" },
+  "contentAiTimeout": { "message": "AI 生成がタイムアウトしました。接続を確認してください。" },
+  "contentAiToastRetry": { "message": "もう一度お試しください" },
+  "contentAiToastTitle": { "message": "⚠ AI 生成に失敗しました" }
 }

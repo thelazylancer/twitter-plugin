@@ -680,15 +680,6 @@
     .ai-provider-option-desc { font-size: 10.5px; color: var(--muted); line-height: 1.35; }
     .ai-provider-section { margin-top: 10px; }
     .ai-provider-section-title { font-size: 11.5px; font-weight: 700; color: var(--text-2); margin-bottom: 6px; }
-    .ai-grok-summary {
-      padding: 9px 10px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      background: var(--surface-2);
-      color: var(--text-2);
-      font-size: 11.5px;
-      line-height: 1.45;
-    }
     .ai-provider-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .ai-provider-grid .field-wide { grid-column: 1 / -1; }
     .ai-generation-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -865,13 +856,9 @@
 
       <div class="panel-card ai-provider-card">
         <h3 data-i18n="aiProviderTitle">AI comment provider</h3>
-        <input id="ai-provider" type="hidden" value="x-grok">
+        <input id="ai-provider" type="hidden" value="openai-compatible">
         <div class="ai-provider-section-title" data-i18n="aiProviderLabel">Provider</div>
         <div class="ai-provider-choice" role="radiogroup" aria-label="AI comment provider">
-          <button type="button" class="ai-provider-option" role="radio" aria-checked="false" data-ai-provider-option="x-grok">
-            <span class="ai-provider-option-title" data-i18n="aiProviderXGrok">X Grok</span>
-            <span class="ai-provider-option-desc" data-i18n="aiProviderXGrokDesc">Use current X login</span>
-          </button>
           <button type="button" class="ai-provider-option" role="radio" aria-checked="false" data-ai-provider-option="openai-compatible">
             <span class="ai-provider-option-title" data-i18n="aiProviderOpenAICompatible">OpenAI compatible</span>
             <span class="ai-provider-option-desc" data-i18n="aiProviderOpenAICompatibleDesc">OpenAI, DeepSeek, OpenRouter</span>
@@ -884,7 +871,6 @@
 
         <div class="ai-provider-section" id="ai-service-config">
           <div class="ai-provider-section-title" data-i18n="aiServiceConfigTitle">Service configuration</div>
-          <div class="ai-grok-summary" id="ai-grok-summary" data-i18n="aiProviderHintGrok">X Grok uses your current X login state. No API key is needed.</div>
           <div class="ai-provider-grid" id="ai-connection-grid">
             <label class="field" for="ai-platform"><span data-i18n="aiPlatformLabel">Platform</span>
             <div class="xvm-select" data-select-name="ai-platform">
@@ -933,7 +919,6 @@
         <input id="grok-template-name" class="tpl-name" type="text" data-i18n-placeholder="grokTplNamePlaceholder" placeholder="Template name" aria-label="Prompt template name">
         <label class="field" for="grok-prompt"><textarea id="grok-prompt" spellcheck="false"></textarea></label>
         <div class="ft-desc" data-i18n="popupGrokPromptHint">Write only the instructions — [推文内容] and the code-block rule are added automatically if missing.</div>
-        <label class="inline-toggle" for="grok-temp-chat"><span data-i18n="popupGrokTempChatLabel">Use temporary chat (don't pollute Grok history)</span><span class="switch"><input id="grok-temp-chat" type="checkbox"><span class="slider"></span></span></label>
         <div class="actions compact">
           <button type="button" id="grok-prompt-reset" class="adv-btn" data-i18n="btnResetTemplates">Restore default templates</button>
         </div>

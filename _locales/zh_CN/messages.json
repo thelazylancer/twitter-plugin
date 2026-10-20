@@ -382,15 +382,6 @@
   "popupGrokPromptHint": {
     "message": "只写要求就行 —— 缺少 [推文内容] 和「每条评论用代码块包裹」时会自动补上。想指定原推文插入位置就自己写 [推文内容]。点击回复框里的 AI 生成后选择模板，生成完成后再从 Options 中选择一条填入。"
   },
-  "popupGrokTempChatLabel": {
-    "message": "使用临时对话（不污染 Grok 历史记录）"
-  },
-  "flashGrokTempChatOn": {
-    "message": "已开启临时对话 ✓"
-  },
-  "flashGrokTempChatOff": {
-    "message": "已关闭临时对话"
-  },
   "flashGrokPromptSaved": {
     "message": "Grok 提示词已保存 ✓"
   },
@@ -497,18 +488,14 @@
   "aiReplyCountLabel": { "message": "评论数量" },
   "aiApiKeyLabel": { "message": "API Key" },
   "aiProviderHint": { "message": "云端服务会把推文上下文发送到所选 AI 服务；Ollama 在本机运行。" },
-  "aiProviderHintGrok": { "message": "X Grok 使用当前 X 登录态，不需要 API Key。" },
   "aiProviderHintOllama": { "message": "Ollama 在本机运行，请确认 Ollama 已启动且模型已下载。" },
   "aiProviderHintCloud": { "message": "云端服务会把推文文本和回复上下文发送到所选 AI 服务。" },
-  "aiProviderXGrok": { "message": "X Grok" },
-  "aiProviderXGrokDesc": { "message": "使用当前 X 登录态" },
   "aiProviderOllama": { "message": "Ollama" },
   "aiProviderOllamaDesc": { "message": "本机模型服务" },
   "aiProviderOpenAICompatible": { "message": "OpenAI 兼容接口" },
   "aiProviderOpenAICompatibleDesc": { "message": "OpenAI、DeepSeek、OpenRouter 等" },
   "aiServiceConfigTitle": { "message": "服务配置" },
   "aiGenerationSettingsTitle": { "message": "生成设置" },
-  "aiCheckLoginStatus": { "message": "检查 Grok 就绪状态" },
   "aiTestConnection": { "message": "测试连接" },
   "aiTestRunning": { "message": "正在测试连接..." },
   "aiTestOk": { "message": "连接测试通过" },
@@ -634,5 +621,40 @@
   "unfollowedBlueTitle": { "message": "只标蓝 V" },
   "unfollowedBlueDesc": { "message": "默认勾选。只给带蓝勾的会员显示未关注。取消后，所有未关注的评论者都会标。" },
   "unfollowedTitle": { "message": "未关注标记" },
-  "unfollowedDesc": { "message": "只在评论区标出你未关注的人，并显示关注数和粉丝数。不额外请求。" }
+  "unfollowedDesc": { "message": "只在评论区标出你未关注的人，并显示关注数和粉丝数。不额外请求。" },
+  "contentAiAuthorEntryTitle": { "message": "读取主贴和这条评论，再生成回复草稿。不会自动发送" },
+  "contentAiBtnAuthor": { "message": "回评" },
+  "contentAiBtnComment": { "message": "快回" },
+  "contentAiBtnGenerating": { "message": "生成中" },
+  "contentAiBtnInvite": { "message": "邀关" },
+  "contentAiClose": { "message": "关闭" },
+  "contentAiErrGenerateFailed": { "message": "AI 生成失败" },
+  "contentAiErrNoAuthorBtn": { "message": "回复框已打开，但没有找到回评按钮" },
+  "contentAiErrNoContext": { "message": "没读到主贴或当前评论" },
+  "contentAiErrNoReplyButton": { "message": "这条评论没有回复按钮" },
+  "contentAiErrNoReplyComposer": { "message": "没有打开回复框" },
+  "contentAiErrNoTweet": { "message": "未找到推文内容" },
+  "contentAiErrNotOwnThread": { "message": "这不是你主贴下的评论" },
+  "contentAiFillNoComposer": { "message": "没有找到回评弹窗，未填入主贴" },
+  "contentAiFillTitle": { "message": "填充到回复框" },
+  "contentAiFilled": { "message": "已填充评论" },
+  "contentAiGenerateTitleAuthor": { "message": "以原帖作者的身份回复这条评论。点一条填入，不会自动发送。" },
+  "contentAiGenerateTitleComment": { "message": "用当前模板生成评论。点一条填入回复框，不会自动发送。" },
+  "contentAiInviteFollowedTitle": { "message": "你已经关注对方了，无需邀关。" },
+  "contentAiInviteFollowedToast": { "message": "你已经关注对方了，不用邀关" },
+  "contentAiInviteTitle": { "message": "生成一条邀请对方互相关注的回复。点一条填入回复框，不会自动发送。" },
+  "contentAiNoteAuthorReply": { "message": "已读取主贴，并按 {who} 的当前评论来回" },
+  "contentAiNoteContext": { "message": "已读取主贴和当前评论" },
+  "contentAiPanelTitleAuthor": { "message": "回评候选" },
+  "contentAiPanelTitleComment": { "message": "评论候选" },
+  "contentAiPanelTitleInvite": { "message": "邀关文案" },
+  "contentAiRefreshAria": { "message": "刷新候选" },
+  "contentAiRefreshTitle": { "message": "换一批" },
+  "contentAiStatusDone": { "message": "共 {n} 条" },
+  "contentAiStatusStreaming": { "message": "生成中 {n}…" },
+  "contentAiTemplateCaret": { "message": "更换评论模板" },
+  "contentAiTemplateMenuHead": { "message": "评论模板" },
+  "contentAiTimeout": { "message": "AI 生成超时，请检查服务连接" },
+  "contentAiToastRetry": { "message": "请重试" },
+  "contentAiToastTitle": { "message": "⚠ AI 生成失败" }
 }

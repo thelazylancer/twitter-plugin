@@ -7,9 +7,13 @@ const contentJs = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), 
 
 describe('author reply reads the main post and the current comment', () => {
   it('builds a two-part context and refuses to reply from only one of them', () => {
-    expect(contentJs).toContain('【主贴】\\n${mainText}\\n\\n【当前评论】\\n${who}：${commentText}');
+    expect(contentJs).toContain('`【主贴】\\n${mainText}`');
+    expect(contentJs).toContain('`【当前评论】\\n${who}：${commentText}`');
+    // The follow relation rides along as a third, optional part.
+    expect(contentJs).toContain('const relationNote = describeFollowRelation(commentArticle, who);');
+    expect(contentJs).toContain('].filter(Boolean).join(\'\\n\\n\')');
     expect(contentJs).toContain('if (!mainText || !commentText || mainText === commentText) return null;');
-    expect(contentJs).toContain("showGrokErrorToast('没读到主贴或当前评论')");
+    expect(contentJs).toContain("showGrokErrorToast(i18n('contentAiErrNoContext'))");
   });
 
   it('reads both texts before opening the reply composer', () => {

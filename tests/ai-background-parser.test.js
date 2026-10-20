@@ -48,6 +48,19 @@ describe('AI background comment parser', () => {
     expect(prompt).not.toMatch(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\uFEFF]/);
   });
 
+  it('reads the post language, not the Chinese \u5173\u6CE8\u72B6\u6001 note appended to it', () => {
+    const { renderPrompt } = loadBackgroundDebug();
+    const note = '\u3010\u5173\u6CE8\u72B6\u6001\u3011\u4F60\u548C@ann\u662F\u4E92\u76F8\u5173\u6CE8';
+
+    expect(renderPrompt(`\u65E5\u672C\u8A9E\u306E\u30C6\u30B9\u30C8\u3002\n\n${note}`, '[\u63A8\u6587\u5185\u5BB9]', 3, { replyLanguage: 'post' }))
+      .toContain('\u5404\u8FD4\u4FE1\u306F\u65E5\u672C\u8A9E\u306E\u307F\u3067\u66F8\u304F\u3053\u3068');
+    expect(renderPrompt(`Ship it.\n\n${note}`, '[\u63A8\u6587\u5185\u5BB9]', 3, { replyLanguage: 'post' }))
+      .toContain('Write every reply in English only');
+    const authorContext = `\u3010\u4E3B\u8D34\u3011\nToday I shipped a thing.\n\n\u3010\u5F53\u524D\u8BC4\u8BBA\u3011\n@ann\uFF1ANice work!\n\n${note}`;
+    expect(renderPrompt(authorContext, '[\u63A8\u6587\u5185\u5BB9]', 3, { replyLanguage: 'post' }))
+      .toContain('Write every reply in English only');
+  });
+
   it('splits a single code block that contains multiple line-based candidates', () => {
     const { extractComments } = loadBackgroundDebug();
     const raw = '```\n这个兔子看着就很好聊\n她是不是也愣了一下\n你俩座位连一起，缘分啊\n兔子是她的吉祥物吗\n一会儿问问是不是自己缝的\n这兔子表情有点嚣张\n感觉她也是个有趣的人\n起飞前先酝酿一下话题\n兔子耳朵这么长，能聊很久\n说不定她会主动跟你讲兔子的故事\n```';

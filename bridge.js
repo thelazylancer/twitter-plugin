@@ -222,6 +222,41 @@ const CONTENT_MESSAGE_KEYS = [
   'contentBookmarkMenuLoadFailed',
   'contentBookmarkMenuNoFolders',
   'contentBookmarkMenuNewFolderPlaceholder',
+  'contentAiToastTitle',
+  'contentAiToastRetry',
+  'contentAiPanelTitleComment',
+  'contentAiPanelTitleAuthor',
+  'contentAiPanelTitleInvite',
+  'contentAiRefreshTitle',
+  'contentAiRefreshAria',
+  'contentAiClose',
+  'contentAiStatusStreaming',
+  'contentAiStatusDone',
+  'contentAiFillTitle',
+  'contentAiFillNoComposer',
+  'contentAiFilled',
+  'contentAiBtnComment',
+  'contentAiBtnAuthor',
+  'contentAiBtnInvite',
+  'contentAiBtnGenerating',
+  'contentAiTimeout',
+  'contentAiErrNoTweet',
+  'contentAiErrNoContext',
+  'contentAiErrGenerateFailed',
+  'contentAiNoteAuthorReply',
+  'contentAiNoteContext',
+  'contentAiGenerateTitleComment',
+  'contentAiGenerateTitleAuthor',
+  'contentAiTemplateCaret',
+  'contentAiTemplateMenuHead',
+  'contentAiErrNotOwnThread',
+  'contentAiErrNoReplyComposer',
+  'contentAiErrNoAuthorBtn',
+  'contentAiAuthorEntryTitle',
+  'contentAiErrNoReplyButton',
+  'contentAiInviteTitle',
+  'contentAiInviteFollowedTitle',
+  'contentAiInviteFollowedToast',
 ];
 
 const DEFAULT_FEATURES = {
@@ -241,11 +276,10 @@ const DEFAULT_FEATURES = {
   grokCommentPrompt: LOCALIZED_GROK_DEFAULTS.grokCommentPrompt,
   grokPromptTemplates: LOCALIZED_GROK_DEFAULTS.grokPromptTemplates,
   grokSelectedPromptId: LOCALIZED_GROK_DEFAULTS.grokSelectedPromptId,
-  grokTemporaryChat: true,
   grokEnterToReply: false,
   authorReplyPrompt: '',
   inviteFollowPrompt: '',
-  aiProvider: 'x-grok',
+  aiProvider: 'openai-compatible',
   aiOpenAIPlatform: 'openai',
   aiBaseUrl: 'https://api.openai.com/v1',
   aiModel: 'gpt-4o-mini',
@@ -1013,27 +1047,6 @@ function safeChromeCall(fn) {
 
 safeChromeCall(() => {
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message?.type === 'XVM_GROK_CHECK') {
-      const requestId = `grok-check-${crypto.randomUUID()}`;
-      const finish = (result) => {
-        clearTimeout(timer);
-        window.removeEventListener('message', onResult);
-        sendResponse(result);
-      };
-      const onResult = (event) => {
-        if (event.source !== window || event.data?.type !== 'XVM_GROK_CHECK_RESULT'
-          || event.data.requestId !== requestId) return;
-        const result = event.data.result;
-        // Never forward arbitrary page payloads or transaction IDs to the popup.
-        finish(result?.ok === true
-          ? { ok: true, message: '已检测到 X 会话标记并生成签名（未验证生成接口）' }
-          : { ok: false, error: String(result?.error || 'Grok 就绪检查失败') });
-      };
-      const timer = setTimeout(() => finish({ ok: false, error: 'Grok 就绪检查超时，请刷新 X 后重试。' }), 20000);
-      window.addEventListener('message', onResult);
-      window.postMessage({ type: 'XVM_GROK_CHECK_REQUEST', requestId }, '*');
-      return true;
-    }
     if (message?.type === 'XVM_RELEASE_NOTES_SHOW_MANUAL') {
       const version = typeof message.version === 'string' && message.version
         ? message.version
@@ -1426,7 +1439,6 @@ window.addEventListener('message', (event) => {
         grokCommentPrompt: DEFAULT_FEATURES.grokCommentPrompt,
         grokPromptTemplates: DEFAULT_FEATURES.grokPromptTemplates,
         grokSelectedPromptId: DEFAULT_FEATURES.grokSelectedPromptId,
-        grokTemporaryChat: DEFAULT_FEATURES.grokTemporaryChat,
         grokEnterToReply: DEFAULT_FEATURES.grokEnterToReply,
         authorReplyPrompt: DEFAULT_FEATURES.authorReplyPrompt,
         inviteFollowPrompt: DEFAULT_FEATURES.inviteFollowPrompt,
@@ -1437,47 +1449,25 @@ window.addEventListener('message', (event) => {
         aiReplyCount: DEFAULT_FEATURES.aiReplyCount,
         aiLanguage: DEFAULT_FEATURES.aiLanguage,
       }, (syncItems) => {
-        chrome.storage.local.get({ xvmGrokCapturedTxId: null }, (localItems) => {
-          const promptTemplates = normalizeGrokPromptTemplates(syncItems.grokPromptTemplates, syncItems.grokCommentPrompt);
-          window.postMessage({
-            type: 'XVM_GROK_SETTINGS_LOAD',
-            promptTemplate: promptTemplates[0]?.prompt || DEFAULT_FEATURES.grokCommentPrompt,
-            promptTemplates,
-            selectedPromptId: syncItems.grokSelectedPromptId || promptTemplates[0]?.id || 'default',
-            temporaryChat: syncItems.grokTemporaryChat !== false,
-            enterToReply: syncItems.grokEnterToReply === true,
-            aiProvider: syncItems.aiProvider || DEFAULT_FEATURES.aiProvider,
-            aiOpenAIPlatform: syncItems.aiOpenAIPlatform || DEFAULT_FEATURES.aiOpenAIPlatform,
-            aiBaseUrl: syncItems.aiBaseUrl || DEFAULT_FEATURES.aiBaseUrl,
-            aiModel: syncItems.aiModel || DEFAULT_FEATURES.aiModel,
-            aiReplyCount: syncItems.aiReplyCount || DEFAULT_FEATURES.aiReplyCount,
-            aiLanguage: syncItems.aiLanguage || DEFAULT_FEATURES.aiLanguage,
-            replyLanguage: ['post', 'zh', 'en', 'ja'].includes(syncItems.replyLanguage) ? syncItems.replyLanguage : 'post',
-            authorReplyPrompt: syncItems.authorReplyPrompt || '',
-            inviteFollowPrompt: syncItems.inviteFollowPrompt || '',
-            capturedTxId: localItems.xvmGrokCapturedTxId,
-          }, '*');
-        });
+        const promptTemplates = normalizeGrokPromptTemplates(syncItems.grokPromptTemplates, syncItems.grokCommentPrompt);
+        window.postMessage({
+          type: 'XVM_GROK_SETTINGS_LOAD',
+          promptTemplate: promptTemplates[0]?.prompt || DEFAULT_FEATURES.grokCommentPrompt,
+          promptTemplates,
+          selectedPromptId: syncItems.grokSelectedPromptId || promptTemplates[0]?.id || 'default',
+          enterToReply: syncItems.grokEnterToReply === true,
+          aiProvider: syncItems.aiProvider || DEFAULT_FEATURES.aiProvider,
+          aiOpenAIPlatform: syncItems.aiOpenAIPlatform || DEFAULT_FEATURES.aiOpenAIPlatform,
+          aiBaseUrl: syncItems.aiBaseUrl || DEFAULT_FEATURES.aiBaseUrl,
+          aiModel: syncItems.aiModel || DEFAULT_FEATURES.aiModel,
+          aiReplyCount: syncItems.aiReplyCount || DEFAULT_FEATURES.aiReplyCount,
+          aiLanguage: syncItems.aiLanguage || DEFAULT_FEATURES.aiLanguage,
+          replyLanguage: ['post', 'zh', 'en', 'ja'].includes(syncItems.replyLanguage) ? syncItems.replyLanguage : 'post',
+          authorReplyPrompt: syncItems.authorReplyPrompt || '',
+          inviteFollowPrompt: syncItems.inviteFollowPrompt || '',
+        }, '*');
       });
     });
-    return;
-  }
-
-  // Persist a tx-id observed on a real X-UI add_response.json POST.
-  // Stored as { txId, capturedAt } in chrome.storage.local. Used as fallback
-  // when self-generated tx-ids fail signature validation (e.g. after X
-  // redeploys their bundle and our algorithm port is briefly out of date).
-  if (type === 'XVM_GROK_CAPTURE_SET' && typeof event.data.txId === 'string' && event.data.txId.length > 16) {
-    safeChromeCall(() => {
-      chrome.storage.local.set({
-        xvmGrokCapturedTxId: { txId: event.data.txId, capturedAt: Date.now() },
-      });
-    });
-    return;
-  }
-
-  if (type === 'XVM_GROK_CAPTURE_CLEAR') {
-    safeChromeCall(() => chrome.storage.local.remove('xvmGrokCapturedTxId'));
     return;
   }
 
@@ -1545,7 +1535,7 @@ safeChromeCall(() => {
       window.postMessage({ type: 'XVM_THEME_UPDATE', pref }, '*');
     }
     const aiTouched = changes.aiProvider || changes.aiOpenAIPlatform || changes.aiBaseUrl || changes.aiModel || changes.aiReplyCount || changes.aiLanguage || changes.replyLanguage;
-    const grokTouched = changes.grokCommentPrompt || changes.grokPromptTemplates || changes.grokSelectedPromptId || changes.grokTemporaryChat || changes.grokEnterToReply || changes.authorReplyPrompt || changes.inviteFollowPrompt || changes.language || aiTouched;
+    const grokTouched = changes.grokCommentPrompt || changes.grokPromptTemplates || changes.grokSelectedPromptId || changes.grokEnterToReply || changes.authorReplyPrompt || changes.inviteFollowPrompt || changes.language || aiTouched;
     const bookmarkTimelineInjectTouched = changes.featureBookmarkTimelineInject || changes.bookmarkTimelineInjectFolderIds || changes.bookmarkTimelineInjectEvery;
     if (!changes.trending && !changes.viral && !changes.featureVelocityLeaderboard && !changes.featureCopyAsMarkdown && !changes.featureStarChart && !changes.featureBookmarkFolders && !bookmarkTimelineInjectTouched && !changes.showBookmarkCount && !changes.leaderboardEdgeHideEnabled && !changes.badgeStyle && !changes.leaderboardCount && !changes.leaderboardColumns && !changes.language && !grokTouched) return;
 
@@ -1566,8 +1556,7 @@ safeChromeCall(() => {
           grokCommentPrompt: DEFAULT_FEATURES.grokCommentPrompt,
           grokPromptTemplates: DEFAULT_FEATURES.grokPromptTemplates,
           grokSelectedPromptId: DEFAULT_FEATURES.grokSelectedPromptId,
-          grokTemporaryChat: DEFAULT_FEATURES.grokTemporaryChat,
-          grokEnterToReply: DEFAULT_FEATURES.grokEnterToReply,
+            grokEnterToReply: DEFAULT_FEATURES.grokEnterToReply,
         authorReplyPrompt: DEFAULT_FEATURES.authorReplyPrompt,
         inviteFollowPrompt: DEFAULT_FEATURES.inviteFollowPrompt,
           aiProvider: DEFAULT_FEATURES.aiProvider,
@@ -1583,7 +1572,6 @@ safeChromeCall(() => {
             promptTemplate: promptTemplates[0]?.prompt || DEFAULT_FEATURES.grokCommentPrompt,
             promptTemplates,
             selectedPromptId: items.grokSelectedPromptId || promptTemplates[0]?.id || 'default',
-            temporaryChat: items.grokTemporaryChat !== false,
             enterToReply: items.grokEnterToReply === true,
             aiProvider: items.aiProvider || DEFAULT_FEATURES.aiProvider,
             aiOpenAIPlatform: items.aiOpenAIPlatform || DEFAULT_FEATURES.aiOpenAIPlatform,

@@ -1844,6 +1844,16 @@ article[data-testid="tweet"][data-xvm-overlay-host="1"] {
   animation: xvm-grok-pulse 0.9s ease-in-out infinite alternate;
 }
 
+/* Already following this account: 邀关 has nothing to invite. Kept clickable so
+   the click can explain itself instead of silently doing nothing. */
+.xvm-grok-invite-btn--followed {
+  border-color: rgba(207, 217, 222, 0.6);
+  background: rgb(247, 249, 249);
+  color: rgba(83, 100, 113, 0.9);
+  box-shadow: none;
+  opacity: 0.75;
+}
+
 .xvm-grok-actions-host {
   display: flex !important;
   flex-direction: row !important;
