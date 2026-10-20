@@ -905,12 +905,14 @@
           <div class="ai-generation-grid">
             <label class="field" for="ai-reply-count"><span data-i18n="aiReplyCountLabel">Reply count</span><input id="ai-reply-count" type="number" min="1" max="20" step="1"></label>
             <label class="field" for="reply-language"><span data-i18n="replyLanguageLabel">回复语言</span>
-              <select id="reply-language">
-                <option value="post" data-i18n="replyLanguagePost" selected>跟随帖子</option>
-                <option value="zh" data-i18n="replyLanguageZh">中文</option>
-                <option value="en" data-i18n="replyLanguageEn">英文</option>
-                <option value="ja" data-i18n="replyLanguageJa">日语</option>
-              </select>
+              <div class="xvm-select" data-select-name="reply-language">
+                <input id="reply-language" type="hidden" value="post">
+                <button type="button" class="xvm-select-trigger" aria-haspopup="listbox" aria-expanded="false">
+                  <span class="xvm-select-value"></span>
+                  <svg class="xvm-select-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <div class="xvm-select-menu" role="listbox"></div>
+              </div>
             </label>
           </div>
         </div>

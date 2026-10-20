@@ -481,6 +481,13 @@ setCustomSelectOptions(aiPlatformSelect, Object.entries(AI_PLATFORM_PRESETS).map
   label: preset.label,
 })), DEFAULT_FEATURES.aiOpenAIPlatform);
 
+setCustomSelectOptions(replyLanguageSelect, [
+  { value: 'post', label: tr('replyLanguagePost') || '跟随帖子' },
+  { value: 'zh', label: tr('replyLanguageZh') || '中文' },
+  { value: 'en', label: tr('replyLanguageEn') || '英文' },
+  { value: 'ja', label: tr('replyLanguageJa') || '日语' },
+], DEFAULT_FEATURES.replyLanguage);
+
 function getLanguageDisplayName(language) {
   const normalized = normalizeLanguage(language);
   const key = normalized === 'auto' ? 'languageAuto'
@@ -745,7 +752,10 @@ chrome.storage.sync.get(STORAGE_DEFAULTS, (items) => {
   if (aiModelInput) aiModelInput.value = items.aiModel || AI_PLATFORM_PRESETS[normalizeAiPlatform(items.aiOpenAIPlatform)].model;
   if (aiReplyCountInput) aiReplyCountInput.value = normalizeAiReplyCount(items.aiReplyCount);
   if (replyLanguageSelect) {
-    replyLanguageSelect.value = ['post', 'zh', 'en', 'ja'].includes(items.replyLanguage) ? items.replyLanguage : 'post';
+    // Custom select: the hidden input holds the value, but the trigger label
+    // and aria-selected state live in the widget, so go through the helper.
+    setCustomSelectValue(replyLanguageSelect,
+      ['post', 'zh', 'en', 'ja'].includes(items.replyLanguage) ? items.replyLanguage : 'post');
   }
   if (freshnessToggleEl) freshnessToggleEl.checked = items.freshnessEnabled !== false;
   if (freshnessHotMinutesEl) freshnessHotMinutesEl.value = items.freshnessHotMinutes || 5;

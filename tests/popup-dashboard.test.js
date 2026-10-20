@@ -250,7 +250,7 @@ describe('#45 popup tabs structure (mock A)', () => {
     expect(/<select\b|<option\b/.test(html)).toBe(false);
     expect(/document\.createElement\(\s*['"]option['"]\s*\)/.test(popupJs)).toBe(false);
     expect(/<select\b|<option\b/.test(userScript)).toBe(false);
-    expect((html.match(/class="xvm-select"/g) || []).length).toBe(3);
+    expect((html.match(/class="xvm-select"/g) || []).length).toBe(4);
   });
 
   it('loads scripts in order: build-channel → tier-logic → popup-pro → popup filters → popup.js → popup-dashboard', () => {
@@ -773,11 +773,14 @@ describe('#45 i18n lock-step (content.js i18n() ↔ bridge CONTENT_MESSAGE_KEYS 
     expect(missingJa, `popup.html references data-i18n keys missing from _locales/ja: ${missingJa.join(', ')}`).toEqual([]);
   });
 
-  it('keeps package and extension versions in sync for v1.18.17', () => {
-    expect(manifest.version).toBe('1.18.17');
-    expect(pkg.version).toBe('1.18.17');
-    expect(packageLock.version).toBe('1.18.17');
-    expect(packageLock.packages?.['']?.version).toBe('1.18.17');
+  it('keeps package and extension versions in sync', () => {
+    // Assert the files agree with each other rather than with a literal. A
+    // hard-coded version turns every bump into a test edit and, worse, lets a
+    // stale package.json hide behind a green suite.
+    expect(manifest.version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(pkg.version).toBe(manifest.version);
+    expect(packageLock.version).toBe(manifest.version);
+    expect(packageLock.packages?.['']?.version).toBe(manifest.version);
   });
 
   it('renders the popup footer version from the extension manifest', () => {
