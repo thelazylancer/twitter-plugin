@@ -58,6 +58,7 @@ function loadScoring() {
     `${src}; this.cbFeedScore = cbFeedScore; this.cbStatusScore = cbStatusScore;`
     + ' this.cbFollowRatio = cbFollowRatio; this.cbRecency = cbRecency;'
     + ' this.cbDisplayRatio = cbDisplayRatio; this.cbRatioIsHot = cbRatioIsHot;'
+    + ' this.cbOneRowPerAuthor = cbOneRowPerAuthor;'
     + ' this.CB_RATIO_HOT = CB_RATIO_HOT;',
     ctx,
   );
@@ -103,7 +104,7 @@ describe('comment ranking', () => {
   // Pull the real scoring helpers out of content.js rather than reimplementing
   // them here, so the weights and the decay curve are exercised as shipped.
   const ctx = loadScoring();
-  const { cbFeedScore, cbStatusScore, cbFollowRatio, cbRecency, cbDisplayRatio, cbRatioIsHot, CB_RATIO_HOT } = ctx;
+  const { cbFeedScore, cbStatusScore, cbFollowRatio, cbRecency, cbDisplayRatio, cbRatioIsHot, cbOneRowPerAuthor, CB_RATIO_HOT } = ctx;
   const hoursAgo = (h) => Date.now() - h * 3_600_000;
 
   describe('feed / search', () => {
@@ -250,6 +251,58 @@ describe('comment ranking', () => {
       expect(contentJs).toContain("${hot ? ' xvm-cb-ratio--hot' : ''}");
       expect(styles).toContain('.xvm-cb .xvm-cb-ratio--hot {');
       expect(styles).toContain('.xvm-lb[data-theme="dark"] .xvm-cb .xvm-cb-ratio--hot');
+    });
+  });
+
+  describe('one row per person', () => {
+    const row = (authorHandle, createdAtMs, score = 0) => ({ authorHandle, createdAtMs, score });
+
+    it('keeps the author\'s newest reply, not their best-scoring one', () => {
+      // The panel is a list of people; which of their replies it points at
+      // matters less than pointing at the most recent thing they said. Keeping
+      // the top-scoring row instead would link to an older reply than the one
+      // the reader can see them having just posted.
+      const kept = cbOneRowPerAuthor([
+        row('ann', 100, 0.9), row('bob', 500, 0.8), row('ann', 900, 0.1),
+      ]);
+      expect(kept).toHaveLength(2);
+      expect(kept[0].authorHandle).toBe('ann');
+      expect(kept[0].createdAtMs).toBe(900);
+      expect(kept[0].score).toBe(0.1);
+    });
+
+    it('decides a timestamp tie on score rather than on DOM order', () => {
+      // X does not always give us a time, and two unknowns are not a tie the
+      // reader can resolve — falling through to DOM order would make the row
+      // depend on virtualisation.
+      const kept = cbOneRowPerAuthor([row('ann', 0, 0.2), row('ann', 0, 0.7)]);
+      expect(kept).toHaveLength(1);
+      expect(kept[0].score).toBe(0.7);
+    });
+
+    it('matches handles case-insensitively', () => {
+      // articleHandle lowercases, but the payload's screen_name is not
+      // guaranteed to, and the same person must not take two rows.
+      expect(cbOneRowPerAuthor([row('Ann', 1), row('ann', 2)])).toHaveLength(1);
+    });
+
+    it('does not collapse rows whose author is unknown', () => {
+      // '' is not an identity. Treating it as one would hide every author we
+      // could not read behind a single row — the opposite of de-duplicating.
+      expect(cbOneRowPerAuthor([row('', 3), row('', 2), row('', 1)])).toHaveLength(3);
+      expect(cbOneRowPerAuthor([row(undefined, 1), row(null, 2)])).toHaveLength(2);
+    });
+
+    it('applies to 互关机会 only, leaving 回复热点 per-post', () => {
+      // 互关机会 is a list of people; 回复热点 is a list of posts, where two
+      // posts by one author are two separate crowds to go read.
+      expect(contentJs).toContain('const ranked = statusPage ? cbOneRowPerAuthor(out) : out;');
+    });
+
+    it('still ranks the survivors by score', () => {
+      // De-duplicating must not decide the order: the newest reply is what the
+      // row points at, the score is still what places it.
+      expect(contentJs).toContain('return ranked.sort((a, b) => (');
     });
   });
 });

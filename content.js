@@ -3444,6 +3444,37 @@ function cbRatioIsHot(ratio) {
   return ratio !== null && Number(ratio.toFixed(1)) >= CB_RATIO_HOT;
 }
 
+// One row per person. 互关机会 is a list of people, so when someone replied
+// several times in the same thread only their newest reply is kept — the person
+// is the point, and the most recent thing they said is the one worth linking
+// to. Ties on time fall back to the better score, so a pair of replies X never
+// timestamped is still decided by something rather than by DOM order.
+function cbOneRowPerAuthor(entries) {
+  const out = [];
+  const indexByAuthor = new Map();
+  for (const entry of entries) {
+    const key = String(entry.authorHandle || '').toLowerCase();
+    // An unread handle is not an identity. Collapsing every unknown author into
+    // one row would hide people, which is the opposite of de-duplicating them.
+    if (!key) {
+      out.push(entry);
+      continue;
+    }
+    const at = indexByAuthor.get(key);
+    if (at === undefined) {
+      indexByAuthor.set(key, out.length);
+      out.push(entry);
+      continue;
+    }
+    const kept = out[at];
+    if (entry.createdAtMs > kept.createdAtMs
+      || (entry.createdAtMs === kept.createdAtMs && entry.score > kept.score)) {
+      out[at] = entry;
+    }
+  }
+  return out;
+}
+
 // Feed / search: reply count with a short recency decay. A 3-day-old post with
 // 500 replies scores below a 2-hour-old post with 80.
 function cbFeedScore(entry) {
@@ -3530,9 +3561,13 @@ function collectCommentRanked() {
     out.push(entry);
   }
 
+  // 互关机会 is a list of people, so it keeps one row per author — their newest
+  // reply. 回复热点 is a list of posts, and two posts by one author are two
+  // separate crowds to go read, so it is left per-post.
+  const ranked = statusPage ? cbOneRowPerAuthor(out) : out;
   // Highest score first. Ties fall back to the old visible ordering so the
   // list is stable across renders instead of shuffling every two seconds.
-  return out.sort((a, b) => (
+  return ranked.sort((a, b) => (
     b.score - a.score
     || b.replies - a.replies
     || b.followers - a.followers
@@ -4094,17 +4129,22 @@ function relationForComment(article) {
   const ownId = articleOwnStatusId(article);
   const byId = ownId ? authorRelationStore.get(ownId) : null;
   const fiber = relationFromFiber(article);
-  const merged = {
+  // The stored relation is a snapshot taken when X's payload arrived; the
+  // button is the only live read of a field the user can change without a
+  // reload. Prefer the button — and only for `following`, the one direction a
+  // button can answer. `followedBy` has no button and still comes from the
+  // payload, as do both counts, which no click can change.
+  const buttonFollowing = followSignalFromButtons(article, handle);
+  return {
     screenName: handle || byHandle?.screenName || byId?.screenName || fiber?.screenName || '',
-    following: booleanOrNull(byId?.following ?? byHandle?.following ?? fiber?.following),
+    following: buttonFollowing !== null
+      ? buttonFollowing
+      : booleanOrNull(byId?.following ?? byHandle?.following ?? fiber?.following),
     followedBy: booleanOrNull(byId?.followedBy ?? byHandle?.followedBy ?? fiber?.followedBy),
     followers: [byId?.followers, byHandle?.followers, fiber?.followers].find((value) => Number.isFinite(value)),
     followingCount: [byId?.followingCount, byHandle?.followingCount, fiber?.followingCount].find((value) => Number.isFinite(value)),
     blueVerified: [byId?.blueVerified, byHandle?.blueVerified, fiber?.blueVerified].find((value) => value === true || value === false) ?? null,
   };
-  const buttonFollowing = followSignalFromButtons(article);
-  if (merged.following === null && buttonFollowing !== null) merged.following = buttonFollowing;
-  return merged;
 }
 
 // One-line relationship note appended to the AI context so the model stops
@@ -4220,14 +4260,38 @@ function blueVerifiedFromDom(article) {
   return name.querySelector('svg[aria-label], [data-testid="icon-verified"]') ? null : false;
 }
 
-function followSignalFromButtons(article) {
+// Reads "do I follow this article's author" off X's own follow button, which is
+// the live value — the payload we cache is a snapshot. `handle` is the article's
+// author: a quoted tweet renders its own Follow button inside this article, and
+// X names the subject in the label, so a label naming anyone else is answering
+// for the wrong account and gets skipped.
+function followSignalFromButtons(article, handle = '') {
   for (const btn of ownArticleNodes(article, 'button, [role="button"]')) {
     const testid = btn.getAttribute('data-testid') || '';
     const label = (btn.getAttribute('aria-label') || btn.textContent || '').trim();
-    if (testid === 'follow' || testid.endsWith('-follow') || /^(Follow|关注|回关)( |@|$)/i.test(label)) return false;
-    if (testid === 'unfollow' || /^(Following|正在关注|已关注)( |@|$)/i.test(label)) return true;
+    const named = label.match(/@([A-Za-z0-9_]+)/)?.[1]?.toLowerCase();
+    if (named && handle && named !== handle) continue;
+    // Testid first, and unfollow before follow. "x-unfollow" does not end in
+    // "-follow", but checking the longer shape first means a testid that does
+    // can never be read as the opposite direction. The label is only consulted
+    // when the testid says nothing — otherwise a button labelled "Follow" with
+    // an "-unfollow" testid would report not-following.
+    if (testid === 'unfollow' || testid.endsWith('-unfollow')) return true;
+    if (testid === 'follow' || testid.endsWith('-follow')) return false;
+    if (/^(Following|正在关注|已关注)( |@|$)/i.test(label)) return true;
+    if (/^(Follow|关注|回关)( |@|$)/i.test(label)) return false;
   }
   return null;
+}
+
+// Whether a click landed on something that toggles a follow. Matched on the
+// same shapes the reader above trusts, plus the caret-menu items, which carry no
+// testid but do name the account.
+function isFollowToggleNode(node) {
+  const testid = node.getAttribute?.('data-testid') || '';
+  if (testid === 'follow' || testid === 'unfollow' || /-(?:un)?follow$/.test(testid)) return true;
+  const label = (node.getAttribute?.('aria-label') || node.textContent || '').trim();
+  return /^(Follow|Unfollow|Following|关注|正在关注|已关注|回关)( |@|$)/i.test(label);
 }
 
 function paintUnfollowed(root = document) {
@@ -4254,6 +4318,10 @@ function paintUnfollowed(root = document) {
       domBlue,
     });
     if (!mark) {
+      // Following someone is one click away, so the chip has to be able to come
+      // back off. It could not before: this branch only stamped the article and
+      // returned, leaving a stale 未关注 on a person the user had just followed.
+      ownArticleNodes(article, '.xvm-unfollowed').forEach((node) => node.remove());
       article.dataset.xvmUnfollowedStamped = '1';
       return;
     }
@@ -4268,6 +4336,43 @@ function paintUnfollowed(root = document) {
     if (mark.hasCounts) article.dataset.xvmUnfollowedStamped = '1';
   });
 }
+
+// X flips the follow button optimistically and never re-sends the payload the
+// relation store was built from, so one click makes every cached relation stale
+// in place. Repaint as soon as the click settles rather than waiting for the
+// periodic tick: the panel is what the user is looking at when they click, and
+// a 互关机会 row that lingers for two seconds reads as "it didn't work".
+function repaintFollowState() {
+  // Drop the stamps so paintUnfollowed re-decides instead of skipping the
+  // article it already made up its mind about.
+  document.querySelectorAll('article[data-xvm-unfollowed-stamped]')
+    .forEach((article) => article.removeAttribute('data-xvm-unfollowed-stamped'));
+  paintUnfollowed();
+  if (commentBoardEnabled) renderCommentBoard();
+}
+
+let followRepaintRaf = 0;
+let followRepaintTimer = 0;
+function scheduleFollowRepaint() {
+  // Twice, and the second one is not redundant: the first runs after X's
+  // optimistic flip, the second after the server's answer. Repainting only
+  // early is worse than not repainting at all — the stale value gets stamped
+  // back on and every later pass skips the article.
+  if (!followRepaintRaf) {
+    followRepaintRaf = requestAnimationFrame(() => {
+      followRepaintRaf = 0;
+      repaintFollowState();
+    });
+  }
+  clearTimeout(followRepaintTimer);
+  followRepaintTimer = setTimeout(repaintFollowState, 900);
+}
+
+document.addEventListener('click', (e) => {
+  const node = e.target?.closest?.('button, [role="button"], [role="menuitem"]');
+  if (!node || !node.closest('article[data-testid="tweet"]')) return;
+  if (isFollowToggleNode(node)) scheduleFollowRepaint();
+}, true);
 
 function paintFreshness(root = document) {
   const articles = root.querySelectorAll?.('article[data-testid="tweet"]') || [];
