@@ -715,6 +715,9 @@
   "contentCommentBoardRatioHot": {
     "message": "フォローバックされやすい"
   },
+  "contentCommentBoardRepliedYou": {
+    "message": "あなたに返信したばかり"
+  },
   "contentCommentBoardBlue": {
     "message": "Blue会員"
   }

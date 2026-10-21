@@ -21,6 +21,13 @@ let unfollowedEnabled = true;
 let unfollowedBlueOnly = true;
 const authorRelationStore = new Map();
 const authorRelationByHandle = new Map();
+// handle -> ms of their newest reply to one of my own posts. Declared up here
+// with the other stores rather than beside the panel code, because it is written
+// from scanForTweets, which can run on a network response that lands while this
+// script is still executing — a const further down would still be in its
+// temporal dead zone at that point.
+const recentRepliers = new Map();
+let repliersSaveTimer = 0;
 
 // === i18n ===
 let localizedStrings = {};
@@ -821,6 +828,7 @@ function scanForTweets(obj) {
     if (data) {
       tweetDataStore.set(data.id, data);
       found = true;
+      if (typeof observeReplierFromPayload === 'function') observeReplierFromPayload(data);
     }
   }
 
@@ -2810,11 +2818,15 @@ window.addEventListener('message', (event) => {
       applyCommentBoardPosition();
     }
   }
+  if (event.data?.type === 'XVM_REPLIERS_LOAD' && event.data.repliers) {
+    hydrateRecentRepliers(event.data.repliers);
+  }
 });
 window.postMessage({ type: 'XVM_LB_POS_REQUEST' }, '*');
 window.postMessage({ type: 'XVM_LB_HEIGHT_REQUEST' }, '*');
 window.postMessage({ type: 'XVM_LB_SIZE_REQUEST' }, '*');
 window.postMessage({ type: 'XVM_CB_STATE_REQUEST' }, '*');
+window.postMessage({ type: 'XVM_REPLIERS_REQUEST' }, '*');
 
 function installLeaderboardDrag() {
   if (!leaderboardEl) return;
@@ -3402,6 +3414,15 @@ const CB_RATIO_SATURATION = 5;
 // CB_RATIO_SATURATION because the two answer different questions: saturation is
 // "how much of the ratio term has this earned", this is "is it worth a look".
 const CB_RATIO_HOT = 0.9;
+// How long a reply to one of your own posts keeps its pull. Deliberately short:
+// this is a browsing-session signal, not a relationship. Two hours covers the
+// span in which "they just replied to me" still means "they are here now", and
+// it is also what keeps the stored map self-clearing.
+const CB_REPLIER_TTL_MS = 2 * 60 * 60 * 1000;
+// What that is worth in feed mode. A nudge rather than a tier: the feed panel is
+// still about where the crowd is, so 1.6 lets a 40-reply post edge past a
+// 60-reply one of the same age without burying the busy threads.
+const CB_FEED_REPLIER_BOOST = 1.6;
 
 function cbHoursSince(createdAtMs) {
   if (!Number.isFinite(createdAtMs) || createdAtMs <= 0) return null;
@@ -3444,6 +3465,13 @@ function cbRatioIsHot(ratio) {
   return ratio !== null && Number(ratio.toFixed(1)) >= CB_RATIO_HOT;
 }
 
+// Is a reply to one of your own posts still inside the window? Takes `nowMs`
+// rather than reading the clock, so the boundary is testable and so a caller
+// that already has a timestamp does not pay for a second Date.now().
+function cbReplierIsRecent(at, nowMs) {
+  return Number.isFinite(at) && nowMs - at < CB_REPLIER_TTL_MS;
+}
+
 // One row per person. 互关机会 is a list of people, so when someone replied
 // several times in the same thread only their newest reply is kept — the person
 // is the point, and the most recent thing they said is the one worth linking
@@ -3480,7 +3508,12 @@ function cbOneRowPerAuthor(entries) {
 function cbFeedScore(entry) {
   const age = cbHoursSince(entry.createdAtMs);
   if (age === null) return 0;
-  return entry.replies * cbRecency(entry.createdAtMs, CB_FEED_HALF_LIFE_HOURS);
+  const base = entry.replies * cbRecency(entry.createdAtMs, CB_FEED_HALF_LIFE_HOURS);
+  // Someone who replied to you in the last couple of hours is worth more than a
+  // post that is merely busy — they are demonstrably here right now, which is
+  // the only thing this panel is trying to find. Still only a multiplier: the
+  // crowd is what the ranking is for.
+  return entry.repliedYou ? base * CB_FEED_REPLIER_BOOST : base;
 }
 
 // Status page: does this person look like someone who will follow back?
@@ -3505,6 +3538,109 @@ function cbStatusScore(entry) {
 // feed: the user said the ordering there does not matter.
 function isCommentBoardStatusPage() {
   return /\/status\/\d+/.test(location.pathname);
+}
+
+// Is the post this page is showing one of mine? Only then does "replied to the
+// root" mean "replied to me".
+function isOwnStatusPage() {
+  const me = getLoggedInHandle();
+  if (!me) return false;
+  const root = findArticleForCurrentStatus();
+  return !!root && articleHandle(root) === me;
+}
+
+// Expiry is checked on read, not only when the map is pruned: a tab can sit open
+// for hours, and an entry has to stop counting the moment it is stale rather
+// than at the next write.
+function isRecentReplier(handle) {
+  const key = String(handle || '').toLowerCase();
+  return key ? cbReplierIsRecent(recentRepliers.get(key), Date.now()) : false;
+}
+
+function recordReplierToMe(handle, at) {
+  const key = String(handle || '').toLowerCase();
+  if (!key || !Number.isFinite(at)) return;
+  const prev = recentRepliers.get(key);
+  // Newest reply wins, and re-observing the same one writes the same value —
+  // which is what makes the record idempotent across the two-second re-render.
+  if (prev !== undefined && prev >= at) return;
+  recentRepliers.set(key, at);
+  scheduleRepliersSave();
+}
+
+function flushRecentRepliers() {
+  if (repliersSaveTimer) {
+    clearTimeout(repliersSaveTimer);
+    repliersSaveTimer = 0;
+  }
+  // Drop what has expired before writing, so the stored map cannot outgrow the
+  // window it describes.
+  const now = Date.now();
+  for (const [handle, at] of recentRepliers) {
+    if (!cbReplierIsRecent(at, now)) recentRepliers.delete(handle);
+  }
+  if (!recentRepliers.size) return;
+  window.postMessage({
+    type: 'XVM_REPLIERS_SAVE',
+    repliers: Object.fromEntries(recentRepliers),
+  }, '*');
+}
+
+function scheduleRepliersSave() {
+  if (repliersSaveTimer) return;
+  repliersSaveTimer = setTimeout(flushRecentRepliers, 5000);
+}
+
+// A pending save would otherwise be dropped when the tab goes away — which is
+// exactly when the browsing session this signal describes has ended.
+window.addEventListener('pagehide', () => {
+  if (repliersSaveTimer) flushRecentRepliers();
+});
+
+function hydrateRecentRepliers(raw) {
+  const now = Date.now();
+  for (const [handle, at] of Object.entries(raw || {})) {
+    const key = String(handle || '').toLowerCase();
+    if (key && cbReplierIsRecent(at, now)) recentRepliers.set(key, at);
+  }
+}
+
+// Whoever replied to the root of one of my own posts replied to me. Observed
+// while the page is already open, so this costs no request and needs no
+// permission — the replies are simply on screen. Everything else about the
+// person is left alone; the map records one timestamp per handle and expires it.
+function observeRepliersToMe() {
+  if (!isCommentBoardStatusPage() || !isOwnStatusPage()) return;
+  const rootId = getStatusIdFromLocation();
+  if (!rootId) return;
+  const now = Date.now();
+  for (const article of document.querySelectorAll('article[data-testid="tweet"]')) {
+    const id = getTweetIdFromArticle(article);
+    if (!id) continue;
+    const data = tweetDataStore.get(id);
+    if (!data || data.inReplyToStatusId !== rootId) continue;
+    const author = articleHandle(article);
+    if (!author) continue;
+    const createdAt = data.createdAt ? new Date(data.createdAt).getTime() : 0;
+    recordReplierToMe(author, Number.isFinite(createdAt) && createdAt > 0 ? createdAt : now);
+  }
+}
+
+// The same fact, read off the payload instead of the page — and this is the one
+// that does the work. scanForTweets walks every GraphQL response X sends, so a
+// reply to one of my posts is seen wherever it is fetched: the notifications
+// timeline, the home feed, a search, someone else's thread. The payload also
+// carries the reply's own created_at, which is the timestamp that matters — when
+// they replied, not when I happened to be looking. The page-level pass above
+// stays as the fallback for payloads that arrive without the target field.
+function observeReplierFromPayload(data) {
+  // Guard the DOM lookup behind the field: this runs per tweet payload, and most
+  // payloads are not replies at all.
+  if (!data?.inReplyToScreenName || !data.screenName) return;
+  const me = getLoggedInHandle();
+  if (!me || data.inReplyToScreenName.toLowerCase() !== me) return;
+  const createdAt = data.createdAt ? new Date(data.createdAt).getTime() : 0;
+  recordReplierToMe(data.screenName, Number.isFinite(createdAt) && createdAt > 0 ? createdAt : Date.now());
 }
 
 // Ranks whatever is mounted. Scope matches the leaderboard, but the sort key
@@ -3555,6 +3691,12 @@ function collectCommentRanked() {
       // panel and the 未关注 chip can never disagree about who is a member.
       blueVerified: unfollowedApi().isBlueMember(relation, blueVerifiedFromDom(article)),
       views: data.views || 0,
+      // Feed mode only for now. 互关机会 already carries a four-term score with a
+      // deliberate invariant behind it, and adding a fifth term there means
+      // rebalancing all four — a separate decision from this one. Keeping the
+      // flag false on status pages also keeps the row marker honest: it only
+      // ever appears where it actually moved the ranking.
+      repliedYou: !statusPage && isRecentReplier(author),
     };
     entry.score = statusPage ? cbStatusScore(entry) : cbFeedScore(entry);
     commentBoardItemMeta.set(id, entry);
@@ -3608,7 +3750,12 @@ const CB_COLUMN_RENDERERS = {
   rank: (_t, i) => `<span class="xvm-lb-rank">${i + 1}</span>`,
   handle: (t) => {
     const handle = (t.handle || '').trim() || i18n('contentFallbackTweetLabel');
-    return `<span class="xvm-lb-handle" title="${lbEscapeHtml(handle)}">${lbEscapeHtml(handle)}</span>`;
+    // Only ever set where it moved the ranking (feed mode), so a marker on
+    // screen always means the row was actually boosted.
+    const replied = t.repliedYou
+      ? `<span class="xvm-cb-replied" title="${i18n('contentCommentBoardRepliedYou')}" aria-label="${i18n('contentCommentBoardRepliedYou')}">↩</span>`
+      : '';
+    return `<span class="xvm-lb-handle" title="${lbEscapeHtml(handle)}">${lbEscapeHtml(handle)}</span>${replied}`;
   },
   preview: (t) => {
     const text = (t.text || '').replace(/\s+/g, ' ').trim();
@@ -4778,6 +4925,9 @@ setInterval(() => {
   // Its own trigger: the comment panel must not depend on badges being on,
   // which the leaderboard's refresh chain effectively does.
   if (commentBoardEnabled) renderCommentBoard();
+  // Ungated by the panel toggle: this observes, it does not display, and a user
+  // who has the panel off today may turn it on tomorrow.
+  observeRepliersToMe();
   paintFreshness();
   paintUnfollowed();
   injectAuthorReplyButtons();

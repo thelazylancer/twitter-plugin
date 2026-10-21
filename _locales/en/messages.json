@@ -722,6 +722,9 @@
   "contentCommentBoardRatioHot": {
     "message": "likely to follow back"
   },
+  "contentCommentBoardRepliedYou": {
+    "message": "replied to you recently"
+  },
   "contentCommentBoardBlue": {
     "message": "Blue member"
   }

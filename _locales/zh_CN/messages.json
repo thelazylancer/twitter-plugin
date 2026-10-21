@@ -720,6 +720,9 @@
   "contentCommentBoardRatioHot": {
     "message": "很可能回关"
   },
+  "contentCommentBoardRepliedYou": {
+    "message": "刚回复过你"
+  },
   "contentCommentBoardBlue": {
     "message": "蓝V会员"
   }

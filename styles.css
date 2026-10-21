@@ -805,6 +805,17 @@ html[data-xvm-badge-style="inline-classic"] .xvm-badge--red { color: #f44336; ba
   line-height: 1;
 }
 
+/* This person replied to one of your own posts within the last couple of hours,
+   which is what earned the row its boost in feed mode. Green because green is
+   already the panel's "worth acting on" colour, and a glyph rather than a pill
+   because it has to fit beside a handle that is already truncating. */
+.xvm-cb .xvm-cb-replied {
+  flex-shrink: 0;
+  color: #177638;
+  font-size: 10px;
+  line-height: 1;
+}
+
 /* Stacked directly under the leaderboard: square the seam so the two panels
    read as one continuous column instead of two rounded boxes touching. */
 .xvm-lb.xvm-lb-stacked { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
@@ -817,6 +828,7 @@ html[data-xvm-badge-style="inline-classic"] .xvm-badge--red { color: #f44336; ba
 .xvm-lb[data-theme="dark"] .xvm-cb .xvm-cb-ratio { color: #fb923c; }
 .xvm-lb[data-theme="dark"] .xvm-cb .xvm-cb-ratio--hot { background: #15803d; color: #ecfdf5; }
 .xvm-lb[data-theme="dark"] .xvm-cb .xvm-cb-blue { color: #60a5fa; }
+.xvm-lb[data-theme="dark"] .xvm-cb .xvm-cb-replied { color: #4ade80; }
 
 article[data-testid="tweet"].xvm-article-linked {
   outline: 2px solid #bf5a2a;

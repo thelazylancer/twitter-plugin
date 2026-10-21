@@ -59,7 +59,10 @@ function loadScoring() {
     + ' this.cbFollowRatio = cbFollowRatio; this.cbRecency = cbRecency;'
     + ' this.cbDisplayRatio = cbDisplayRatio; this.cbRatioIsHot = cbRatioIsHot;'
     + ' this.cbOneRowPerAuthor = cbOneRowPerAuthor;'
-    + ' this.CB_RATIO_HOT = CB_RATIO_HOT;',
+    + ' this.cbReplierIsRecent = cbReplierIsRecent;'
+    + ' this.CB_RATIO_HOT = CB_RATIO_HOT;'
+    + ' this.CB_REPLIER_TTL_MS = CB_REPLIER_TTL_MS;'
+    + ' this.CB_FEED_REPLIER_BOOST = CB_FEED_REPLIER_BOOST;',
     ctx,
   );
   return ctx;
@@ -104,7 +107,7 @@ describe('comment ranking', () => {
   // Pull the real scoring helpers out of content.js rather than reimplementing
   // them here, so the weights and the decay curve are exercised as shipped.
   const ctx = loadScoring();
-  const { cbFeedScore, cbStatusScore, cbFollowRatio, cbRecency, cbDisplayRatio, cbRatioIsHot, cbOneRowPerAuthor, CB_RATIO_HOT } = ctx;
+  const { cbFeedScore, cbStatusScore, cbFollowRatio, cbRecency, cbDisplayRatio, cbRatioIsHot, cbOneRowPerAuthor, cbReplierIsRecent, CB_RATIO_HOT, CB_REPLIER_TTL_MS, CB_FEED_REPLIER_BOOST } = ctx;
   const hoursAgo = (h) => Date.now() - h * 3_600_000;
 
   describe('feed / search', () => {
@@ -131,6 +134,53 @@ describe('comment ranking', () => {
       const six = cbRecency(hoursAgo(6), 6);
       expect(now).toBeCloseTo(1, 5);
       expect(six).toBeCloseTo(0.5, 5);
+    });
+  });
+
+  describe('someone who just replied to one of your own posts', () => {
+    it('expires exactly at the two-hour mark', () => {
+      // Short on purpose: this describes a browsing session, not a
+      // relationship, so the boundary is the whole feature.
+      expect(CB_REPLIER_TTL_MS).toBe(2 * 60 * 60 * 1000);
+      const now = 1_700_000_000_000;
+      expect(cbReplierIsRecent(now - CB_REPLIER_TTL_MS + 1, now)).toBe(true);
+      expect(cbReplierIsRecent(now - CB_REPLIER_TTL_MS, now)).toBe(false);
+      expect(cbReplierIsRecent(now - CB_REPLIER_TTL_MS - 1, now)).toBe(false);
+    });
+
+    it('treats a missing timestamp as not recent', () => {
+      // A payload X never timestamped must not read as "just now", or every
+      // unreadable reply would sit at the top of the feed panel forever.
+      const now = Date.now();
+      expect(cbReplierIsRecent(0, now)).toBe(false);
+      expect(cbReplierIsRecent(undefined, now)).toBe(false);
+      expect(cbReplierIsRecent(NaN, now)).toBe(false);
+    });
+
+    it('lifts the post in feed mode', () => {
+      const base = { replies: 40, createdAtMs: hoursAgo(1) };
+      expect(cbFeedScore({ ...base, repliedYou: true }))
+        .toBeGreaterThan(cbFeedScore({ ...base, repliedYou: false }));
+    });
+
+    it('is a nudge, not a takeover', () => {
+      // 40 replies x 1.6 = 64, so it edges past 60 and still loses to 100. The
+      // feed panel is about where the crowd is; this only breaks near-ties.
+      const busy = { createdAtMs: hoursAgo(1) };
+      expect(cbFeedScore({ ...busy, replies: 40, repliedYou: true }))
+        .toBeGreaterThan(cbFeedScore({ ...busy, replies: 60, repliedYou: false }));
+      expect(cbFeedScore({ ...busy, replies: 40, repliedYou: true }))
+        .toBeLessThan(cbFeedScore({ ...busy, replies: 100, repliedYou: false }));
+      expect(CB_FEED_REPLIER_BOOST).toBeGreaterThan(1);
+    });
+
+    it('does not leak into the status score', () => {
+      // 互关机会 was deliberately left alone: it already carries four terms and
+      // an invariant behind them, and rebalancing is a separate decision. This
+      // pins that the flag is inert there rather than quietly scoring.
+      const base = { followedBy: false, followingCount: 1000, followers: 1000, createdAtMs: hoursAgo(1) };
+      expect(cbStatusScore({ ...base, repliedYou: true }))
+        .toBe(cbStatusScore({ ...base, repliedYou: false }));
     });
   });
 
@@ -369,6 +419,81 @@ describe('comment board wiring', () => {
   it('keeps its own column vocabulary', () => {
     expect(bridgeJs).toContain('KNOWN_CB_COLUMN_IDS');
     expect(bridgeJs).toContain('normalizeCommentBoardColumns');
+  });
+});
+
+describe('repliers to your own posts', () => {
+  it('reads them off the payload, so any timeline counts', () => {
+    // scanForTweets walks every GraphQL response X sends, so the notifications
+    // timeline needs no reader of its own — and no testid is guessed at.
+    expect(contentJs).toContain('observeReplierFromPayload(data)');
+    expect(contentJs).toContain('if (!me || data.inReplyToScreenName.toLowerCase() !== me) return;');
+    // The guard keeps the DOM lookup out of the hot path for non-replies.
+    expect(contentJs).toContain('if (!data?.inReplyToScreenName || !data.screenName) return;');
+  });
+
+  it('timestamps the reply, not the moment it was seen', () => {
+    // "他们的访问时间是要根据回复的时间来着" — the window has to measure when
+    // they replied, or scrolling past the same reply would keep it alive.
+    expect(contentJs).toContain("const createdAt = data.createdAt ? new Date(data.createdAt).getTime() : 0;");
+    expect(contentJs).toContain('recordReplierToMe(data.screenName, Number.isFinite(createdAt) && createdAt > 0 ? createdAt : Date.now());');
+  });
+
+  it('is declared before the code that writes to it can run', () => {
+    // scanForTweets can fire on a response that lands while this script is still
+    // executing; a const beside the panel code would still be in its temporal
+    // dead zone at that point, and the write would throw.
+    const decl = contentJs.indexOf('const recentRepliers = new Map();');
+    const scanner = contentJs.indexOf('function scanForTweets(');
+    const writer = contentJs.indexOf('function observeReplierFromPayload(');
+    expect(decl).toBeGreaterThan(-1);
+    expect(scanner).toBeGreaterThan(-1);
+    expect(decl).toBeLessThan(scanner);
+    expect(decl).toBeLessThan(writer);
+  });
+
+  it('still has the page-level fallback for payloads missing the target', () => {
+    expect(contentJs).toContain('if (!isCommentBoardStatusPage() || !isOwnStatusPage()) return;');
+    expect(contentJs).toContain('if (!data || data.inReplyToStatusId !== rootId) continue;');
+  });
+
+  it('keeps one timestamp per handle and re-observing it is a no-op', () => {
+    // Both observers run on every tick, so a write that is not idempotent would
+    // push the expiry out on every pass and the entry would never age out.
+    expect(contentJs).toContain('if (prev !== undefined && prev >= at) return;');
+    expect(contentJs).toContain('return key ? cbReplierIsRecent(recentRepliers.get(key), Date.now()) : false;');
+  });
+
+  it('persists through the bridge, debounced', () => {
+    expect(contentJs).toContain("type: 'XVM_REPLIERS_SAVE'");
+    expect(contentJs).toContain("type: 'XVM_REPLIERS_REQUEST'");
+    expect(bridgeJs).toContain("type === 'XVM_REPLIERS_SAVE'");
+    expect(bridgeJs).toContain("type === 'XVM_REPLIERS_REQUEST'");
+    expect(bridgeJs).toContain('REPLIERS_MAX_ENTRIES');
+    expect(contentJs).toContain('setTimeout(flushRecentRepliers, 5000)');
+  });
+
+  it('drops what has expired before it is written', () => {
+    // The stored map has to describe the same window the reader applies, or it
+    // outgrows the two hours it claims to cover.
+    expect(contentJs).toContain('if (!cbReplierIsRecent(at, now)) recentRepliers.delete(handle);');
+  });
+
+  it('keeps observing even when the panel is off', () => {
+    // Observing is not displaying, and the panel can be switched on later.
+    expect(contentJs).toContain('observeRepliersToMe();');
+    expect(contentJs).not.toContain('if (commentBoardEnabled) observeRepliersToMe();');
+  });
+
+  it('boosts feed mode only', () => {
+    expect(contentJs).toContain('repliedYou: !statusPage && isRecentReplier(author),');
+    expect(contentJs).toContain('return entry.repliedYou ? base * CB_FEED_REPLIER_BOOST : base;');
+  });
+
+  it('marks the row only where the boost applied', () => {
+    expect(contentJs).toContain("xvm-cb-replied");
+    expect(styles).toContain('.xvm-cb .xvm-cb-replied {');
+    expect(styles).toContain('.xvm-lb[data-theme="dark"] .xvm-cb .xvm-cb-replied');
   });
 });
 

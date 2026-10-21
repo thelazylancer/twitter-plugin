@@ -144,6 +144,7 @@ const CONTENT_MESSAGE_KEYS = [
   'contentCommentBoardFollowingCount',
   'contentCommentBoardRatio',
   'contentCommentBoardRatioHot',
+  'contentCommentBoardRepliedYou',
   'contentCommentBoardBlue',
   'contentCommentBoardMutual',
   'contentCommentBoardFollowing',
@@ -349,6 +350,10 @@ const BOOKMARK_TIMELINE_STORAGE_LOCK = 'xvm-bookmark-timeline-storage';
 const BOOKMARK_TIMELINE_MANUAL_LOCK = 'xvm-bookmark-timeline-manual-refresh';
 const BOOKMARK_TIMELINE_MANUAL_TTL_MS = 30 * 1000;
 const BOOKMARK_TIMELINE_MAX_ENTRIES_PER_FOLDER = 120;
+// The replier map is short-lived by design (the content script drops anything
+// past its TTL), so this cap only ever bites if the TTL is raised. It exists so
+// a bug in the TTL cannot turn a two-hour signal into unbounded storage.
+const REPLIERS_MAX_ENTRIES = 2000;
 // X returns ~20 tweets per BookmarkFolderTimeline page regardless of count, so we
 // must follow the bottom cursor to gather a folder's full contents (runaway guard).
 const BOOKMARK_TIMELINE_MAX_PAGES = 10;
@@ -1434,6 +1439,32 @@ window.addEventListener('message', (event) => {
   if (type === 'XVM_COMMENT_BOARD_DISABLE') {
     safeChromeCall(() => {
       chrome.storage.sync.set({ featureCommentBoard: false });
+    });
+    return;
+  }
+
+  // People who recently replied to one of your own posts, keyed by handle. The
+  // content script owns the TTL and sends an already-pruned map, so the two
+  // sides cannot disagree about what "recent" means; this side is a dumb
+  // round-trip plus a size cap, because the map is written on every render.
+  if (type === 'XVM_REPLIERS_REQUEST') {
+    safeChromeCall(() => {
+      chrome.storage.local.get({ xvmRecentRepliers: null }, (items) => {
+        if (items.xvmRecentRepliers) {
+          window.postMessage({ type: 'XVM_REPLIERS_LOAD', repliers: items.xvmRecentRepliers }, '*');
+        }
+      });
+    });
+    return;
+  }
+
+  if (type === 'XVM_REPLIERS_SAVE' && event.data.repliers) {
+    const entries = Object.entries(event.data.repliers)
+      .filter(([, at]) => Number.isFinite(at))
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, REPLIERS_MAX_ENTRIES);
+    safeChromeCall(() => {
+      chrome.storage.local.set({ xvmRecentRepliers: Object.fromEntries(entries) });
     });
     return;
   }
