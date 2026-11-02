@@ -768,6 +768,9 @@
   "contentFollowingCountLabel": {
     "message": "Showing"
   },
+  "contentFollowingLastSeen": {
+    "message": "Last seen"
+  },
   "contentCommentBoardBlue": {
     "message": "Blue member"
   }

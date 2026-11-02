@@ -761,6 +761,9 @@
   "contentFollowingCountLabel": {
     "message": "表示"
   },
+  "contentFollowingLastSeen": {
+    "message": "最終確認"
+  },
   "contentCommentBoardBlue": {
     "message": "Blue会員"
   }

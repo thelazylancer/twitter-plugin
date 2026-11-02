@@ -249,6 +249,17 @@ describe('panel states', () => {
     expect(contentJs).toContain('while (Date.now() < deadline && followingScanRunning && isOwnFollowingPage()) {');
   });
 
+  it('dates old records instead of guessing who was unfollowed', () => {
+    // A scan only proof-reads the pages X served, so a missing handle is not
+    // evidence of an unfollow. Old rows are dated rather than deleted.
+    expect(contentJs).toContain('const FOLLOWING_RECORD_STALE_MS = 7 * 24 * 60 * 60 * 1000;');
+    expect(contentJs).toContain('Date.now() - entry.seenAt > FOLLOWING_RECORD_STALE_MS');
+    expect(contentJs).toContain("i18n('contentFollowingLastSeen')");
+    expect(contentJs).toContain('class="xvm-fp-seen"');
+    expect(contentJs).toContain("class=\"xvm-fp-row${stale ? ' is-stale' : ''}\"");
+    expect(bridgeJs).toContain("'contentFollowingLastSeen'");
+  });
+
   it('keeps the filter state on the pressed filter for assistive tech', () => {
     expect(contentJs).toContain("btn.setAttribute('aria-pressed', active ? 'true' : 'false');");
   });

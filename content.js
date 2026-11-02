@@ -3827,6 +3827,11 @@ function observeInteractionsFromNotifications() {
 const FOLLOWING_SCAN_PENDING_KEY = 'xvmFollowingScanPending';
 const FOLLOWING_SCAN_MAX_MS = 8 * 60 * 1000;
 const FOLLOWING_SCAN_IDLE_ROUNDS = 6;
+// A record that has not been seen again for a week is surfaced with its last
+// date. Nothing is deleted: a scan only sees the pages X actually served from
+// the current scroll position, so it cannot prove a handle was unfollowed —
+// only that this record is old. The user can judge the rest.
+const FOLLOWING_RECORD_STALE_MS = 7 * 24 * 60 * 60 * 1000;
 
 function isOwnFollowingPage() {
   const me = getLoggedInHandle();
@@ -4150,10 +4155,21 @@ function renderFollowingPanel() {
       ? i18n('contentFollowingFilterYes')
       : state === 'no' ? i18n('contentFollowingFilterNo') : '';
     const name = String(entry.name || '');
-    return `<li class="xvm-fp-row">
+    // Stale records stay in the list; the date is the honest marker. A delete
+    // here would be a guess, and a wrong guess removes a follow the user
+    // still has.
+    const stale = Number.isFinite(entry.seenAt)
+      && entry.seenAt > 0
+      && Date.now() - entry.seenAt > FOLLOWING_RECORD_STALE_MS;
+    const seenAt = stale ? new Date(entry.seenAt) : null;
+    const seenLabel = seenAt
+      ? `${i18n('contentFollowingLastSeen')} ${seenAt.getFullYear()}-${String(seenAt.getMonth() + 1).padStart(2, '0')}-${String(seenAt.getDate()).padStart(2, '0')}`
+      : '';
+    return `<li class="xvm-fp-row${stale ? ' is-stale' : ''}">
       <a class="xvm-fp-link" href="/${encodeURIComponent(handle)}">
         <span class="xvm-fp-handle">@${lbEscapeHtml(handle)}</span>
         ${name ? `<span class="xvm-fp-name" title="${lbEscapeHtml(name)}">${lbEscapeHtml(name)}</span>` : ''}
+        ${seenLabel ? `<span class="xvm-fp-seen">${lbEscapeHtml(seenLabel)}</span>` : ''}
       </a>
       ${stateLabel ? `<span class="xvm-fp-state is-${state}">${lbEscapeHtml(stateLabel)}</span>` : ''}
     </li>`;

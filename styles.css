@@ -3330,6 +3330,18 @@ img.xvm-liv-img {
   font-size: 11px;
   line-height: 1.35;
 }
+.xvm-fp-seen {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fp-muted);
+  font-size: 10px;
+  line-height: 1.3;
+}
+.xvm-fp-row.is-stale .xvm-fp-seen {
+  color: var(--fp-accent);
+}
 .xvm-fp-state {
   justify-self: end;
   margin-right: 8px;

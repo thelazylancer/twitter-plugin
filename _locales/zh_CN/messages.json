@@ -766,6 +766,9 @@
   "contentFollowingCountLabel": {
     "message": "显示"
   },
+  "contentFollowingLastSeen": {
+    "message": "上次见到"
+  },
   "contentCommentBoardBlue": {
     "message": "蓝V会员"
   }

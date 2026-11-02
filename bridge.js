@@ -159,6 +159,7 @@ const CONTENT_MESSAGE_KEYS = [
   'contentFollowingEmpty',
   'contentFollowingEmptyFilter',
   'contentFollowingCountLabel',
+  'contentFollowingLastSeen',
   'contentCommentBoardBlue',
   'contentCommentBoardMutual',
   'contentCommentBoardFollowing',
