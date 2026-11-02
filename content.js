@@ -1777,6 +1777,11 @@ let leaderboardHeight = LB_DEFAULT_HEIGHT;
 // or Japanese row reads identically.
 const XVM_UI_ICONS = {
   flame: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 14c2.6 0 4.3-1.7 4.3-4 0-3-3-4.4-3-7-1.8 1-2.4 2.4-2.4 3.8 0 1 .4 1.6.4 1.6s-1.6-.6-2.1-2.1C3.9 7.4 3.7 8.7 3.7 10c0 2.3 1.7 4 4.3 4z"/></svg>',
+  // Tier marks for the velocity list. Drawn rather than typed so they take
+  // the row's ink and read the same on every platform.
+  trend: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.4 11.6L6.2 7.8l2.3 2.3 4.9-4.9"/><path d="M9.7 5.2h3.7v3.7"/></svg>',
+  sprout: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13.6V6.8"/><path d="M8 9.4C8 7.6 6.7 5.8 4.5 5.8c0 2 1.3 3.4 3.5 3.6z"/><path d="M8 7.6c0-1.8 1.3-3.6 3.5-3.6 0 2-1.3 3.4-3.5 3.6z"/></svg>',
+  eye: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.8 8s2.2-3.6 6.2-3.6S14.2 8 14.2 8s-2.2 3.6-6.2 3.6S1.8 8 1.8 8z"/><circle cx="8" cy="8" r="1.7"/></svg>',
   chat: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.6 10.4a1.6 1.6 0 0 1-1.6 1.6H6.4L3.2 14v-2H3a1.6 1.6 0 0 1-1.6-1.6V4.6A1.6 1.6 0 0 1 3 3h9a1.6 1.6 0 0 1 1.6 1.6z"/></svg>',
   users: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.4 13.2v-1.1a2.6 2.6 0 0 0-2.6-2.6H5.1a2.6 2.6 0 0 0-2.6 2.6v1.1"/><circle cx="6.4" cy="5" r="2.1"/><path d="M13.5 13.2v-1.1a2.6 2.6 0 0 0-1.9-2.5"/><path d="M10.1 3a2.1 2.1 0 0 1 0 4"/></svg>',
   arrow: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.2 8h9.2"/><path d="M9.2 4.8L12.4 8l-3.2 3.2"/></svg>',
@@ -3424,8 +3429,10 @@ const LB_COLUMN_RENDERERS = {
     const tier = t.velocity >= velocityThresholds.viral ? 'red'
       : t.velocity >= velocityThresholds.trending ? 'orange'
         : 'green';
-    const icon = tier === 'red' ? '\u{1F525}' : tier === 'orange' ? '\u{1F680}' : '\u{1F331}';
-    return `<span class="xvm-lb-icon">${icon}</span>`;
+    const icon = tier === 'red' ? XVM_UI_ICONS.flame
+      : tier === 'orange' ? XVM_UI_ICONS.trend
+        : XVM_UI_ICONS.sprout;
+    return `<span class="xvm-lb-icon" aria-hidden="true">${icon}</span>`;
   },
   handle: (t) => {
     const fallbackHandle = `(${i18n('contentFallbackTweetLabel')})`;
@@ -3439,7 +3446,7 @@ const LB_COLUMN_RENDERERS = {
     const text = (t.text || '').replace(/\s+/g, ' ').trim();
     return `<span class="xvm-lb-preview" title="${lbEscapeHtml(text.slice(0, 280))}">${lbEscapeHtml(text)}</span>`;
   },
-  views: (t) => `<span class="xvm-lb-views" title="${i18n('contentLeaderboardTotalViews')}">\u{1F441} ${formatViews(t.views)}</span>`,
+  views: (t) => `<span class="xvm-lb-views" title="${i18n('contentLeaderboardTotalViews')}">${XVM_UI_ICONS.eye} ${formatViews(t.views)}</span>`,
   velocity: (t) => `<span class="xvm-lb-vel">${formatVelocity(t.velocity)}/h</span>`,
 };
 

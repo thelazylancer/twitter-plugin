@@ -742,7 +742,12 @@ html[data-xvm-surface="dark"][data-xvm-badge-style="inline-classic"] .xvm-badge:
   font-size: 11px;
   font-weight: 600;
 }
-.xvm-lb-icon { flex-shrink: 0; }
+.xvm-lb-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+.xvm-lb-icon svg { width: 12px; height: 12px; }
 .xvm-lb-handle {
   /* flex-shrink:0 so the handle is allowed to show in full and it's
      the preview column that gets truncated first when they coexist. */
@@ -778,6 +783,9 @@ html[data-xvm-surface="dark"][data-xvm-badge-style="inline-classic"] .xvm-badge:
 .xvm-lb-green .xvm-lb-vel { color: #177638; }
 .xvm-lb-orange .xvm-lb-vel { color: #a84e20; }
 .xvm-lb-red .xvm-lb-vel { color: #c23c1c; }
+.xvm-lb-green .xvm-lb-icon { color: #177638; }
+.xvm-lb-orange .xvm-lb-icon { color: #a84e20; }
+.xvm-lb-red .xvm-lb-icon { color: #c23c1c; }
 
 .xvm-lb-item-selected {
   background: rgba(191, 90, 42, 0.14);
@@ -2367,6 +2375,9 @@ img.xvm-liv-img {
 .xvm-lb[data-theme="dark"] .xvm-lb-green .xvm-lb-vel { color: #4ade80; }
 .xvm-lb[data-theme="dark"] .xvm-lb-orange .xvm-lb-vel { color: #fb923c; }
 .xvm-lb[data-theme="dark"] .xvm-lb-red .xvm-lb-vel { color: #ff6b4a; }
+.xvm-lb[data-theme="dark"] .xvm-lb-green .xvm-lb-icon { color: #4ade80; }
+.xvm-lb[data-theme="dark"] .xvm-lb-orange .xvm-lb-icon { color: #fb923c; }
+.xvm-lb[data-theme="dark"] .xvm-lb-red .xvm-lb-icon { color: #ff6b4a; }
 
 /* ============================================================
    "仅看热帖" Pro-feature in-page toggle (v1.7.0 #4).
