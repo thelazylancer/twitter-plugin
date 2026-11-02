@@ -513,7 +513,8 @@ describe('people who interacted with your own posts', () => {
     // They never appear in a tweet payload, so the page is the only source —
     // and the cell's own <time> is the timestamp that matters.
     expect(contentJs).toContain("if (window.location.pathname !== '/notifications') return;");
-    expect(contentJs).toContain("const at = Date.parse(stamp?.getAttribute('datetime') || '');");
+    expect(contentJs).toContain("const stampValue = stamp?.getAttribute('datetime') || '';");
+    expect(contentJs).toContain('const at = Date.parse(stampValue);');
     expect(contentJs).toContain("['like', /liked|赞了|いいねしました/i],");
     expect(contentJs).toContain("['repost', /reposted|retweeted|转推了|リポストしました/i],");
   });

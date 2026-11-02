@@ -638,7 +638,7 @@ describe('#69/#72 user self-test polish', () => {
   it('lifts badge ink on X own dark canvas', () => {
     // The popup's theme pref says nothing about the page behind the tweet, so
     // content.js reads the surface it is drawn on instead.
-    expect(contentJs).toContain('function syncPageSurfaceTheme() {');
+    expect(contentJs).toContain('function syncPageSurfaceTheme(force = false) {');
     expect(contentJs).toContain("setAttribute('data-xvm-surface', next)");
     const darkGreen = stylesCss.match(/html\[data-xvm-surface="dark"\]\s+\.xvm-badge--green\s*\{\s*color:\s*(#[0-9a-f]{6})/i)?.[1];
     expect(darkGreen).toBeTruthy();

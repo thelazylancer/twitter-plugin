@@ -1758,6 +1758,9 @@ document.addEventListener('click', (e) => {
 let leaderboardEl = null;
 let leaderboardSettingsEl = null;
 let leaderboardRaf = 0;
+// Last rendered row markup. The tick reruns every two seconds; rebuilding an
+// identical list would throw away text selection and reattach row listeners.
+let leaderboardHtml = '';
 const leaderboardItemMeta = new Map();
 let pendingLeaderboardJump = null;
 const LB_DEFAULT_WIDTH = 280;
@@ -1827,6 +1830,14 @@ function ensureLeaderboard() {
   leaderboardEl.querySelector('.xvm-lb-head').appendChild(controls);
 
   document.body.appendChild(leaderboardEl);
+  // Delegated once: rows are rebuilt as scores change, but the list element
+  // is not, so the handler survives every render.
+  leaderboardEl.querySelector('.xvm-lb-list')?.addEventListener('click', (ev) => {
+    const li = ev.target.closest?.('.xvm-lb-item');
+    if (!li) return;
+    ev.stopPropagation();
+    if (li.dataset.id) jumpToLeaderboardTweet(li.dataset.id, li);
+  });
   applyLeaderboardWidth();
   applyLeaderboardHeight();
   applyLeaderboardPosition();
@@ -1876,7 +1887,13 @@ function applyReleaseNotesTheme(resolved) {
 // plugin theme. Read the page background instead and tag <html> so the badge
 // palette can follow the canvas it is actually drawn on.
 let _pageSurface = '';
-function syncPageSurfaceTheme() {
+let _pageSurfaceCheckedAt = 0;
+function syncPageSurfaceTheme(force = false) {
+  const now = Date.now();
+  // Reading computed styles can invalidate style state. X changes its canvas
+  // rarely, so a five-second floor loses nothing and keeps the tick cheap.
+  if (!force && now - _pageSurfaceCheckedAt < 5000) return;
+  _pageSurfaceCheckedAt = now;
   let bg = '';
   try {
     const bodyBg = getComputedStyle(document.body).backgroundColor;
@@ -3446,6 +3463,7 @@ const LB_COLUMN_RENDERERS = {
 
 let commentBoardEl = null;
 let commentBoardRaf = 0;
+let commentBoardHtml = '';
 const commentBoardItemMeta = new Map();
 // Same footprint as the velocity leaderboard — the two panels stack, so they
 // must read as one column. Aliased rather than duplicated so they cannot drift.
@@ -3807,9 +3825,20 @@ function observeInteractionsFromNotifications() {
   if (!me) return;
   for (const cell of document.querySelectorAll('[data-testid="cellInnerDiv"]')) {
     const stamp = cell.querySelector('time[datetime]');
-    const at = Date.parse(stamp?.getAttribute('datetime') || '');
+    const stampValue = stamp?.getAttribute('datetime') || '';
+    const at = Date.parse(stampValue);
     if (!Number.isFinite(at)) continue;
-    const kind = notificationKindOf(cell.textContent);
+    // cell.textContent serialises the whole notification subtree, which was
+    // the expensive part of this pass on every two-second tick. The cell's own
+    // <time> identifies the notification, so the kind only needs parsing when
+    // that timestamp changes. Actors are still read every pass: X can add
+    // someone to a grouped like without moving the time.
+    let kind = cell.dataset.xvmNotifKind || '';
+    if (cell.dataset.xvmNotifStamp !== stampValue) {
+      kind = notificationKindOf(cell.textContent) || '';
+      cell.dataset.xvmNotifKind = kind;
+      cell.dataset.xvmNotifStamp = stampValue;
+    }
     if (!kind) continue;
     for (const actor of notificationActors(cell)) {
       if (actor.toLowerCase() === me) continue;
@@ -4464,6 +4493,20 @@ function ensureCommentBoard() {
     window.postMessage({ type: 'XVM_COMMENT_BOARD_DISABLE' }, '*');
   });
   document.body.appendChild(el);
+  el.querySelector('.xvm-lb-list')?.addEventListener('click', (ev) => {
+    const li = ev.target.closest?.('.xvm-cb-item');
+    if (!li) return;
+    ev.stopPropagation();
+    const entry = commentBoardItemMeta.get(li.dataset.id);
+    if (!entry) return;
+    // The article may have been virtualized away while the panel stayed put;
+    // fall back to the recorded page offset in that case.
+    if (entry.article?.isConnected) {
+      entry.article.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+      window.scrollTo({ top: entry.pageY - 120, behavior: 'smooth' });
+    }
+  });
   commentBoardEl = el;
   applyCommentBoardSize();
   applyCommentBoardPosition();
@@ -4501,7 +4544,10 @@ function renderCommentBoard() {
     // the two are one stack. A stale persisted edge on a disabled leaderboard
     // must not keep this panel hidden.
     if (!top.length || (leaderboardEnabled && leaderboardHiddenEdge)) {
-      if (list) list.innerHTML = '';
+      if (list && !top.length) {
+        list.innerHTML = '';
+        commentBoardHtml = '';
+      }
       hideCommentBoard();
       return;
     }
@@ -4519,24 +4565,17 @@ function renderCommentBoard() {
     const visibleCols = commentBoardColumns.filter((c) => (
       c.visible && CB_COLUMN_RENDERERS[c.id] && cbColumnApplies(c.id, statusPage)
     ));
-    list.innerHTML = top.map((t, i) => {
+    const html = top.map((t, i) => {
       const cells = visibleCols.map((c) => CB_COLUMN_RENDERERS[c.id](t, i)).join('');
       return `<li class="xvm-lb-item xvm-cb-item" data-id="${lbEscapeHtml(t.id)}">${cells}</li>`;
     }).join('');
-    list.querySelectorAll('.xvm-cb-item').forEach((li) => {
-      li.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        const entry = commentBoardItemMeta.get(li.dataset.id);
-        if (!entry) return;
-        // The article may have been virtualized away while the panel stayed
-        // put; fall back to the recorded page offset in that case.
-        if (entry.article?.isConnected) {
-          entry.article.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        } else {
-          window.scrollTo({ top: entry.pageY - 120, behavior: 'smooth' });
-        }
-      });
-    });
+    // Scores on the status page decay slowly; most two-second passes produce
+    // the same rows. Replacing them anyway would interrupt selection and
+    // reattach listeners for no visible change.
+    if (html !== commentBoardHtml) {
+      commentBoardHtml = html;
+      list.innerHTML = html;
+    }
   });
 }
 
@@ -5348,6 +5387,7 @@ function renderLeaderboard() {
     const list = el.querySelector('.xvm-lb-list');
     if (!top.length) {
       if (list) list.innerHTML = '';
+      leaderboardHtml = '';
       el.style.display = 'none';
       clearLink();
       return;
@@ -5355,24 +5395,23 @@ function renderLeaderboard() {
     el.style.display = 'block';
     if (leaderboardHiddenEdge) positionHiddenLeaderboard(leaderboardHiddenEdge);
     const visibleCols = leaderboardColumns.filter((c) => c.visible && LB_COLUMN_RENDERERS[c.id]);
-    list.innerHTML = top.map((t, i) => {
+    const html = top.map((t, i) => {
       const tier = t.velocity >= velocityThresholds.viral ? 'red'
         : t.velocity >= velocityThresholds.trending ? 'orange'
           : 'green';
       const cells = visibleCols.map((c) => LB_COLUMN_RENDERERS[c.id](t, i)).join('');
       return `<li class="xvm-lb-item xvm-lb-${tier}" data-id="${t.id}">${cells}</li>`;
     }).join('');
-
-    list.querySelectorAll('.xvm-lb-item').forEach((li) => {
-      li.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        const id = li.dataset.id;
-        jumpToLeaderboardTweet(id, li);
-      });
-    });
+    // An unchanged list keeps its nodes, text selection, and the delegated
+    // listener. The tick reruns every two seconds, so most passes land here.
+    const rebuilt = html !== leaderboardHtml;
+    if (rebuilt) {
+      leaderboardHtml = html;
+      list.innerHTML = html;
+    }
 
     // Restore link highlight if the linked item is in the freshly rendered list
-    if (linkState) {
+    if (linkState && rebuilt) {
       const relinkItem = list.querySelector(`.xvm-lb-item[data-id="${CSS.escape(linkState.tweetId)}"]`);
       if (relinkItem) {
         linkState.itemEl = relinkItem;
@@ -5542,7 +5581,7 @@ function getTweetIdFromArticle(article) {
 }
 
 // Periodic re-render for tweets whose data arrived after DOM render
-syncPageSurfaceTheme();
+syncPageSurfaceTheme(true);
 setInterval(() => {
   // First, and on its own: anything above it that throws would otherwise take
   // the scan button down with it.
@@ -5728,15 +5767,36 @@ document.addEventListener('click', (e) => {
   lastShareContext = createShareContextFromArticle(article);
 }, true);
 
+let _loggedInHandle = '';
+let _loggedInHandleAt = 0;
+const LOGGED_IN_HANDLE_TTL_MS = 5000;
+
 function getLoggedInHandle() {
+  // The sidebar link is stable for the whole session, but this is called a
+  // handful of times per tick and by every Following response. A short TTL
+  // collapses those calls without making an account switch stick for long.
+  const now = Date.now();
+  if (_loggedInHandle && now - _loggedInHandleAt < LOGGED_IN_HANDLE_TTL_MS) {
+    return _loggedInHandle;
+  }
   const profile = document.querySelector('a[data-testid="AppTabBar_Profile_Link"]');
   const href = profile?.getAttribute('href') || '';
   const fromHref = href.match(/^\/([A-Za-z0-9_]{1,15})\/?$/)?.[1];
-  if (fromHref) return fromHref.toLowerCase();
+  if (fromHref) {
+    _loggedInHandle = fromHref.toLowerCase();
+    _loggedInHandleAt = now;
+    return _loggedInHandle;
+  }
   const switcher = document.querySelector('[data-testid="SideNav_AccountSwitcher_Button"]');
   const at = (switcher?.textContent || '').match(/@([A-Za-z0-9_]{1,15})/);
-  return at ? at[1].toLowerCase() : '';
+  if (at) {
+    _loggedInHandle = at[1].toLowerCase();
+    _loggedInHandleAt = now;
+    return _loggedInHandle;
+  }
+  return '';
 }
+
 
 function articleHandle(article) {
   if (!article) return '';
@@ -5778,10 +5838,28 @@ function authorReplyInput() {
     knownOwnStatusId = '';
     knownOwnMainText = '';
   }
+  // This runs on a two-second tick on every x.com page. Mapping every article
+  // is only worth it on a status page whose focal post belongs to the user;
+  // everywhere else authorReplyStatusIds would return an empty list anyway.
+  if (!pageStatusId) {
+    return { pageStatusId: '', loggedInHandle: '', knownOwnStatusId, cards: [] };
+  }
+  const me = getLoggedInHandle();
+  if (!me) {
+    return { pageStatusId, loggedInHandle: '', knownOwnStatusId, cards: [] };
+  }
+  if (knownOwnStatusId !== pageStatusId) {
+    const focal = findArticleForCurrentStatus();
+    const focalHandle = articleHandle(focal);
+    const focalIsOwn = !!focal && (focalHandle ? focalHandle === me : articleHasOwnAnalytics(focal));
+    if (!focalIsOwn) {
+      return { pageStatusId, loggedInHandle: me, knownOwnStatusId, cards: [] };
+    }
+  }
   const articles = Array.from(document.querySelectorAll('article[data-testid="tweet"]'));
   const input = {
     pageStatusId,
-    loggedInHandle: getLoggedInHandle(),
+    loggedInHandle: me,
     knownOwnStatusId,
     cards: articles.map((article) => {
       const statusId = articleOwnStatusId(article);
