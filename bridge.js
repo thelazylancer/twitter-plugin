@@ -147,6 +147,18 @@ const CONTENT_MESSAGE_KEYS = [
   'contentCommentBoardRepliedYou',
   'contentCommentBoardLikedYou',
   'contentCommentBoardRepostedYou',
+  'contentFollowingTitle',
+  'contentFollowingScan',
+  'contentFollowingPause',
+  'contentFollowingResume',
+  'contentFollowingStop',
+  'contentFollowingSearch',
+  'contentFollowingFilterAll',
+  'contentFollowingFilterNo',
+  'contentFollowingFilterYes',
+  'contentFollowingEmpty',
+  'contentFollowingEmptyFilter',
+  'contentFollowingCountLabel',
   'contentCommentBoardBlue',
   'contentCommentBoardMutual',
   'contentCommentBoardFollowing',
@@ -247,6 +259,7 @@ const CONTENT_MESSAGE_KEYS = [
   'contentUpdateItemFilterRulesTitle',
   'contentUpdateItemFilterRulesBody',
   'contentUpdateDismiss',
+  'contentClose',
   'contentBookmarkMenuInFolder',
   'contentBookmarkMenuNotInAny',
   'contentBookmarkMenuCheckFailed',
@@ -357,6 +370,9 @@ const BOOKMARK_TIMELINE_MAX_ENTRIES_PER_FOLDER = 120;
 // exists so a bug in the TTL cannot turn a three-day signal into unbounded
 // storage.
 const INTERACTIONS_MAX_ENTRIES = 2000;
+// X caps following at 10,000, so this never bites in practice. It exists so a
+// runaway writer cannot fill the 10 MB local quota.
+const FOLLOWING_MAX_ENTRIES = 20000;
 
 function newestInteractionAt(entry) {
   let newest = 0;
@@ -1495,6 +1511,30 @@ window.addEventListener('message', (event) => {
       chrome.storage.local.set({ xvmInteractions: Object.fromEntries(entries) }, () => {
         chrome.storage.local.remove('xvmRecentRepliers');
       });
+    });
+    return;
+  }
+
+  // The Following index is a plain snapshot written from the page; the content
+  // script owns the shape and the pruning, so this side only stores it.
+  if (type === 'XVM_FOLLOWING_REQUEST') {
+    safeChromeCall(() => {
+      chrome.storage.local.get({ xvmFollowingIndex: null }, (items) => {
+        if (items.xvmFollowingIndex) {
+          window.postMessage({ type: 'XVM_FOLLOWING_LOAD', following: items.xvmFollowingIndex }, '*');
+        }
+      });
+    });
+    return;
+  }
+
+  if (type === 'XVM_FOLLOWING_SAVE' && event.data.following) {
+    const entries = Object.entries(event.data.following)
+      .filter(([, entry]) => entry && typeof entry === 'object')
+      .sort((a, b) => (Number(b[1].seenAt) || 0) - (Number(a[1].seenAt) || 0))
+      .slice(0, FOLLOWING_MAX_ENTRIES);
+    safeChromeCall(() => {
+      chrome.storage.local.set({ xvmFollowingIndex: Object.fromEntries(entries) });
     });
     return;
   }

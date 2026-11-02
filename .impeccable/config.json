@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "cream-palette",
+        "value": "*",
+        "files": [
+          "popup.html"
+        ],
+        "createdAt": "2026-11-02T06:54:16.422Z",
+        "reason": "Paper/ink surface is the product's deliberate visual world, requested for this fork."
+      }
+    ]
+  }
+}

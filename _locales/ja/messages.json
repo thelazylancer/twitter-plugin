@@ -563,6 +563,7 @@
   "contentUpdateItemFilterRulesTitle": { "message": "コンテンツフィルターを安定化" },
   "contentUpdateItemFilterRulesBody": { "message": "通常の Telegram 言及の誤判定を減らしつつ、返信やプロフィール文にある WeChat / Telegram 誘導広告パターンをより多く検出できるようになりました。" },
   "contentUpdateDismiss": { "message": "了解" },
+  "contentClose": { "message": "閉じる" },
   "cfTitle":        { "message": "コンテンツフィルター" },
   "cfLockedHint":   { "message": "コンテンツフィルターは無料で使えます。ここで有効化できます。" },
   "cfEnabled":      { "message": "成人向け / 広告 / 誘導返信を隠す" },
@@ -723,6 +724,42 @@
   },
   "contentCommentBoardRepostedYou": {
     "message": "あなたのポストをリポストしたばかり"
+  },
+  "contentFollowingTitle": {
+    "message": "フォローリスト"
+  },
+  "contentFollowingScan": {
+    "message": "スキャン"
+  },
+  "contentFollowingPause": {
+    "message": "一時停止"
+  },
+  "contentFollowingResume": {
+    "message": "再開"
+  },
+  "contentFollowingStop": {
+    "message": "停止"
+  },
+  "contentFollowingSearch": {
+    "message": "ユーザー名を検索"
+  },
+  "contentFollowingFilterAll": {
+    "message": "すべて"
+  },
+  "contentFollowingFilterNo": {
+    "message": "フォロバなし"
+  },
+  "contentFollowingFilterYes": {
+    "message": "フォロバあり"
+  },
+  "contentFollowingEmpty": {
+    "message": "まだ記録がありません。フォロー中ページで「スキャン」を押してください。"
+  },
+  "contentFollowingEmptyFilter": {
+    "message": "条件に合うアカウントはありません"
+  },
+  "contentFollowingCountLabel": {
+    "message": "表示"
   },
   "contentCommentBoardBlue": {
     "message": "Blue会員"

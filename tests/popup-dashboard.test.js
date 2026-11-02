@@ -76,7 +76,7 @@ describe('#45 popup tabs structure (mock A)', () => {
   });
 
   it('Pro tab includes inline activate form + Coming-soon M2 list', () => {
-    const pro = html.match(/data-tab-panel="pro"[\s\S]*?(?=role="tabpanel"|<\/section>\s*$)/)?.[0] || '';
+    const pro = html.match(/<section[^>]*id="tabpanel-pro"[\s\S]*?(?=<\/section>)/)?.[0] || '';
     expect(/id="activate-inline"/.test(pro)).toBe(true);
     expect(/class="coming-list"/.test(pro)).toBe(true);
     // 3 stubs: color-card, webhook, bark
@@ -228,10 +228,10 @@ describe('#45 popup tabs structure (mock A)', () => {
     expect(/id="grok-prompt"/.test(ai)).toBe(true);
   });
 
-  it('About footer links to the project and maintainer X profile', () => {
+  it('About footer links to this fork, not the upstream project', () => {
     const about = html.match(/data-tab-panel="about"[\s\S]*?(?=<\/div>\s*<div id="xvm-toast")/)?.[0] || '';
-    expect(/https:\/\/github\.com\/Icy-Cat\/x-viral-monitor/.test(about)).toBe(true);
-    expect(/https:\/\/x\.com\/intent\/follow\?screen_name=icycat/.test(about)).toBe(true);
+    expect(/https:\/\/github\.com\/thelazylancer\/twitter-plugin/.test(about)).toBe(true);
+    expect(/Icy-Cat|x-viral-monitor|screen_name=icycat/.test(about)).toBe(false);
   });
 
   it('keeps all legacy IDs popup.js / popup-rate-filter.js / popup-pro.js depend on', () => {
@@ -359,6 +359,15 @@ describe('#45 popup-dashboard.js tab router', () => {
   it('exposes setTab function + TABS whitelist', () => {
     expect(/function\s+setTab\s*\(/.test(dashJs)).toBe(true);
     expect(/TABS\s*=\s*\[\s*['"]pro['"]\s*,\s*['"]filter['"]\s*,\s*['"]leaderboard['"]\s*,\s*['"]ai['"]\s*,\s*['"]marks['"]\s*,\s*['"]about['"]\s*\]/.test(dashJs)).toBe(true);
+  });
+  it('drops the Pro tab in community builds, where every Pro feature is already on', () => {
+    expect(dashJs).toContain("globalThis.__xvmIsCommunityDevBuild === true ? ['pro'] : []");
+    expect(/return\s+TABS\.includes\(name\)\s*&&\s*!HIDDEN_TABS\.has\(name\)/.test(dashJs)).toBe(true);
+    // setTab must fall back rather than paint an empty panel for a hidden tab.
+    expect(/if\s*\(!isValidTab\(name\)\)\s*name\s*=\s*['"]ai['"]/.test(dashJs)).toBe(true);
+    expect(/function\s+applyBuildChannel\(\)/.test(dashJs)).toBe(true);
+    expect(/body\[data-build-channel="community-dev"\]\s+\.tab-btn\[data-tab="pro"\]/.test(html)).toBe(true);
+    expect(/body\[data-build-channel="community-dev"\]\s+#tabpanel-pro/.test(html)).toBe(true);
   });
   it('wires aria-selected updates on tab click', () => {
     expect(/aria-selected/.test(dashJs)).toBe(true);
@@ -522,10 +531,11 @@ describe('#69/#72 user self-test polish', () => {
   });
 
   it('gives the Short/Long rate-filter sub-tabs a visible selected + keyboard focus state', () => {
-    expect(/\.rf-subcard\s+\.sub-tab-btn\[aria-selected="true"\]\s*\{[\s\S]*?background:\s*var\(--accent\)\s*!important/.test(html)).toBe(true);
-    expect(/\.rf-subcard\s+\.sub-tab-btn\[aria-selected="true"\]\s*\{[\s\S]*?color:\s*#0b1120\s*!important/.test(html)).toBe(true);
-    expect(/\.rf-subcard\s+\.sub-tab-btn:hover\s*\{[\s\S]*?background:\s*var\(--surface\)\s*!important/.test(html)).toBe(true);
-    expect(/\.rf-subcard\s+\.sub-tab-btn:focus-visible\s*\{[\s\S]*?outline:\s*2px\s+solid\s+var\(--accent\)/.test(html)).toBe(true);
+    // Selected segment lifts out of the track instead of flooding it with the
+    // accent, matching the in-page segmented controls.
+    expect(/\.sub-tab-btn\[aria-selected="true"\]\s*\{[^}]*background:\s*var\(--surface\)/.test(html)).toBe(true);
+    expect(/\.sub-tab-btn\[aria-selected="true"\]\s*\{[^}]*color:\s*var\(--text\)/.test(html)).toBe(true);
+    expect(/button:focus-visible,\s*a:focus-visible,\s*summary:focus-visible\s*\{[^}]*outline:\s*2px\s+solid\s+var\(--accent\)/.test(html)).toBe(true);
   });
 
   it('renders the leaderboard Hot only switch with shared state sync hooks', () => {
@@ -623,6 +633,16 @@ describe('#69/#72 user self-test polish', () => {
   it('keeps the compact green velocity badge at accessible contrast', () => {
     const greenBadge = stylesCss.match(/\.xvm-badge--green\s*\{\s*color:\s*(#[0-9a-f]{6})/i)?.[1];
     expect(contrastRatio(greenBadge, '#c5e8d2')).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('lifts badge ink on X own dark canvas', () => {
+    // The popup's theme pref says nothing about the page behind the tweet, so
+    // content.js reads the surface it is drawn on instead.
+    expect(contentJs).toContain('function syncPageSurfaceTheme() {');
+    expect(contentJs).toContain("setAttribute('data-xvm-surface', next)");
+    const darkGreen = stylesCss.match(/html\[data-xvm-surface="dark"\]\s+\.xvm-badge--green\s*\{\s*color:\s*(#[0-9a-f]{6})/i)?.[1];
+    expect(darkGreen).toBeTruthy();
+    expect(contrastRatio(darkGreen, '#062311')).toBeGreaterThanOrEqual(4.5);
   });
 
   it('keeps the floating leaderboard list at the configured height when few tweets remain', () => {
@@ -783,12 +803,15 @@ describe('#45 i18n lock-step (content.js i18n() ↔ bridge CONTENT_MESSAGE_KEYS 
     expect(packageLock.packages?.['']?.version).toBe(manifest.version);
   });
 
-  it('renders the popup footer version from the extension manifest', () => {
+  it('renders the popup header and footer version from the extension manifest', () => {
     expect(html).toMatch(/id="popup-version"><\/span>/);
+    expect(html).toMatch(/id="popup-version-header"><\/span>/);
+    // The header used to carry a hand-written number that drifted on release.
+    expect(html).not.toMatch(/class="ver">\d/);
     expect(dashJs).toMatch(/function\s+currentExtensionVersion\(\)/);
     expect(dashJs).toMatch(/chrome\.runtime\.getManifest\(\)\.version/);
     expect(dashJs).toMatch(/function\s+renderPopupVersion\(\)/);
-    expect(dashJs).toMatch(/getElementById\(['"]popup-version['"]\)/);
+    expect(dashJs).toMatch(/querySelectorAll\(['"]#popup-version, #popup-version-header['"]\)/);
   });
 });
 

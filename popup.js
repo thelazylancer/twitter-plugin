@@ -799,7 +799,7 @@ function renderGrokTemplateEditor() {
     if (grokTemplatesState.length > 1) {
       const del = document.createElement('span');
       del.className = 'tpl-chip-del';
-      del.textContent = '×';
+      del.innerHTML = '<svg viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>';
       del.title = tr('btnDelete');
       del.addEventListener('click', (ev) => {
         ev.stopPropagation();
@@ -937,7 +937,7 @@ function renderColList() {
     li.dataset.idx = String(idx);
     li.dataset.id = col.id;
     li.innerHTML = `
-      <span class="col-grip">⋮⋮</span>
+      <span class="col-grip" aria-hidden="true"><svg viewBox="0 0 8 12" fill="currentColor"><circle cx="2" cy="2" r="1"/><circle cx="6" cy="2" r="1"/><circle cx="2" cy="6" r="1"/><circle cx="6" cy="6" r="1"/><circle cx="2" cy="10" r="1"/><circle cx="6" cy="10" r="1"/></svg></span>
       <input type="checkbox" ${col.visible ? 'checked' : ''}>
       <span class="col-name">${COLUMN_LABEL_KEYS[col.id] ? tr(COLUMN_LABEL_KEYS[col.id]) : col.id}</span>
     `;

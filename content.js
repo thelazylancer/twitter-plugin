@@ -32,6 +32,21 @@ const authorRelationByHandle = new Map();
 // would let either keep the other alive.
 const recentInteractions = new Map();
 let interactionsSaveTimer = 0;
+// handle -> { name, followsMe, seenAt } for accounts that appeared on my own
+// Following timeline. Same reason for living up here: the Following response
+// hook can fire while the script is still executing.
+const followingIndex = new Map();
+let followingSaveTimer = 0;
+let followingPanelEl = null;
+let followingLauncherEl = null;
+let followingOpen = false;
+let followingAutoOpenedPath = '';
+let followingScanRunning = false;
+let followingScanPaused = false;
+let followingDirty = true;
+let followingFilter = 'no';
+let followingQuery = '';
+let followingRenderTimer = 0;
 
 // === i18n ===
 let localizedStrings = {};
@@ -70,7 +85,7 @@ function applyAiLocalizedUi() {
     refreshBtn.setAttribute('aria-label', i18n('contentAiRefreshAria'));
   }
   const closeBtn = panel?.querySelector('.xvm-grok-close');
-  if (closeBtn) closeBtn.setAttribute('aria-label', i18n('contentAiClose'));
+  if (closeBtn) closeBtn.setAttribute('aria-label', i18n('contentClose'));
 }
 
 function applyLocalizedUi() {
@@ -82,7 +97,7 @@ function applyLocalizedUi() {
   const settings = leaderboardEl.querySelector('.xvm-lb-settings');
   const close = leaderboardEl.querySelector('.xvm-lb-close');
   if (head) head.title = i18n('contentLeaderboardDragToMove');
-  if (title) title.textContent = `🔥 ${i18n('contentLeaderboardTitle')}`;
+  if (title) title.innerHTML = `${XVM_UI_ICONS.flame} ${lbEscapeHtml(i18n('contentLeaderboardTitle'))}`;
   if (back) {
     back.title = i18n('contentLeaderboardBackToPrevious');
     back.setAttribute('aria-label', i18n('contentLeaderboardBackToPrevious'));
@@ -657,6 +672,17 @@ window.__xvmNet?.onResponse(GRAPHQL_RE, async ({ url, response, source }) => {
     try { scanForTweets(response.json()); } catch (_) {}
   }
 });
+// The Following timeline is its own GraphQL operation. scanForTweets walks the
+// same payload, but it cannot tell a follow list from any other user list — so
+// this hook is what tags an entry as "someone I follow" rather than "someone I
+// happened to see". No extra request: this is X's own pagination.
+window.__xvmNet?.onResponse(/\/(?:i\/api\/)?graphql\/[^/]+\/Following(?:\?|$)/, async ({ response, source }) => {
+  try {
+    const json = source === 'fetch' ? await response.clone().json() : response.json();
+    captureFollowingUsers(json);
+  } catch (_) {}
+});
+
 // Ad prune + bookmark inject are separate patch subscribers. Match ONLY the
 // timeline ops they need so other GraphQL (BookmarkFoldersSlice, Viewer, …)
 // never enters response.clone().json() rewrite — MAIN-world callers like
@@ -1743,15 +1769,34 @@ const LB_MAX_HEIGHT = 800;
 let leaderboardWidth = LB_DEFAULT_WIDTH;
 let leaderboardHeight = LB_DEFAULT_HEIGHT;
 
+// Shared inline marks for the compact panels. Drawn rather than typed so they
+// take the row's colour and the same optical size, and so a Chinese, English
+// or Japanese row reads identically.
+const XVM_UI_ICONS = {
+  flame: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 14c2.6 0 4.3-1.7 4.3-4 0-3-3-4.4-3-7-1.8 1-2.4 2.4-2.4 3.8 0 1 .4 1.6.4 1.6s-1.6-.6-2.1-2.1C3.9 7.4 3.7 8.7 3.7 10c0 2.3 1.7 4 4.3 4z"/></svg>',
+  chat: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.6 10.4a1.6 1.6 0 0 1-1.6 1.6H6.4L3.2 14v-2H3a1.6 1.6 0 0 1-1.6-1.6V4.6A1.6 1.6 0 0 1 3 3h9a1.6 1.6 0 0 1 1.6 1.6z"/></svg>',
+  users: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.4 13.2v-1.1a2.6 2.6 0 0 0-2.6-2.6H5.1a2.6 2.6 0 0 0-2.6 2.6v1.1"/><circle cx="6.4" cy="5" r="2.1"/><path d="M13.5 13.2v-1.1a2.6 2.6 0 0 0-1.9-2.5"/><path d="M10.1 3a2.1 2.1 0 0 1 0 4"/></svg>',
+  arrow: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.2 8h9.2"/><path d="M9.2 4.8L12.4 8l-3.2 3.2"/></svg>',
+  check: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.4 8.6l3.1 3 6.1-6.3"/></svg>',
+  reply: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.6 3.4L3 7l3.6 3.6"/><path d="M3 7h5.9a4.1 4.1 0 0 1 4.1 4.1v1"/></svg>',
+  like: '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 13.3l-.7-.6C4 10 2 8.2 2 5.9A3 3 0 0 1 8 4.6a3 3 0 0 1 6 1.3c0 2.3-2 4.1-5.3 6.8z"/></svg>',
+  repost: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.2 6.4V6a2 2 0 0 1 2-2h7"/><path d="M10 2l2.4 2L10 6"/><path d="M12.8 9.6V10a2 2 0 0 1-2 2h-7"/><path d="M6 10l-2.4 2L6 14"/></svg>',
+  grip: '<svg viewBox="0 0 8 12" fill="currentColor" aria-hidden="true"><circle cx="2" cy="2" r="1"/><circle cx="6" cy="2" r="1"/><circle cx="2" cy="6" r="1"/><circle cx="6" cy="6" r="1"/><circle cx="2" cy="10" r="1"/><circle cx="6" cy="10" r="1"/></svg>',
+  chevron: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5"/></svg>',
+  chevronDown: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6L8 10.5 12.5 6"/></svg>',
+  close: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>',
+  spark: '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 2.2l1.25 4.05L13.3 7.5l-4.05 1.25L8 12.8l-1.25-4.05L2.7 7.5l4.05-1.25z"/></svg>',
+};
+
 function ensureLeaderboard() {
   if (leaderboardEl) return leaderboardEl;
   leaderboardEl = document.createElement('div');
   leaderboardEl.className = 'xvm-lb';
   leaderboardEl.innerHTML = `
     <div class="xvm-lb-head" title="${i18n('contentLeaderboardDragToMove')}">
-      <span class="xvm-lb-grip">⋮⋮</span>
-      <button class="xvm-lb-edge-toggle" type="button" title="${i18nOr('contentLeaderboardEdgeHide', '贴边隐藏')}" aria-label="${i18nOr('contentLeaderboardEdgeHide', '贴边隐藏')}">›</button>
-      <span class="xvm-lb-title">🔥 ${i18n('contentLeaderboardTitle')}</span>
+      <span class="xvm-lb-grip" aria-hidden="true">${XVM_UI_ICONS.grip}</span>
+      <button class="xvm-lb-edge-toggle" type="button" title="${i18nOr('contentLeaderboardEdgeHide', '贴边隐藏')}" aria-label="${i18nOr('contentLeaderboardEdgeHide', '贴边隐藏')}">${XVM_UI_ICONS.chevron}</button>
+      <span class="xvm-lb-title">${XVM_UI_ICONS.flame} ${i18n('contentLeaderboardTitle')}</span>
       <button class="xvm-lb-back" type="button" title="${i18n('contentLeaderboardBackToPrevious')}" aria-label="${i18n('contentLeaderboardBackToPrevious')}" hidden>
         <svg viewBox="0 0 20 20" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 16 L12.5 16 Q16 16 16 12.5 L16 8.5 Q16 5 12.5 5 L5 5"></path>
@@ -1809,6 +1854,8 @@ function applyLeaderboardTheme(resolved) {
   const r = resolved || _resolvedTheme(_themePref);
   if (leaderboardEl) leaderboardEl.setAttribute('data-theme', r);
   if (commentBoardEl) commentBoardEl.setAttribute('data-theme', r);
+  if (followingPanelEl) followingPanelEl.setAttribute('data-theme', r);
+  if (followingLauncherEl) followingLauncherEl.setAttribute('data-theme', r);
   if (leaderboardSettingsEl) leaderboardSettingsEl.setAttribute('data-theme', r);
   applyReleaseNotesTheme(r);
 }
@@ -1823,6 +1870,27 @@ function _resolvedTheme(pref) {
 function applyReleaseNotesTheme(resolved) {
   const r = resolved || _resolvedTheme(_themePref);
   document.querySelectorAll('.xvm-update-backdrop').forEach((el) => el.setAttribute('data-theme', r));
+}
+
+// X's canvas is chosen in X, not in this popup, so badges cannot inherit the
+// plugin theme. Read the page background instead and tag <html> so the badge
+// palette can follow the canvas it is actually drawn on.
+let _pageSurface = '';
+function syncPageSurfaceTheme() {
+  let bg = '';
+  try {
+    const bodyBg = getComputedStyle(document.body).backgroundColor;
+    bg = bodyBg && !/rgba?\([^)]*,\s*0\s*\)/.test(bodyBg)
+      ? bodyBg
+      : getComputedStyle(document.documentElement).backgroundColor;
+  } catch (_) { return; }
+  const m = /rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(bg || '');
+  const next = m && (Number(m[1]) * 299 + Number(m[2]) * 587 + Number(m[3]) * 114) / 1000 < 128
+    ? 'dark'
+    : 'light';
+  if (next === _pageSurface) return;
+  _pageSurface = next;
+  document.documentElement.setAttribute('data-xvm-surface', next);
 }
 function installLeaderboardThemeSync() {
   if (_themeSyncInstalled) return;
@@ -2174,7 +2242,7 @@ function showBookmarkTimelineSettings() {
   backdrop.className = 'xvm-bti-backdrop';
   backdrop.innerHTML = `
     <div class="xvm-bti-dialog" role="dialog" aria-modal="true" aria-label="书签穿插设置">
-      <button class="xvm-bti-close" type="button" aria-label="关闭">×</button>
+      <button class="xvm-bti-close" type="button" aria-label="${i18n('contentClose')}">${XVM_UI_ICONS.close}</button>
       <h2>书签穿插</h2>
       <p class="xvm-bti-sub">把选中文件夹里的书签帖穿插到首页时间线里。</p>
       <label class="xvm-bti-row">
@@ -2405,8 +2473,8 @@ function showLeaderboardUpgradeBubble() {
   const bubble = document.createElement('div');
   bubble.className = 'xvm-lb-upgrade';
   bubble.innerHTML = `
-    <button class="xvm-lb-upgrade-close" type="button" aria-label="Close">×</button>
-    <div class="xvm-lb-upgrade-title">✨ <span></span></div>
+    <button class="xvm-lb-upgrade-close" type="button" aria-label="${i18n('contentClose')}">${XVM_UI_ICONS.close}</button>
+    <div class="xvm-lb-upgrade-title">${XVM_UI_ICONS.spark} <span></span></div>
     <div class="xvm-lb-upgrade-sub"></div>
     <div class="xvm-lb-upgrade-actions">
       <a class="xvm-lb-upgrade-link" target="_blank" rel="noopener"></a>
@@ -2825,12 +2893,16 @@ window.addEventListener('message', (event) => {
   if (event.data?.type === 'XVM_INTERACTIONS_LOAD' && event.data.interactions) {
     hydrateRecentInteractions(event.data.interactions);
   }
+  if (event.data?.type === 'XVM_FOLLOWING_LOAD' && event.data.following) {
+    hydrateFollowingIndex(event.data.following);
+  }
 });
 window.postMessage({ type: 'XVM_LB_POS_REQUEST' }, '*');
 window.postMessage({ type: 'XVM_LB_HEIGHT_REQUEST' }, '*');
 window.postMessage({ type: 'XVM_LB_SIZE_REQUEST' }, '*');
 window.postMessage({ type: 'XVM_CB_STATE_REQUEST' }, '*');
 window.postMessage({ type: 'XVM_INTERACTIONS_REQUEST' }, '*');
+window.postMessage({ type: 'XVM_FOLLOWING_REQUEST' }, '*');
 
 function installLeaderboardDrag() {
   if (!leaderboardEl) return;
@@ -3428,10 +3500,9 @@ const CB_REPLIER_TTL_MS = 2 * 60 * 60 * 1000;
 // person noticed me" — and that question still has a useful answer days later.
 const CB_INTERACTION_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 const CB_INTERACTION_KINDS = ['reply', 'like', 'repost'];
-// Glyphs and the i18n key each one borrows. The key is stored, not resolved:
+// The i18n key each marker borrows. The key is stored, not resolved:
 // localizedStrings lands after this const, so resolving here would freeze the
 // raw key into the renderer.
-const CB_INTERACTION_MARKS = { reply: '↩', like: '♥', repost: '⟳' };
 const CB_INTERACTION_LABELS = {
   reply: 'contentCommentBoardRepliedYou',
   like: 'contentCommentBoardLikedYou',
@@ -3747,6 +3818,430 @@ function observeInteractionsFromNotifications() {
   }
 }
 
+// ── Following list ─────────────────────────────────────────────────────────
+// The list of accounts I follow that do not follow back. Built from X's own
+// Following pagination rather than a direct GraphQL call: the page already
+// requests each page as it scrolls, so capturing those responses costs no
+// request the user would not have made anyway, and no query id has to be
+// tracked across X's releases.
+const FOLLOWING_SCAN_PENDING_KEY = 'xvmFollowingScanPending';
+const FOLLOWING_SCAN_MAX_MS = 8 * 60 * 1000;
+const FOLLOWING_SCAN_IDLE_ROUNDS = 6;
+
+function isOwnFollowingPage() {
+  const me = getLoggedInHandle();
+  if (!me) return false;
+  const m = /^\/([^/]+)\/following\/?$/.exec(window.location.pathname);
+  return !!m && m[1].toLowerCase() === me;
+}
+
+function isOwnProfilePage() {
+  const me = getLoggedInHandle();
+  return !!me && window.location.pathname.toLowerCase().replace(/\/+$/, '') === `/${me}`;
+}
+
+function captureFollowingUsers(json) {
+  // The hook is global, so without this a visit to someone else's Following
+  // list would file their follows as mine.
+  if (!isOwnFollowingPage()) return;
+  const me = getLoggedInHandle();
+  let changed = 0;
+  const walk = (obj) => {
+    if (!obj || typeof obj !== 'object') return;
+    const user = obj.user_results?.result || obj.userResult?.result;
+    if (user && typeof user === 'object') {
+      const relation = readAuthorRelation(user);
+      const handle = relation?.screenName;
+      // The viewer can appear in the module; they are not someone they follow.
+      if (handle && handle !== me) {
+        const prev = followingIndex.get(handle);
+        const followsMe = relation.followedBy === null
+          ? (prev?.followsMe ?? null)   // a later page may omit the field
+          : relation.followedBy;
+        const name = String(user.legacy?.name || user.core?.name || prev?.name || '');
+        if (!prev || prev.followsMe !== followsMe || prev.name !== name) changed += 1;
+        followingIndex.set(handle, { name, followsMe, seenAt: Date.now() });
+      }
+      return; // a user result carries nothing else worth walking
+    }
+    if (Array.isArray(obj)) {
+      for (const item of obj) walk(item);
+      return;
+    }
+    for (const key of Object.keys(obj)) {
+      const val = obj[key];
+      // Only rows that are actually followed accounts. X mixes "who to follow"
+      // modules and cursors into the same instruction list, and walking those
+      // would add people the user does not follow.
+      if (key === 'entries' && Array.isArray(val)) {
+        for (const entry of val) {
+          if (typeof entry?.entryId === 'string' && entry.entryId.startsWith('user-')) walk(entry);
+        }
+        continue;
+      }
+      if (val && typeof val === 'object') walk(val);
+    }
+  };
+  walk(json);
+  if (changed) markFollowingDirty();
+}
+
+function flushFollowingIndex() {
+  if (followingSaveTimer) {
+    clearTimeout(followingSaveTimer);
+    followingSaveTimer = 0;
+  }
+  if (!followingIndex.size) return;
+  window.postMessage({
+    type: 'XVM_FOLLOWING_SAVE',
+    following: Object.fromEntries(followingIndex),
+  }, '*');
+}
+
+function scheduleFollowingSave() {
+  if (followingSaveTimer) return;
+  followingSaveTimer = setTimeout(flushFollowingIndex, 5000);
+}
+
+window.addEventListener('pagehide', () => {
+  if (followingSaveTimer) flushFollowingIndex();
+});
+
+function hydrateFollowingIndex(raw) {
+  let changed = 0;
+  for (const [handle, entry] of Object.entries(raw || {})) {
+    const key = String(handle || '').toLowerCase();
+    if (!key || !entry || typeof entry !== 'object') continue;
+    followingIndex.set(key, {
+      name: String(entry.name || ''),
+      followsMe: entry.followsMe === true || entry.followsMe === false ? entry.followsMe : null,
+      seenAt: Number.isFinite(entry.seenAt) ? entry.seenAt : 0,
+    });
+    changed += 1;
+  }
+  if (changed) markFollowingDirty();
+}
+
+function markFollowingDirty() {
+  followingDirty = true;
+  scheduleFollowingSave();
+  if (followingRenderTimer) return;
+  // setTimeout rather than rAF: a scan can finish while the tab is in the
+  // background, where rAF never fires and the panel would stay stale.
+  followingRenderTimer = setTimeout(() => {
+    followingRenderTimer = 0;
+    renderFollowingPanel();
+  }, 200);
+}
+
+function followingRows() {
+  const q = followingQuery.trim().toLowerCase();
+  const rows = [];
+  for (const [handle, entry] of followingIndex) {
+    if (followingFilter === 'no' && entry.followsMe !== false) continue;
+    if (followingFilter === 'yes' && entry.followsMe !== true) continue;
+    if (q && !handle.includes(q) && !String(entry.name || '').toLowerCase().includes(q)) continue;
+    rows.push([handle, entry]);
+  }
+  return rows.sort((a, b) => a[0].localeCompare(b[0]));
+}
+
+function ensureFollowingPanel() {
+  if (followingPanelEl) return followingPanelEl;
+  const el = document.createElement('div');
+  el.className = 'xvm-lb xvm-fp';
+  el.id = 'xvm-fp-panel';
+  el.setAttribute('role', 'region');
+  el.setAttribute('aria-label', i18n('contentFollowingTitle'));
+  el.innerHTML = `
+    <div class="xvm-lb-head">
+      <span class="xvm-lb-title">${i18n('contentFollowingTitle')}</span>
+      <div class="xvm-lb-controls">
+        <button class="xvm-fp-scan" type="button">
+          <svg class="xvm-fp-scan-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M13.4 8A5.4 5.4 0 1 1 8 2.6a5.4 5.4 0 0 1 4.2 2"/>
+            <path d="M13.4 2.6v3.2h-3.2"/>
+          </svg>
+          <span class="xvm-fp-scan-label"></span>
+        </button>
+        <button class="xvm-lb-action xvm-fp-close" type="button" title="${i18n('contentCommentBoardClose')}" aria-label="${i18n('contentCommentBoardClose')}">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+            <path d="M4.6 4.6l6.8 6.8M11.4 4.6l-6.8 6.8"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="xvm-fp-tools">
+      <div class="xvm-fp-searchbox">
+        <svg class="xvm-fp-search-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+          <circle cx="7" cy="7" r="4.2"/>
+          <path d="M10.2 10.2l3.3 3.3"/>
+        </svg>
+        <input class="xvm-fp-search" type="search" placeholder="${i18n('contentFollowingSearch')}" aria-label="${i18n('contentFollowingSearch')}">
+      </div>
+      <div class="xvm-fp-filters" role="group">
+        <button type="button" class="xvm-fp-filter" data-filter="all">${i18n('contentFollowingFilterAll')}</button>
+        <button type="button" class="xvm-fp-filter" data-filter="no">${i18n('contentFollowingFilterNo')}</button>
+        <button type="button" class="xvm-fp-filter" data-filter="yes">${i18n('contentFollowingFilterYes')}</button>
+      </div>
+    </div>
+    <ul class="xvm-lb-list xvm-fp-list"></ul>
+    <div class="xvm-fp-foot">
+      <span class="xvm-fp-count"></span>
+      <button class="xvm-fp-stop" type="button" hidden></button>
+    </div>
+  `;
+  el.querySelector('.xvm-fp-scan')?.addEventListener('click', () => startFollowingScan());
+  el.querySelector('.xvm-fp-stop')?.addEventListener('click', () => stopFollowingScan());
+  el.querySelector('.xvm-fp-close')?.addEventListener('click', () => {
+    // Closing the panel must not leave the page scrolling by itself; keep the
+    // scan (and its eight-minute budget) so reopening can resume it.
+    if (followingScanRunning) followingScanPaused = true;
+    followingOpen = false;
+    hideFollowingPanel();
+  });
+  el.querySelector('.xvm-fp-search')?.addEventListener('input', (e) => {
+    followingQuery = String(e.target.value || '');
+    followingDirty = true;
+    renderFollowingPanel();
+  });
+  el.querySelectorAll('.xvm-fp-filter').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      followingFilter = btn.dataset.filter || 'all';
+      followingDirty = true;
+      renderFollowingPanel();
+    });
+  });
+  document.body.appendChild(el);
+  followingPanelEl = el;
+  return el;
+}
+
+function ensureFollowingLauncher() {
+  if (followingLauncherEl) return followingLauncherEl;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'xvm-fp-launcher';
+  btn.setAttribute('aria-controls', 'xvm-fp-panel');
+  btn.innerHTML = `
+    <svg class="xvm-fp-launcher-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="6" cy="5.6" r="2.4"/>
+      <path d="M1.8 12.6c.4-2.1 1.9-3.3 4.2-3.3s3.8 1.2 4.2 3.3"/>
+      <path d="M11.1 4.3a2 2 0 0 1 0 3.9"/>
+      <path d="M12 9.7c1.2.5 1.9 1.5 2.1 2.9"/>
+    </svg>
+    <span class="xvm-fp-launcher-label"></span>
+  `;
+  btn.addEventListener('click', () => {
+    followingOpen = !followingOpen;
+    followingDirty = true;
+    renderFollowingPanel();
+  });
+  document.body.appendChild(btn);
+  followingLauncherEl = btn;
+  return btn;
+}
+
+function hideFollowingPanel() {
+  if (followingPanelEl) followingPanelEl.style.display = 'none';
+}
+
+function renderFollowingPanel() {
+  if (!document.body) return;
+  // The panel used to be reachable only by knowing the URL. It is now opened
+  // from a chip on the two pages where the list is meaningful; everywhere else
+  // the chip is not injected at all rather than following the user around.
+  const canOpen = isOwnFollowingPage() || isOwnProfilePage();
+  const launcher = canOpen ? ensureFollowingLauncher() : followingLauncherEl;
+  if (launcher) launcher.style.display = canOpen ? 'flex' : 'none';
+  if (canOpen) {
+    const title = i18n('contentFollowingTitle');
+    const label = launcher.querySelector('.xvm-fp-launcher-label');
+    if (label) label.textContent = title;
+    launcher.title = title;
+    launcher.setAttribute('aria-label', title);
+    launcher.setAttribute('aria-expanded', followingOpen ? 'true' : 'false');
+    try { launcher.setAttribute('data-theme', _resolvedTheme(_themePref)); } catch (_) {}
+  }
+  // Landing on the Following page opens it once, so the scan button is in
+  // sight without a click. Closing it stays closed for that page.
+  if (isOwnFollowingPage() && followingAutoOpenedPath !== window.location.pathname) {
+    followingAutoOpenedPath = window.location.pathname;
+    followingOpen = true;
+    followingDirty = true;
+  }
+  if (!canOpen || !followingOpen) {
+    hideFollowingPanel();
+    followingDirty = true;
+    return;
+  }
+  const el = ensureFollowingPanel();
+  el.style.display = 'flex';
+  // Locales can land after the panel was built, and the theme vars are
+  // initialised further down the file — a replayed network response can mark
+  // this dirty before either exists.
+  try { el.setAttribute('data-theme', _resolvedTheme(_themePref)); } catch (_) {}
+  const setText = (selector, text) => {
+    const node = el.querySelector(selector);
+    if (node) node.textContent = text;
+  };
+  setText('.xvm-lb-title', i18n('contentFollowingTitle'));
+  setText('.xvm-fp-filter[data-filter="all"]', i18n('contentFollowingFilterAll'));
+  setText('.xvm-fp-filter[data-filter="no"]', i18n('contentFollowingFilterNo'));
+  setText('.xvm-fp-filter[data-filter="yes"]', i18n('contentFollowingFilterYes'));
+  const search = el.querySelector('.xvm-fp-search');
+  if (search) {
+    search.placeholder = i18n('contentFollowingSearch');
+    search.setAttribute('aria-label', i18n('contentFollowingSearch'));
+  }
+  const scanBtn = el.querySelector('.xvm-fp-scan');
+  if (scanBtn) {
+    const spinning = followingScanRunning && !followingScanPaused;
+    scanBtn.classList.toggle('is-scanning', spinning);
+    scanBtn.setAttribute('aria-busy', spinning ? 'true' : 'false');
+    const label = scanBtn.querySelector('.xvm-fp-scan-label');
+    if (label) label.textContent = followingScanRunning
+      ? (followingScanPaused
+        ? i18n('contentFollowingResume')
+        : i18n('contentFollowingPause'))
+      : i18n('contentFollowingScan');
+  }
+  const stopBtn = el.querySelector('.xvm-fp-stop');
+  if (stopBtn) {
+    stopBtn.hidden = !followingScanRunning;
+    stopBtn.textContent = i18n('contentFollowingStop');
+  }
+  if (!followingDirty) return;
+  followingDirty = false;
+  el.querySelectorAll('.xvm-fp-filter').forEach((btn) => {
+    const active = btn.dataset.filter === followingFilter;
+    btn.classList.toggle('is-active', active);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+  const rows = followingRows();
+  const count = el.querySelector('.xvm-fp-count');
+  if (count) {
+    // Counts stay outside the translated string: the i18n rule for this
+    // codebase forbids $N$ placeholders.
+    count.textContent = `${i18n('contentFollowingCountLabel')} ${rows.length} / ${followingIndex.size}`;
+  }
+  const list = el.querySelector('.xvm-fp-list');
+  if (!list) return;
+  if (!rows.length) {
+    // "Nothing scanned yet" and "this filter has no matches" are different
+    // problems with different next steps, so they get different copy.
+    const message = followingIndex.size
+      ? i18n('contentFollowingEmptyFilter')
+      : i18n('contentFollowingEmpty');
+    list.innerHTML = `<li class="xvm-fp-empty">
+      <svg class="xvm-fp-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="9" cy="8" r="3.1"/>
+        <path d="M3.6 19c.6-3 2.8-4.6 5.4-4.6s4.8 1.6 5.4 4.6"/>
+        <circle cx="17.2" cy="9.6" r="2.3"/>
+        <path d="M15.7 14.7c2.1.2 3.6 1.6 4.2 3.9"/>
+      </svg>
+      <span>${lbEscapeHtml(message)}</span>
+    </li>`;
+    return;
+  }
+  list.innerHTML = rows.map(([handle, entry]) => {
+    const state = entry.followsMe === true ? 'yes' : entry.followsMe === false ? 'no' : 'unknown';
+    const stateLabel = state === 'yes'
+      ? i18n('contentFollowingFilterYes')
+      : state === 'no' ? i18n('contentFollowingFilterNo') : '';
+    const name = String(entry.name || '');
+    return `<li class="xvm-fp-row">
+      <a class="xvm-fp-link" href="/${encodeURIComponent(handle)}">
+        <span class="xvm-fp-handle">@${lbEscapeHtml(handle)}</span>
+        ${name ? `<span class="xvm-fp-name" title="${lbEscapeHtml(name)}">${lbEscapeHtml(name)}</span>` : ''}
+      </a>
+      ${stateLabel ? `<span class="xvm-fp-state is-${state}">${lbEscapeHtml(stateLabel)}</span>` : ''}
+    </li>`;
+  }).join('');
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function runFollowingScan() {
+  if (followingScanRunning) return;
+  followingScanRunning = true;
+  followingScanPaused = false;
+  followingDirty = true;
+  renderFollowingPanel();
+  let deadline = Date.now() + FOLLOWING_SCAN_MAX_MS;
+  let pausedAt = 0;
+  let idle = 0;
+  let last = followingIndex.size;
+  try {
+    // Leaving the Following page ends the run: the loop's scrolls would land
+    // on a different timeline and the hook only files pages from this URL.
+    while (Date.now() < deadline && followingScanRunning && isOwnFollowingPage()) {
+      // Paused scans keep their place: the page is not scrolled, no request is
+      // made, and the wall-clock budget is extended by however long the pause
+      // lasted, so pausing never eats into the eight minutes of scanning.
+      if (followingScanPaused) {
+        if (!pausedAt) pausedAt = Date.now();
+        await sleep(400);
+        continue;
+      }
+      if (pausedAt) {
+        deadline += Date.now() - pausedAt;
+        pausedAt = 0;
+      }
+      // Ask the page for the next screenful. The pace is deliberately human:
+      // the whole point of this path is that every request is one X's own
+      // pagination would have sent anyway.
+      window.scrollBy(0, Math.round(window.innerHeight * 1.6));
+      await sleep(1500 + Math.random() * 900);
+      if (followingIndex.size === last) idle += 1;
+      else { idle = 0; last = followingIndex.size; }
+      // Six rounds without a new handle means the list ended, or X stopped
+      // serving pages. Either way there is nothing to gain by pushing on.
+      if (idle >= FOLLOWING_SCAN_IDLE_ROUNDS) break;
+    }
+  } finally {
+    followingScanRunning = false;
+    followingScanPaused = false;
+    flushFollowingIndex();
+    followingDirty = true;
+    renderFollowingPanel();
+  }
+}
+
+function stopFollowingScan() {
+  followingScanRunning = false;
+  followingScanPaused = false;
+  renderFollowingPanel();
+}
+
+function startFollowingScan() {
+  if (followingScanRunning) {
+    // Running → paused → running. Stopping is its own control in the footer,
+    // so a mis-click never throws away an eight-minute scan.
+    followingScanPaused = !followingScanPaused;
+    renderFollowingPanel();
+    return;
+  }
+  if (isOwnFollowingPage()) {
+    runFollowingScan();
+    return;
+  }
+  const me = getLoggedInHandle();
+  if (!me) return;
+  try { sessionStorage.setItem(FOLLOWING_SCAN_PENDING_KEY, '1'); } catch (_) {}
+  window.location.href = `https://x.com/${encodeURIComponent(me)}/following`;
+}
+
+// A scan spans a full page navigation, so the intent has to survive it.
+try {
+  if (sessionStorage.getItem(FOLLOWING_SCAN_PENDING_KEY) === '1') {
+    sessionStorage.removeItem(FOLLOWING_SCAN_PENDING_KEY);
+    setTimeout(() => { if (isOwnFollowingPage()) runFollowingScan(); }, 2500);
+  }
+} catch (_) {}
+
 // Ranks whatever is mounted. Scope matches the leaderboard, but the sort key
 // depends on the page: crowd-finding on feeds, person-finding in a thread.
 function collectCommentRanked() {
@@ -3854,6 +4349,14 @@ function cbColumnApplies(id, statusPage) {
   return page === 'both' || page === (statusPage ? 'status' : 'feed');
 }
 
+// The mark each interaction kind draws. Kept next to the renderer rather than
+// with the scoring block so the pure scoring helpers stay runnable on their own.
+const CB_INTERACTION_MARKS = {
+  reply: XVM_UI_ICONS.reply,
+  like: XVM_UI_ICONS.like,
+  repost: XVM_UI_ICONS.repost,
+};
+
 const CB_COLUMN_RENDERERS = {
   rank: (_t, i) => `<span class="xvm-lb-rank">${i + 1}</span>`,
   handle: (t) => {
@@ -3871,12 +4374,12 @@ const CB_COLUMN_RENDERERS = {
     const text = (t.text || '').replace(/\s+/g, ' ').trim();
     return `<span class="xvm-lb-preview" title="${lbEscapeHtml(text.slice(0, 280))}">${lbEscapeHtml(text)}</span>`;
   },
-  replies: (t) => `<span class="xvm-lb-views" title="${i18n('contentCommentBoardReplies')}">\u{1F4AC} ${formatViews(t.replies)}</span>`,
+  replies: (t) => `<span class="xvm-lb-views" title="${i18n('contentCommentBoardReplies')}">${XVM_UI_ICONS.chat} ${formatViews(t.replies)}</span>`,
   followers: (t) => (t.followers >= 0
-    ? `<span class="xvm-lb-views" title="${i18n('contentCommentBoardFollowers')}">\u{1F465} ${formatViews(t.followers)}</span>`
+    ? `<span class="xvm-lb-views" title="${i18n('contentCommentBoardFollowers')}">${XVM_UI_ICONS.users} ${formatViews(t.followers)}</span>`
     : ''),
   following: (t) => (t.followingCount >= 0
-    ? `<span class="xvm-lb-views" title="${i18n('contentCommentBoardFollowingCount')}">\u{2192} ${formatViews(t.followingCount)}</span>`
+    ? `<span class="xvm-lb-views" title="${i18n('contentCommentBoardFollowingCount')}">${XVM_UI_ICONS.arrow} ${formatViews(t.followingCount)}</span>`
     : ''),
   // The follow-back signal, shown as the actual ratio rather than the score so
   // the user can see why a row outranks another. At or above CB_RATIO_HOT the
@@ -3892,7 +4395,7 @@ const CB_COLUMN_RENDERERS = {
     return `<span class="xvm-lb-views xvm-cb-ratio${hot ? ' xvm-cb-ratio--hot' : ''}" title="${lbEscapeHtml(title)}">${ratio.toFixed(1)}x</span>`;
   },
   blue: (t) => (t.blueVerified === true
-    ? `<span class="xvm-cb-blue" title="${i18n('contentCommentBoardBlue')}" aria-label="${i18n('contentCommentBoardBlue')}">✔</span>`
+    ? `<span class="xvm-cb-blue" title="${i18n('contentCommentBoardBlue')}" aria-label="${i18n('contentCommentBoardBlue')}">${XVM_UI_ICONS.check}</span>`
     : ''),
   relation: (t) => {
     const label = commentRelationLabel(t);
@@ -3924,7 +4427,7 @@ function ensureCommentBoard() {
   el.className = 'xvm-lb xvm-cb';
   el.innerHTML = `
     <div class="xvm-lb-head" title="${i18n('contentCommentBoardDragToMove')}">
-      <span class="xvm-lb-grip">⋮⋮</span>
+      <span class="xvm-lb-grip" aria-hidden="true">${XVM_UI_ICONS.grip}</span>
       <span class="xvm-lb-title xvm-cb-title"></span>
       <div class="xvm-lb-controls">
         <button class="xvm-lb-action xvm-cb-close" type="button" title="${i18n('contentCommentBoardClose')}" aria-label="${i18n('contentCommentBoardClose')}">
@@ -3990,9 +4493,9 @@ function renderCommentBoard() {
     // The panel does two different jobs, so it says which one it is doing.
     const titleEl = el.querySelector('.xvm-cb-title');
     if (titleEl) {
-      titleEl.textContent = statusPage
-        ? `\u{1F91D} ${i18n('contentCommentBoardTitleStatus')}`
-        : `\u{1F4AC} ${i18n('contentCommentBoardTitleFeed')}`;
+      titleEl.innerHTML = statusPage
+        ? `${XVM_UI_ICONS.users} ${lbEscapeHtml(i18n('contentCommentBoardTitleStatus'))}`
+        : `${XVM_UI_ICONS.chat} ${lbEscapeHtml(i18n('contentCommentBoardTitleFeed'))}`;
     }
     // Re-anchor on every render: the leaderboard can have moved, been hidden,
     // or changed size since the last pass.
@@ -5023,7 +5526,11 @@ function getTweetIdFromArticle(article) {
 }
 
 // Periodic re-render for tweets whose data arrived after DOM render
+syncPageSurfaceTheme();
 setInterval(() => {
+  // First, and on its own: anything above it that throws would otherwise take
+  // the scan button down with it.
+  renderFollowingPanel();
   const unscored = document.querySelectorAll('article[data-testid="tweet"]:not([data-xvm-scored])');
   if (unscored.length > 0) {
     renderBadges();
@@ -5042,6 +5549,7 @@ setInterval(() => {
   paintFreshness();
   paintUnfollowed();
   injectAuthorReplyButtons();
+  syncPageSurfaceTheme();
 }, 2000);
 
 // Refresh leaderboard on scroll as virtualized articles come and go
@@ -5653,8 +6161,8 @@ function showReleaseNotesModal(version) {
   const close = document.createElement('button');
   close.type = 'button';
   close.className = 'xvm-update-close';
-  close.setAttribute('aria-label', 'Close');
-  close.textContent = '×';
+  close.setAttribute('aria-label', i18nOr('contentClose', '关闭'));
+  close.innerHTML = XVM_UI_ICONS.close;
 
   const eyebrow = document.createElement('div');
   eyebrow.className = 'xvm-update-eyebrow';
@@ -5700,8 +6208,22 @@ function showReleaseNotesModal(version) {
     if (event.target === backdrop) dismiss();
   });
   onKeyDown = (event) => {
-    if (event.key !== 'Escape') return;
-    dismiss();
+    if (event.key === 'Escape') { dismiss(); return; }
+    if (event.key !== 'Tab') return;
+    // aria-modal only describes the dialog; without this the Tab key walks
+    // back out onto the timeline underneath it.
+    const focusables = dialog.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (!focusables.length) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    const active = document.activeElement;
+    if (event.shiftKey && (active === first || !dialog.contains(active))) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
+      event.preventDefault();
+      first.focus();
+    }
   };
   document.addEventListener('keydown', onKeyDown, true);
 
@@ -6051,7 +6573,7 @@ function showGrokOptions(comments, editable, opts = {}) {
         <span class="xvm-grok-options-status" aria-live="polite"></span>
         <div class="xvm-grok-options-actions">
           <button type="button" class="xvm-grok-refresh" aria-label="${i18n('contentAiRefreshAria')}" title="${i18n('contentAiRefreshTitle')}">↻</button>
-          <button type="button" class="xvm-grok-close" aria-label="${i18n('contentAiClose')}">×</button>
+          <button type="button" class="xvm-grok-close" aria-label="${i18n('contentClose')}">${XVM_UI_ICONS.close}</button>
         </div>
       </div>
       <div class="xvm-grok-options-note" hidden></div>
@@ -6528,7 +7050,7 @@ function injectGrokReplyButtons(root = document) {
     const caret = document.createElement('button');
     caret.type = 'button';
     caret.className = 'xvm-grok-template-caret';
-    caret.textContent = '▾';
+    caret.innerHTML = XVM_UI_ICONS.chevronDown;
     caret.title = i18n('contentAiTemplateCaret');
     caret.setAttribute('aria-label', i18n('contentAiTemplateCaret'));
     caret.addEventListener('click', (ev) => {

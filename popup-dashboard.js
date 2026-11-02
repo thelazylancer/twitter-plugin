@@ -15,6 +15,11 @@
 
 (() => {
   const TABS = ['pro', 'filter', 'leaderboard', 'ai', 'marks', 'about'];
+  // Community builds unlock every Pro feature locally, so the Pro tab has
+  // nothing to sell or explain. Store builds keep it: that tab is the license
+  // surface. Hidden here as well as in CSS so a persisted "pro" tab can never
+  // leave the popup with no visible panel.
+  const HIDDEN_TABS = new Set(globalThis.__xvmIsCommunityDevBuild === true ? ['pro'] : []);
   const ACTIVE_TAB_KEY = 'xvm_popup_active_tab';
 
   // Critical bug fix (Codex polish item 3): the previous t(key) signature
@@ -30,7 +35,7 @@
   }
 
   function isValidTab(name) {
-    return TABS.includes(name);
+    return TABS.includes(name) && !HIDDEN_TABS.has(name);
   }
 
   function persistTab(name) {
@@ -62,11 +67,17 @@
   }
 
   function setTab(name, opts = {}) {
-    if (!TABS.includes(name)) name = 'ai';
+    if (!isValidTab(name)) name = 'ai';
     const persist = opts.persist !== false;
     document.body.dataset.tab = name;
     document.querySelectorAll('[role="tab"][data-tab]').forEach((btn) => {
-      btn.setAttribute('aria-selected', String(btn.dataset.tab === name));
+      const active = btn.dataset.tab === name;
+      btn.setAttribute('aria-selected', String(active));
+      // The strip scrolls on narrow locales; the chosen tab must never be the
+      // one hiding past the edge.
+      if (active && typeof btn.scrollIntoView === 'function') {
+        btn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      }
     });
     document.querySelectorAll('[data-tab-panel]').forEach((p) => {
       p.dataset.active = (p.dataset.tabPanel === name) ? '1' : '0';
@@ -255,8 +266,13 @@
   }
 
   function renderPopupVersion() {
-    const el = document.getElementById('popup-version');
-    if (el) el.textContent = currentExtensionVersion();
+    const version = currentExtensionVersion();
+    if (!version) return;
+    // Header and footer read the same manifest field, so neither can drift
+    // from the build the way a hand-edited copy does.
+    document.querySelectorAll('#popup-version, #popup-version-header').forEach((el) => {
+      el.textContent = version;
+    });
   }
 
   function showReleaseNotesOnCurrentTab() {
@@ -285,7 +301,15 @@
     document.getElementById('show-update-notes')?.addEventListener('click', showReleaseNotesOnCurrentTab);
   }
 
+  // popup-pro.js also writes this, but only after its async tier lookup; the
+  // tab strip's channel rules must be right on the first paint.
+  function applyBuildChannel() {
+    const channel = globalThis.__xvmBuildChannel || document.body.dataset.buildChannel || 'store';
+    document.body.dataset.buildChannel = channel;
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
+    applyBuildChannel();
     loadInitialTab(); // default — Filter is the primary Pro feature surface
     renderPopupVersion();
     wireTabButtons();

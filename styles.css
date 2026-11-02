@@ -47,6 +47,14 @@ html[data-xvm-rate-filter-on] [data-testid="cellInnerDiv"][data-xvm-rate-hidden]
 .xvm-badge--orange { color: #c2410c; background: rgba(234, 88, 12, 0.25); }
 .xvm-badge--red { color: #b91c1c; background: rgba(220, 38, 38, 0.25); }
 
+/* X's canvas is not the popup's: the same ink that reads on paper turns to
+   mud on X's dark theme, and content.js sets data-xvm-surface from the page
+   background itself. Move to the light end of each hue there, keeping the
+   tinted pill and the same three identities. */
+html[data-xvm-surface="dark"] .xvm-badge--green { color: #4ade80; background: rgba(34, 197, 94, 0.18); }
+html[data-xvm-surface="dark"] .xvm-badge--orange { color: #fb923c; background: rgba(249, 115, 22, 0.18); }
+html[data-xvm-surface="dark"] .xvm-badge--red { color: #f87171; background: rgba(239, 68, 68, 0.18); }
+
 /* === Badge: inline-classic === */
 html[data-xvm-badge-style="inline-classic"] .xvm-badge {
   gap: 0;
@@ -69,6 +77,12 @@ html[data-xvm-badge-style="inline-classic"] .xvm-badge:hover { color: rgb(29, 15
 html[data-xvm-badge-style="inline-classic"] .xvm-badge--green { color: #0f6b32; background: transparent; }
 html[data-xvm-badge-style="inline-classic"] .xvm-badge--orange { color: #ff9800; background: transparent; }
 html[data-xvm-badge-style="inline-classic"] .xvm-badge--red { color: #f44336; background: transparent; }
+/* Same surface rule for the text-only variant, where there is no pill to
+   carry the color: the ink has to do all of the work. */
+html[data-xvm-surface="dark"][data-xvm-badge-style="inline-classic"] .xvm-badge--green { color: #4ade80; background: transparent; }
+html[data-xvm-surface="dark"][data-xvm-badge-style="inline-classic"] .xvm-badge--orange { color: #ffa726; background: transparent; }
+html[data-xvm-surface="dark"][data-xvm-badge-style="inline-classic"] .xvm-badge--red { color: #f87171; background: transparent; }
+html[data-xvm-surface="dark"][data-xvm-badge-style="inline-classic"] .xvm-badge:hover { color: rgb(96, 165, 250); }
 
 .xvm-bookmark-timeline-badge {
   display: inline-flex;
@@ -97,6 +111,8 @@ html[data-xvm-badge-style="inline-classic"] .xvm-badge--red { color: #f44336; ba
   white-space: pre-line;
   line-height: 1.6;
   min-width: 160px;
+  max-width: min(320px, calc(100vw - 16px));
+  overflow-wrap: anywhere;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
 }
 
@@ -130,8 +146,12 @@ html[data-xvm-badge-style="inline-classic"] .xvm-badge--red { color: #f44336; ba
   position: absolute;
   top: 10px;
   right: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 30px;
   height: 30px;
+  padding: 0;
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -140,6 +160,7 @@ html[data-xvm-badge-style="inline-classic"] .xvm-badge--red { color: #f44336; ba
   line-height: 28px;
   cursor: pointer;
 }
+.xvm-update-close svg { width: 16px; height: 16px; }
 
 .xvm-update-close:hover { background: rgba(15, 20, 25, 0.08); }
 
@@ -265,8 +286,12 @@ html[data-xvm-badge-style="inline-classic"] .xvm-badge--red { color: #f44336; ba
   position: absolute;
   top: 18px;
   right: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 36px;
   height: 36px;
+  padding: 0;
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -275,6 +300,7 @@ html[data-xvm-badge-style="inline-classic"] .xvm-badge--red { color: #f44336; ba
   line-height: 32px;
   cursor: pointer;
 }
+.xvm-bti-close svg { width: 16px; height: 16px; }
 
 .xvm-bti-close:hover { background: rgba(15, 20, 25, 0.08); }
 
@@ -750,7 +776,7 @@ html[data-xvm-badge-style="inline-classic"] .xvm-badge--red { color: #f44336; ba
   flex-shrink: 0;
 }
 .xvm-lb-green .xvm-lb-vel { color: #177638; }
-.xvm-lb-orange .xvm-lb-vel { color: #bf5a2a; }
+.xvm-lb-orange .xvm-lb-vel { color: #a84e20; }
 .xvm-lb-red .xvm-lb-vel { color: #c23c1c; }
 
 .xvm-lb-item-selected {
@@ -774,13 +800,22 @@ html[data-xvm-badge-style="inline-classic"] .xvm-badge--red { color: #f44336; ba
 }
 .xvm-cb-mutual      { background: rgba(23, 118, 56, 0.14);  color: #177638; }
 .xvm-cb-following   { background: rgba(29, 155, 240, 0.14); color: #0f6fa8; }
-.xvm-cb-follows-you { background: rgba(191, 90, 42, 0.14);  color: #bf5a2a; }
+.xvm-cb-follows-you { background: rgba(191, 90, 42, 0.14);  color: #a34518; }
 .xvm-cb-none        { background: rgba(110, 91, 77, 0.12);  color: #6e5b4d; }
+
+/* A status row carries six columns in the same 280px the feed row carries
+   four. Let the handle give ground (its title attribute keeps the full name)
+   so the counts stay whole instead of clipping at the panel edge. */
+.xvm-cb .xvm-lb-item { gap: 4px; padding-left: 8px; padding-right: 8px; }
+.xvm-cb .xvm-lb-handle {
+  flex: 0 1 auto;
+  min-width: 0;
+}
 
 /* The follow-back ratio is the reason a status row is where it is, so it gets
    the leaderboard's emphasis treatment rather than the muted counter colour. */
 .xvm-cb .xvm-cb-ratio {
-  color: #bf5a2a;
+  color: #a34518;
   font-weight: 700;
 }
 
@@ -819,6 +854,16 @@ html[data-xvm-badge-style="inline-classic"] .xvm-badge--red { color: #f44336; ba
 .xvm-cb .xvm-cb-interact--reply { color: #177638; }
 .xvm-cb .xvm-cb-interact--like { color: #e0245e; }
 .xvm-cb .xvm-cb-interact--repost { color: #1d9bf0; }
+
+/* Icons are drawn, not typed: they inherit the row's colour and keep a single
+   optical size across the title, the counters and the status marks. */
+.xvm-lb-title svg { width: 12px; height: 12px; margin-right: 3px; vertical-align: -2px; }
+.xvm-lb-views svg { width: 10px; height: 10px; margin-right: 1px; vertical-align: -1.5px; }
+.xvm-lb-grip { display: inline-flex; align-items: center; }
+.xvm-lb-grip svg { width: 8px; height: 12px; }
+.xvm-lb-edge-toggle svg { width: 12px; height: 12px; }
+.xvm-cb-interact, .xvm-cb-blue { display: inline-flex; align-items: center; }
+.xvm-cb-interact svg, .xvm-cb-blue svg { width: 11px; height: 11px; }
 
 /* Stacked directly under the leaderboard: square the seam so the two panels
    read as one continuous column instead of two rounded boxes touching. */
@@ -874,6 +919,9 @@ article[data-testid="tweet"].xvm-article-linked {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   padding: 10px 16px;
   border-radius: 10px;
+  max-width: min(420px, calc(100vw - 32px));
+  text-align: center;
+  overflow-wrap: anywhere;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   opacity: 0;
   transition: opacity 180ms ease, transform 180ms ease;
@@ -1878,6 +1926,7 @@ article[data-testid="tweet"][data-xvm-overlay-host="1"] {
   border-color: rgba(83, 100, 113, 0.35);
   background: rgb(247, 249, 249);
 }
+.xvm-grok-template-caret svg { width: 12px; height: 12px; }
 
 /* 邀关 — same pill as 快回, slightly quieter so it reads as the secondary action. */
 .xvm-grok-invite-btn {
@@ -2103,8 +2152,12 @@ article[data-testid="tweet"][data-xvm-overlay-host="1"] {
 }
 
 .xvm-grok-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 28px;
   height: 28px;
+  padding: 0;
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -2113,6 +2166,7 @@ article[data-testid="tweet"][data-xvm-overlay-host="1"] {
   line-height: 1;
   cursor: pointer;
 }
+.xvm-grok-close svg { width: 14px; height: 14px; }
 
 .xvm-grok-close:hover {
   background: rgba(15, 20, 25, 0.08);
@@ -2659,6 +2713,7 @@ img.xvm-liv-img {
   color: #f8fafc;
 }
 .xvm-lb-upgrade-title { font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 4px; }
+.xvm-lb-upgrade-title svg { width: 12px; height: 12px; flex: 0 0 auto; color: #bf5a2a; }
 .xvm-lb-upgrade-actions { display: flex; gap: 6px; margin-top: 6px; }
 .xvm-lb-upgrade-btn, .xvm-lb-upgrade-link {
   flex: 1; text-align: center;
@@ -2670,13 +2725,18 @@ img.xvm-liv-img {
 .xvm-lb-upgrade-btn { background: #bf5a2a; color: #fffcf6; }
 .xvm-lb-upgrade-btn:hover { filter: brightness(1.06); }
 .xvm-lb-upgrade-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: none; border: none; cursor: pointer; padding: 0 4px;
   font-size: 14px; color: #6e5b4d; line-height: 1;
   float: right; margin-top: -2px;
 }
+.xvm-lb-upgrade-close svg { width: 12px; height: 12px; }
 .xvm-lb[data-theme="dark"] .xvm-lb-upgrade-btn { background: #06b6d4; color: #0b1120; border-color: #06b6d4; }
 .xvm-lb[data-theme="dark"] .xvm-lb-upgrade-link { background: transparent; color: #22d3ee; border-color: #06b6d4; }
 .xvm-lb[data-theme="dark"] .xvm-lb-upgrade-close { color: #94a3b8; }
+.xvm-lb[data-theme="dark"] .xvm-lb-upgrade-title svg { color: #22d3ee; }
 
 .xvm-bk-menu {
   --xvm-bk-bg: #fffcf6;
@@ -2914,3 +2974,404 @@ img.xvm-liv-img {
   color: #c23c1c;
 }
 
+
+/* ── Following list panel ──────────────────────────────────────────────────
+   A narrow card pinned bottom-right. It reuses .xvm-lb for the paper, theme and
+   header so it reads as part of the same stack; only the body is its own. */
+.xvm-fp {
+  --fp-ink: #24180f;
+  --fp-muted: #6e5b4d;
+  --fp-line: rgba(86, 60, 34, 0.16);
+  --fp-hover: rgba(191, 90, 42, 0.07);
+  --fp-field: #ffffff;
+  --fp-seg: rgba(86, 60, 34, 0.06);
+  --fp-active: #ffffff;
+  --fp-accent: #8f3d17;
+  --fp-link: #1d9bf0;
+  --fp-no: #b42318;
+  --fp-no-bg: rgba(180, 35, 24, 0.14);
+  --fp-yes: #177638;
+  --fp-yes-bg: rgba(23, 118, 56, 0.14);
+
+  right: 16px;
+  bottom: 64px;
+  top: auto;
+  width: min(340px, calc(100vw - 32px));
+  max-height: 62vh;
+  flex-direction: column;
+  animation: xvm-fp-rise 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.xvm-fp[data-theme="dark"] {
+  --fp-ink: #f8fafc;
+  --fp-muted: #94a3b8;
+  --fp-line: rgba(148, 163, 184, 0.22);
+  --fp-hover: rgba(148, 163, 184, 0.10);
+  --fp-field: #0b1220;
+  --fp-seg: rgba(148, 163, 184, 0.10);
+  --fp-active: #334155;
+  --fp-accent: #fb923c;
+  --fp-link: #60a5fa;
+  --fp-no: #f87171;
+  --fp-no-bg: rgba(248, 113, 113, 0.14);
+  --fp-yes: #4ade80;
+  --fp-yes-bg: rgba(74, 222, 128, 0.14);
+}
+@keyframes xvm-fp-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes xvm-fp-spin {
+  to { transform: rotate(360deg); }
+}
+/* The way in. Shown only on your own Following and profile pages, where the
+   list is meaningful, so it never floats over a stranger's timeline. */
+.xvm-fp-launcher {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483000;
+  display: none;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 13px 0 11px;
+  border: 1px solid rgba(86, 60, 34, 0.22);
+  border-radius: 999px;
+  background: #fffcf6;
+  color: #24180f;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(36, 24, 15, 0.16);
+  transition: background 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
+}
+.xvm-fp-launcher:hover {
+  background: #f6efe2;
+  box-shadow: 0 8px 22px rgba(36, 24, 15, 0.2);
+  transform: translateY(-1px);
+}
+.xvm-fp-launcher[aria-expanded="true"] {
+  border-color: rgba(191, 90, 42, 0.34);
+  background: #f0e6d6;
+  color: #6f2f11;
+}
+.xvm-fp-launcher:active {
+  transform: translateY(0);
+}
+.xvm-fp-launcher-icon {
+  display: block;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+.xvm-fp-launcher[data-theme="dark"] {
+  border-color: #334155;
+  background: #0f172a;
+  color: #f8fafc;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+.xvm-fp-launcher[data-theme="dark"]:hover {
+  background: #1e293b;
+}
+.xvm-fp-launcher[data-theme="dark"][aria-expanded="true"] {
+  border-color: #475569;
+  background: #243244;
+  color: #f8fafc;
+}
+.xvm-fp-launcher:focus-visible,
+.xvm-fp button:focus-visible,
+.xvm-fp input:focus-visible,
+.xvm-fp-link:focus-visible {
+  outline: 2px solid #1d9bf0;
+  outline-offset: 1px;
+}
+.xvm-fp .xvm-lb-head {
+  flex-shrink: 0;
+  cursor: default;
+  padding: 8px 10px 8px 12px;
+}
+.xvm-fp .xvm-lb-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--fp-ink);
+  letter-spacing: 0;
+}
+.xvm-fp .xvm-lb-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.xvm-fp-scan {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px 0 8px;
+  border: 1px solid rgba(191, 90, 42, 0.24);
+  border-radius: 999px;
+  background: rgba(191, 90, 42, 0.08);
+  color: var(--fp-accent);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
+}
+.xvm-fp-scan:hover {
+  background: rgba(191, 90, 42, 0.15);
+  border-color: rgba(191, 90, 42, 0.36);
+}
+.xvm-fp-scan:active {
+  transform: translateY(1px);
+}
+.xvm-fp-scan-icon {
+  display: block;
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+}
+.xvm-fp-scan.is-scanning .xvm-fp-scan-icon {
+  animation: xvm-fp-spin 1s linear infinite;
+}
+.xvm-fp[data-theme="dark"] .xvm-fp-scan {
+  border-color: rgba(251, 146, 60, 0.3);
+  background: rgba(251, 146, 60, 0.12);
+}
+.xvm-fp[data-theme="dark"] .xvm-fp-scan:hover {
+  background: rgba(251, 146, 60, 0.2);
+}
+.xvm-fp-close {
+  width: 26px;
+  height: 26px;
+}
+.xvm-fp-close svg {
+  width: 14px;
+  height: 14px;
+}
+.xvm-fp-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 8px;
+}
+.xvm-fp-searchbox {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.xvm-fp-search-icon {
+  position: absolute;
+  left: 9px;
+  width: 13px;
+  height: 13px;
+  color: var(--fp-muted);
+  opacity: 0.75;
+  pointer-events: none;
+}
+.xvm-fp-search {
+  width: 100%;
+  box-sizing: border-box;
+  height: 30px;
+  padding: 0 9px 0 28px;
+  border: 1px solid var(--fp-line);
+  border-radius: 8px;
+  background: var(--fp-field);
+  color: var(--fp-ink);
+  font: inherit;
+  font-size: 12px;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.xvm-fp-search::placeholder {
+  color: var(--fp-muted);
+  opacity: 0.8;
+}
+.xvm-fp-search:focus {
+  outline: none;
+  border-color: #1d9bf0;
+  box-shadow: 0 0 0 3px rgba(29, 155, 240, 0.14);
+}
+.xvm-fp-search::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+.xvm-fp-filters {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--fp-line);
+  border-radius: 8px;
+  background: var(--fp-seg);
+}
+.xvm-fp-filter {
+  height: 26px;
+  padding: 0 4px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fp-muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.xvm-fp-filter:hover {
+  color: var(--fp-ink);
+}
+.xvm-fp-filter.is-active {
+  background: var(--fp-active);
+  color: var(--fp-ink);
+  box-shadow: 0 1px 2px rgba(36, 24, 15, 0.10);
+}
+.xvm-fp-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 5px 8px 6px 12px;
+  border-top: 1px solid var(--fp-line);
+}
+.xvm-fp-count {
+  display: block;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--fp-muted);
+}
+.xvm-fp-stop {
+  flex: 0 0 auto;
+  padding: 3px 9px;
+  border: 1px solid color-mix(in srgb, var(--fp-no) 55%, transparent);
+  border-radius: 999px;
+  background: var(--fp-no-bg);
+  color: var(--fp-no);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+/* A running scan is work in progress; the one control that ends it should read
+   as such without needing a hover. */
+.xvm-fp-stop:hover {
+  border-color: var(--fp-no);
+  background: color-mix(in srgb, var(--fp-no) 22%, transparent);
+}
+.xvm-fp-stop[hidden] {
+  display: none;
+}
+.xvm-fp-list {
+  flex: 1 1 auto;
+  height: auto;
+  max-height: none;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0;
+  padding: 4px 8px 8px;
+  list-style: none;
+}
+.xvm-fp-list::-webkit-scrollbar {
+  width: 8px;
+}
+.xvm-fp-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.xvm-fp-list::-webkit-scrollbar-thumb {
+  background: var(--fp-line);
+  background-clip: content-box;
+  border: 2px solid transparent;
+  border-radius: 8px;
+}
+.xvm-fp-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 10px;
+  align-items: center;
+  border-radius: 8px;
+  transition: background 0.1s ease;
+}
+.xvm-fp-row:hover {
+  background: var(--fp-hover);
+}
+.xvm-fp-link {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 7px 8px;
+  border-radius: 8px;
+  text-decoration: none;
+}
+.xvm-fp-handle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fp-link);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.xvm-fp-link:hover .xvm-fp-handle {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.xvm-fp-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fp-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.xvm-fp-state {
+  justify-self: end;
+  margin-right: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.xvm-fp-state.is-no {
+  color: var(--fp-no);
+  background: var(--fp-no-bg);
+}
+.xvm-fp-state.is-yes {
+  color: var(--fp-yes);
+  background: var(--fp-yes-bg);
+}
+.xvm-fp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--fp-muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+.xvm-fp-empty-icon {
+  width: 22px;
+  height: 22px;
+  opacity: 0.45;
+}
+@media (prefers-reduced-motion: reduce) {
+  .xvm-fp,
+  .xvm-fp-scan.is-scanning .xvm-fp-scan-icon {
+    animation: none;
+  }
+  .xvm-fp-launcher,
+  .xvm-fp-filter,
+  .xvm-fp-row {
+    transition: none;
+  }
+}

@@ -4,6 +4,8 @@ node_modules/
 .superpowers/
 .playwright-mcp/
 .agents/
+# Impeccable's detector cache is machine state; the config beside it is policy.
+/.impeccable/hook.cache.json
 secrets/
 # Maintainer-only store publishing script (names the publisher / service account)
 /scripts/upload-webstore.mjs

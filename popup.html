@@ -35,6 +35,22 @@
       --card:           var(--surface);
       --line:           var(--border);
       --accent-strong:  var(--accent-hi);
+      /* Filled controls read white-on-rust in light and ink-on-cyan in dark;
+         a single --accent-ink keeps every primary button legible in both. */
+      --accent-ink:     #fffcf6;
+      --accent-ink-hover: #fffcf6;
+      --accent-solid:      #b4501f;
+      --accent-solid-hover:#9a3f14;
+      --focus-ring:     0 0 0 3px rgba(191, 90, 42, 0.20);
+      --shadow-pop:     0 10px 24px rgba(36, 24, 15, 0.16);
+      /* Accent used as *text* on a tinted surface, where --accent itself is
+         too light to clear 4.5:1. */
+      --accent-text:    #8f3d17;
+      --fs-title:       13px;
+      --fs-body:        12.5px;
+      --fs-label:       11.5px;
+      --fs-meta:        11px;
+      --fs-micro:       10.5px;
     }
     /* Dark theme (shadcn slate-950 + cyan-500, opt-in via toggle) */
     body[data-theme="dark"] {
@@ -46,7 +62,7 @@
       --border-hi: #334155;
       --text:      #f8fafc;
       --text-2:    #cbd5e1;
-      --muted:     #64748b;
+      --muted:     #94a3b8;
       --accent:    #06b6d4;
       --accent-2:  #0891b2;
       --accent-hi: #22d3ee;
@@ -54,6 +70,13 @@
       --ok:        #4ade80;
       --warn:      #fbbf24;
       --danger:    #f87171;
+      --accent-ink:       #06121f;
+      --accent-ink-hover: #06121f;
+      --accent-solid:       #06b6d4;
+      --accent-solid-hover: #22d3ee;
+      --focus-ring: 0 0 0 3px rgba(6, 182, 212, 0.24);
+      --shadow-pop: 0 10px 24px rgba(0, 0, 0, 0.55);
+      --accent-text: #67e8f9;
     }
     /* CTA buttons inherit accent contrast; both themes work because text
        color #0b1120 is dark (cyan-500 / bf5a2a both pass AA). Override
@@ -67,10 +90,17 @@
       width: 360px;            /* fixed-width popup per mock A (polish #1) */
       min-width: 360px;
       max-width: 360px;
-      font-family: "Inter", "Avenir Next", "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-family: "Avenir Next", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
       font-size: 13px;
+      line-height: 1.4;
       color: var(--text);
       background: var(--bg);
+      caret-color: var(--accent);
+    }
+    ::selection { background: color-mix(in srgb, var(--accent) 26%, transparent); color: var(--text); }
+    button, a, summary { -webkit-tap-highlight-color: transparent; }
+    button:focus-visible, a:focus-visible, summary:focus-visible {
+      outline: 2px solid var(--accent); outline-offset: 2px;
     }
     /* Polish #1 (post-mock A): keep scrollbar gutter stable so popup doesn't
        jitter 1-2px when tab content height changes. Plus slim custom
@@ -91,9 +121,15 @@
       object-fit: cover;
       box-shadow: 0 1px 0 rgba(255,255,255,.14) inset, 0 6px 14px rgba(0,0,0,.18);
     }
-    .app-title { flex: 1; }
-    .app-title .name { display: block; font-size: 13px; font-weight: 700; color: var(--text); }
-    .app-title .sub  { display: block; font-size: 10px; color: var(--muted); }
+    .app-title { flex: 1; min-width: 0; }
+    .app-title .name { display: block; font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.25; }
+    .app-title .ver  { display: block; font-size: 10px; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; line-height: 1.3; }
+    /* One line, ellipsised: the subtitle is a caption, not a paragraph, and
+       wrapping it pushed the whole header taller than the controls. */
+    .app-title .sub  {
+      display: block; font-size: 10px; color: var(--muted);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
 
     #tier-chip {
       font-size: 11px; padding: 5px 12px; border-radius: 999px;
@@ -147,15 +183,24 @@
     .language-toggle .language-toggle-text { transform: translateY(.2px); }
 
     /* === Main tab bar === */
+    /* Six tabs never fit 360px in every locale ("Leaderboard" alone is wider
+       than a sixth of the popup), so the strip scrolls horizontally instead of
+       squeezing labels into two lines. Selected tab scrolls itself into view. */
     .tabbar {
-      display: flex; gap: 4px; padding: 0;
+      display: flex; gap: 2px; padding: 0;
       border-bottom: 1px solid var(--border);
       margin-bottom: 10px;
+      overflow-x: auto; overflow-y: hidden;
+      scrollbar-width: none;
+      scroll-behavior: smooth;
+      scroll-padding: 0 8px;
     }
+    .tabbar::-webkit-scrollbar { display: none; }
     .tab-btn {
-      flex: 1; padding: 10px 4px;
+      flex: 1 1 auto; min-width: max-content; padding: 10px 6px;
       background: none; border: none;
-      color: var(--muted); font-size: 12.5px; font-weight: 500;
+      color: var(--muted); font-size: 12px; font-weight: 500;
+      white-space: nowrap;
       cursor: pointer; position: relative;
       transition: color 120ms;
     }
@@ -165,10 +210,10 @@
     }
     .tab-btn[aria-selected="true"]::after {
       content: ""; position: absolute;
-      left: 8px; right: 8px; bottom: -1px; height: 3px;  /* 3px underline (polish #2) */
+      left: 6px; right: 6px; bottom: -1px; height: 3px;  /* 3px underline (polish #2) */
       background: var(--accent); border-radius: 2px;
     }
-    .tab-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 4px; }
+    .tab-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 6px; }
 
     /* === Tab panels === */
     [role="tabpanel"] { display: none; }
@@ -201,8 +246,8 @@
       background: var(--bg);
     }
     .pro-scope-block.free {
-      border-color: rgba(6, 182, 212, 0.28);
-      background: rgba(6, 182, 212, 0.08);
+      border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+      background: color-mix(in srgb, var(--accent) 8%, transparent);
     }
     .pro-scope-title {
       margin-bottom: 4px;
@@ -218,22 +263,29 @@
     }
     .community-dev-badge {
       display: none; margin: 0 0 10px; padding: 8px 10px;
-      border: 1px solid rgba(6, 182, 212, 0.36); border-radius: var(--radius-sm);
-      background: rgba(6, 182, 212, 0.10); color: var(--accent-hi);
+      border: 1px solid color-mix(in srgb, var(--accent) 36%, transparent);
+      border-radius: var(--radius-sm);
+      background: color-mix(in srgb, var(--accent) 10%, transparent);
+      color: var(--accent-text);
       font-size: 11px; font-weight: 700; line-height: 1.35;
     }
     body[data-build-channel="community-dev"] .community-dev-badge { display: block; }
+    /* Community builds have every Pro feature unlocked, so the Pro tab is an
+       empty billboard. It is the whole tab, not a panel inside one. */
+    body[data-build-channel="community-dev"] .tab-btn[data-tab="pro"],
+    body[data-build-channel="community-dev"] #tabpanel-pro { display: none; }
     .pro-cta-row { display: flex; flex-direction: column; gap: 6px; }
     .pro-cta {
       display: inline-flex; justify-content: center; align-items: center; gap: 6px;
-      padding: 9px 12px; border-radius: var(--radius-sm);
-      background: var(--accent); border: 1px solid var(--accent);
-      color: #0b1120; font-weight: 600; font-size: 12.5px;
+      min-height: 34px; padding: 8px 14px; border-radius: var(--radius-sm);
+      background: var(--accent-solid); border: 1px solid var(--accent-solid);
+      color: var(--accent-ink); font-weight: 700; font-size: 12.5px;
       text-decoration: none; cursor: pointer;
+      transition: background 120ms, border-color 120ms;
     }
-    .pro-cta:hover { background: var(--accent-hi); border-color: var(--accent-hi); }
-    .pro-cta.secondary { background: transparent; color: var(--accent-hi); }
-    .pro-cta.secondary:hover { background: var(--surface-2); }
+    .pro-cta:hover { background: var(--accent-solid-hover); border-color: var(--accent-solid-hover); color: var(--accent-ink-hover); }
+    .pro-cta.secondary { background: transparent; color: var(--accent-text); border-color: var(--border-hi); }
+    .pro-cta.secondary:hover { background: var(--surface-2); border-color: var(--accent); color: var(--accent-text); }
     .pro-cta svg { width: 14px; height: 14px; }
 
     .pro-meta { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); }
@@ -244,10 +296,12 @@
     .pro-activate { margin-top: 10px; padding: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); }
     .pro-activate label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
     .pro-activate input { width: 100%; padding: 6px 8px; background: var(--bg); border: 1px solid var(--border-hi); border-radius: var(--radius-xs); color: var(--text); font-size: 12px; }
-    .pro-activate input:focus { outline: 2px solid var(--accent); }
+    .pro-activate input:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
     .pro-activate .actions { display: flex; gap: 6px; margin-top: 8px; justify-content: flex-end; }
-    .pro-activate button { padding: 6px 12px; border-radius: var(--radius-xs); border: 1px solid var(--border-hi); background: var(--surface-2); color: var(--text); font-size: 12px; cursor: pointer; }
-    .pro-activate button.primary { background: var(--accent); border-color: var(--accent); color: #0b1120; }
+    .pro-activate button { min-height: 32px; padding: 6px 12px; border-radius: var(--radius-xs); border: 1px solid var(--border-hi); background: var(--surface-2); color: var(--text); font-size: 12px; font-weight: 600; cursor: pointer; transition: background 120ms, border-color 120ms; }
+    .pro-activate button:hover { border-color: var(--accent); }
+    .pro-activate button.primary { background: var(--accent-solid); border-color: var(--accent-solid); color: var(--accent-ink); }
+    .pro-activate button.primary:hover { background: var(--accent-solid-hover); border-color: var(--accent-solid-hover); }
     .pro-activate button:disabled { opacity: 0.5; cursor: not-allowed; }
     .pro-msg { margin-top: 6px; font-size: 11px; min-height: 14px; }
     .pro-msg[data-kind="ok"]  { color: var(--ok); }
@@ -258,7 +312,7 @@
       margin-top: 12px; padding: 10px;
       background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
     }
-    .coming-list-title { font-size: 11.5px; font-weight: 600; color: var(--accent-hi); margin-bottom: 6px; }
+    .coming-list-title { font-size: 11.5px; font-weight: 600; color: var(--accent-text); margin-bottom: 6px; }
     .coming-list ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
     .coming-list li { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 12px; color: var(--text-2); }
     .coming-list li svg { width: 14px; height: 14px; color: var(--muted); }
@@ -267,18 +321,24 @@
 
     /* === Filter tab (sub-tabs) === */
     .sub-tabbar {
-      display: flex; gap: 4px; margin: 8px 0 10px;
-      padding: 3px; background: var(--surface); border: 1px solid var(--border);
+      display: flex; gap: 2px; margin: 8px 0 10px;
+      padding: 3px; background: var(--surface-2); border: 1px solid var(--border);
       border-radius: var(--radius-sm);
     }
     .sub-tab-btn {
-      flex: 1; padding: 6px 4px;
+      flex: 1; min-height: 30px; padding: 6px 4px;
       background: transparent; border: none; border-radius: var(--radius-xs);
-      color: var(--text-2); font-size: 11.5px; font-weight: 500; cursor: pointer;
+      color: var(--muted); font-size: 11.5px; font-weight: 600; cursor: pointer;
+      transition: background 120ms, color 120ms;
     }
     .sub-tab-btn:hover { color: var(--text); }
     .sub-tab-btn[aria-selected="true"] {
-      background: var(--accent); color: #0b1120; font-weight: 600;
+      background: var(--surface); color: var(--text);
+      box-shadow: 0 1px 2px rgba(36, 24, 15, 0.10);
+    }
+    body[data-theme="dark"] .sub-tab-btn[aria-selected="true"] {
+      background: var(--surface-3);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
     }
     [data-sub-panel] { display: none; }
     [data-sub-panel][data-active="1"] { display: block; }
@@ -296,10 +356,10 @@
     }
     .cf-levels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin: 10px 0; }
     .cf-level {
-      padding: 7px 4px; border: 1px solid var(--border-hi); border-radius: var(--radius-xs);
-      background: var(--surface-2); color: var(--text-2); font-size: 11px; cursor: pointer;
+      min-height: 32px; padding: 7px 4px; border: 1px solid var(--border-hi); border-radius: var(--radius-xs);
+      background: var(--surface-2); color: var(--text-2); font-size: 11px; font-weight: 600; cursor: pointer;
     }
-    .cf-level[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #0b1120; font-weight: 700; }
+    .cf-level[aria-pressed="true"] { background: var(--accent-solid); border-color: var(--accent-solid); color: var(--accent-ink); font-weight: 700; }
     .cf-custom { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
     .cf-custom summary { cursor: pointer; font-size: 12px; font-weight: 700; color: var(--text-2); }
     .cf-add-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 8px 0; }
@@ -325,7 +385,7 @@
     .cf-rule-main span { font-size: 10px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .cf-rule-row button { width: 22px; height: 22px; border-radius: 999px; border: 1px solid var(--border-hi); background: transparent; color: var(--muted); cursor: pointer; flex: 0 0 22px; }
     .cf-rules-source { margin-top: 4px; font-size: 11px; opacity: 0.75; }
-    .cf-rules-refresh { margin: 4px 0 8px; padding: 4px 10px; font-size: 11px; }
+    .cf-rules-refresh { width: auto; margin: 2px auto 10px; min-height: 28px; padding: 4px 12px; font-size: 12px; }
     .lf-section .rf-row {
       min-width: 0;
     }
@@ -349,18 +409,18 @@
       opacity: 0.78;
     }
     .lf-section #lf-list-input:focus {
-      outline: 2px solid var(--accent);
-      outline-offset: -1px;
-      border-color: transparent;
+      outline: none;
+      box-shadow: var(--focus-ring);
+      border-color: var(--accent);
     }
 
     /* Section header (polish #4: "🔵 流速过滤" inside Filter tab) */
-    .rf-title {
+    .cf-title, .rf-title {
       display: flex; align-items: center; gap: 6px;
       font-size: 14px; font-weight: 700; color: var(--text);
-      margin: 0 0 12px;
+      margin: 0 0 12px; line-height: 1.3;
     }
-    .rf-title::before {
+    .cf-title::before, .rf-title::before {
       content: ""; display: inline-block;
       width: 16px; height: 16px; flex: 0 0 16px;
       background: var(--accent); mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polygon points='22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3'/></svg>") center/contain no-repeat;
@@ -380,42 +440,14 @@
       color: var(--text);
     }
 
-    /* Polish #4: sub-tabs card wrapper */
+    /* Polish #4: sub-tabs card wrapper. The strip keeps the shared segmented
+       look; the wrapper only owns the spacing. */
     .rf-subcard {
-      background: var(--surface-2); border: 1px solid var(--border);
-      border-radius: var(--radius-sm); padding: 4px; margin: 0 0 12px;
+      background: transparent; border: none;
+      padding: 0; margin: 0 0 12px;
     }
-    .rf-subcard .sub-tabbar {
-      background: transparent; border: none; border-radius: 0;
-      padding: 0; margin: 0;
-      border-bottom: 1px solid var(--border);
-    }
-    .rf-subcard .sub-tab-btn {
-      background: transparent !important; color: var(--text-2) !important;
-      border-radius: 0 !important; position: relative;
-      padding: 8px 4px; font-weight: 500;
-    }
-    .rf-subcard .sub-tab-btn:hover {
-      background: var(--surface) !important;
-      color: var(--text) !important;
-    }
-    .rf-subcard .sub-tab-btn:focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: -2px;
-    }
-    .rf-subcard .sub-tab-btn[aria-selected="true"] {
-      background: var(--accent) !important;
-      color: #0b1120 !important;
-      border-radius: var(--radius-xs) var(--radius-xs) 0 0 !important;
-      font-weight: 700;
-      box-shadow: 0 1px 0 rgba(15, 23, 42, 0.1);
-    }
-    .rf-subcard .sub-tab-btn[aria-selected="true"]::after {
-      content: ""; position: absolute;
-      left: 10px; right: 10px; bottom: -1px; height: 2px;
-      background: var(--accent-hi); border-radius: 2px;
-    }
-    .rf-subcard [data-sub-panel] { padding: 10px 4px 4px; }
+    .rf-subcard .sub-tabbar { margin: 0 0 10px; }
+    .rf-subcard [data-sub-panel] { padding: 0; }
 
     .rf-fieldset { border: none; padding: 0; margin: 0; }
     .rf-fieldset legend { display: none; }
@@ -431,7 +463,7 @@
       border-radius: var(--radius-sm); background: var(--bg); color: var(--text);
       font: inherit; font-size: 13px; text-align: left;
     }
-    .rf-row input[type="number"]:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+    .rf-row input[type="number"]:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
 
     .rf-rule-hint { font-size: 10.5px; color: var(--muted); margin: 10px 0; line-height: 1.5; }
 
@@ -439,13 +471,15 @@
     .rf-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
     .rf-btn, .rf-btn-ghost {
       width: 100%;
-      padding: 11px 14px; border-radius: var(--radius-sm);
+      min-height: 40px;
+      padding: 10px 14px; border-radius: var(--radius-sm);
       font-size: 13px; font-weight: 700;
-      cursor: pointer; border: 1px solid var(--accent);
+      cursor: pointer; border: 1px solid var(--accent-solid);
+      transition: background 120ms, border-color 120ms, color 120ms;
     }
-    .rf-btn       { background: var(--accent); color: #0b1120; }
-    .rf-btn:hover { background: var(--accent-hi); border-color: var(--accent-hi); }
-    .rf-btn-ghost { background: transparent; color: var(--accent-hi); order: 2; font-weight: 500; font-size: 12px; padding: 6px; border: none; }
+    .rf-btn       { background: var(--accent-solid); color: var(--accent-ink); }
+    .rf-btn:hover { background: var(--accent-solid-hover); border-color: var(--accent-solid-hover); }
+    .rf-btn-ghost { min-height: 32px; background: transparent; color: var(--accent-text); order: 2; font-weight: 600; font-size: 12px; padding: 6px; border: none; }
     .rf-btn-ghost:hover { color: var(--text); }
     .rf-msg { margin-top: 8px; font-size: 11px; min-height: 14px; text-align: center; }
     .rf-msg[data-kind="ok"]  { color: var(--ok); }
@@ -493,6 +527,7 @@
     .switch .slider {
       position: absolute; inset: 0; cursor: pointer;
       background: var(--surface-3); border-radius: 999px;
+      box-shadow: inset 0 0 0 1px var(--border-hi);
       transition: 200ms;
     }
     .switch .slider::before {
@@ -504,20 +539,37 @@
     }
     .switch input:checked + .slider { background: var(--accent); }
     .switch input:checked + .slider::before { transform: translateX(20px); }
-    .switch input:focus-visible + .slider { box-shadow: 0 0 0 2px var(--accent); }
+    .switch input:focus-visible + .slider { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
 
     /* === Leaderboard tab + About tab (legacy controls in dark theme) === */
-    .panel-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin: 0 0 10px; }
-    .panel-card h3 { font-size: 12px; margin-bottom: 8px; color: var(--text-2); font-weight: 600; }
+    .panel-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin: 0 0 10px; }
+    .panel-card h3 { font-size: var(--fs-title); line-height: 1.3; margin-bottom: 10px; color: var(--text); font-weight: 700; letter-spacing: -0.01em; }
     label.field { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; color: var(--text-2); margin: 6px 0; }
     .row { display: flex; gap: 8px; }
     .row > .field { flex: 1; }
+    /* Marks tab: the minutes field leads, the colour swatch is a fixed square. */
+    .row-color { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; margin: 8px 0; }
+    .row-color .field { margin: 0; }
+    .row-color .field:last-child { align-items: center; }
+    .row-color .field:last-child > span { text-align: center; }
     input[type="number"], input[type="text"], input[type="password"], textarea {
-      padding: 6px 8px; border: 1.5px solid var(--border-hi); border-radius: var(--radius-xs);
+      min-height: 34px;
+      padding: 7px 10px; border: 1.5px solid var(--border-hi); border-radius: var(--radius-xs);
       background: var(--bg); color: var(--text); font: inherit; font-size: 12px;
+      transition: border-color 120ms, box-shadow 120ms;
     }
-    input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+    input[type="number"]:hover, input[type="text"]:hover, input[type="password"]:hover, textarea:hover { border-color: var(--accent); }
+    input:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
     textarea { min-height: 80px; resize: vertical; }
+    /* Native color pickers ship as a chunky bordered box; make them a swatch. */
+    input[type="color"] {
+      width: 44px; height: 34px; padding: 3px;
+      border: 1.5px solid var(--border-hi); border-radius: var(--radius-xs);
+      background: var(--bg); cursor: pointer;
+    }
+    input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+    input[type="color"]::-webkit-color-swatch { border: none; border-radius: 4px; }
+    input[type="color"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
     /* shadcn-style custom Select: trigger + listbox, no native dropdown. */
     .xvm-select { position: relative; width: 100%; }
@@ -540,7 +592,7 @@
       gap: 8px;
     }
     .xvm-select-trigger:hover { border-color: var(--accent); }
-    .xvm-select-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+    .xvm-select-trigger:focus-visible { outline: none; border-color: var(--accent); box-shadow: var(--focus-ring); }
     .xvm-select-value {
       min-width: 0;
       overflow: hidden;
@@ -596,12 +648,14 @@
       font-weight: 600;
     }
     button.adv-btn {
-      padding: 6px 12px; border: 1px solid var(--border-hi);
+      min-height: 32px; padding: 6px 13px; border: 1px solid var(--border-hi);
       border-radius: var(--radius-sm); background: var(--surface-2);
-      color: var(--text); font: inherit; font-size: 12px; cursor: pointer;
+      color: var(--text); font: inherit; font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: background 120ms, border-color 120ms;
     }
-    button.adv-btn:hover { background: var(--border-hi); }
-    button.adv-btn.primary { background: var(--accent); border-color: var(--accent); color: #0b1120; }
+    button.adv-btn:hover { border-color: var(--accent); }
+    button.adv-btn.primary { background: var(--accent-solid); border-color: var(--accent-solid); color: var(--accent-ink); }
+    button.adv-btn.primary:hover { background: var(--accent-solid-hover); border-color: var(--accent-solid-hover); }
     .actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: 8px; }
     .actions.compact button { padding: 4px 10px; font-size: 11px; }
     .status-msg { font-size: 11px; color: var(--ok); margin-top: 6px; }
@@ -619,13 +673,20 @@
     .ft-title { font-size: 12.5px; font-weight: 600; }
     .ft-desc  { font-size: 11px; color: var(--muted); margin-top: 2px; line-height: 1.45; }
     .ft-lb-count, .ft-lb-cols, .ft-lb-reset { margin-top: 6px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-    .ft-lb-count input[type="number"] { width: 56px; padding: 3px 5px; text-align: right; }
+    .ft-lb-count { font-size: 11.5px; color: var(--muted); }
+    .ft-lb-count label { color: var(--text-2); font-weight: 600; }
+    .ft-lb-count input[type="number"] { width: 56px; min-height: 30px; padding: 3px 6px; text-align: center; font-size: 12px; }
     .ft-lb-cols-hint { font-size: 10.5px; color: var(--muted); }
     .col-list { list-style: none; padding: 0; margin: 4px 0; display: flex; flex-direction: column; gap: 3px; flex-basis: 100%; }
     .col-list li { display: flex; align-items: center; gap: 6px; padding: 3px 6px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; font-size: 11px; cursor: grab; }
-    .ft-lb-reset-btn { padding: 4px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-hi); background: var(--surface-2); color: var(--text-2); font-size: 11.5px; cursor: pointer; }
-    .ft-lb-reset-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .col-grip { display: inline-flex; align-items: center; color: var(--muted); }
+    .col-grip svg { width: 7px; height: 11px; }
+    .ft-lb-reset-btn { min-height: 30px; padding: 4px 11px; border-radius: var(--radius-sm); border: 1px solid var(--border-hi); background: var(--surface-2); color: var(--text-2); font-size: 11.5px; font-weight: 600; cursor: pointer; transition: border-color 120ms, color 120ms; }
+    .ft-lb-reset-btn:hover { border-color: var(--accent); color: var(--accent-text); }
     .ft-lb-reset-msg { font-size: 11px; color: var(--ok); }
+    /* The About tab pairs a button with a full-width select; both settings
+       controls should read as the same width. */
+    #theme-toggle-about { width: 100%; text-align: left; }
     .tpl-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
     .tpl-status { font-size: 10.5px; color: var(--ok); opacity: 0; transition: opacity 150ms; }
     .tpl-status[data-on="1"] { opacity: 1; }
@@ -644,6 +705,7 @@
     }
     .tpl-chip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px; }
     .tpl-chip-del {
+      display: inline-flex; align-items: center;
       border: 0; background: none; padding: 0; margin-right: -2px; line-height: 1;
       color: var(--muted); font-size: 13px; cursor: pointer; opacity: 0;
     }
@@ -695,18 +757,23 @@
       text-align: center; font-size: 10.5px; color: var(--muted);
       margin: 8px 0 0;
     }
-    .footer-line a { color: var(--accent); text-decoration: none; }
+    .footer-line a { color: var(--accent-text); text-decoration: none; }
+    .footer-line a:hover { text-decoration: underline; text-underline-offset: 2px; }
 
     /* === Toast === */
     #xvm-toast {
-      position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+      position: fixed; left: 50%; bottom: 16px;
+      transform: translate(-50%, 6px);
       background: var(--surface-2); color: var(--text);
       border: 1px solid var(--border-hi);
       padding: 8px 14px; border-radius: var(--radius-sm);
-      font-size: 12px; opacity: 0; pointer-events: none;
-      transition: opacity 200ms; z-index: 9999;
+      font-size: 12px; font-weight: 600;
+      box-shadow: var(--shadow-pop);
+      opacity: 0; pointer-events: none;
+      transition: opacity 200ms, transform 200ms;
+      z-index: 9999;
     }
-    #xvm-toast.show { opacity: 1; }
+    #xvm-toast.show { opacity: 1; transform: translate(-50%, 0); }
   </style>
 </head>
 <body data-tab="ai" data-tier="free" data-theme="light">
@@ -730,7 +797,7 @@
       <img class="app-logo" src="icons/icon_origin.svg" alt="蓝V特工">
       <div class="app-title">
         <span class="name">蓝V特工</span>
-        <span class="ver">1.18.18</span>
+        <span class="ver" id="popup-version-header"></span>
         <span class="sub" data-i18n="popupSubtitle">Real-time impression velocity on X tweets</span>
       </div>
       <span id="tier-chip">FREE</span>
@@ -894,8 +961,8 @@
               <div class="xvm-select-menu" role="listbox"></div>
             </div>
             </label>
-            <label class="field field-wide" for="ai-base-url"><span data-i18n="aiBaseUrlLabel">Base URL</span><input id="ai-base-url" type="text" spellcheck="false"></label>
             <label class="field" for="ai-model"><span data-i18n="aiModelLabel">Model</span><input id="ai-model" type="text" spellcheck="false"></label>
+            <label class="field field-wide" for="ai-base-url"><span data-i18n="aiBaseUrlLabel">Base URL</span><input id="ai-base-url" type="text" spellcheck="false"></label>
             <label class="field field-wide" for="ai-api-key"><span data-i18n="aiApiKeyLabel">API Key</span><input id="ai-api-key" type="password" spellcheck="false" autocomplete="off"></label>
           </div>
         </div>
@@ -973,15 +1040,15 @@
           </div>
           <label class="switch" for="feat-freshness" aria-label="新鲜度上色"><input id="feat-freshness" type="checkbox" checked><span class="slider"></span></label>
         </div>
-        <div class="row">
+        <div class="row row-color">
           <label class="field"><span data-i18n="freshnessHotMinutes">5 分钟内</span><input id="freshness-hot-minutes" type="number" min="1" max="1440" step="1" value="5"></label>
           <label class="field"><span data-i18n="freshnessHotColor">颜色</span><input id="freshness-hot-color" type="color" value="#f4212e"></label>
         </div>
-        <div class="row">
+        <div class="row row-color">
           <label class="field"><span data-i18n="freshnessFreshMinutes">10 分钟内</span><input id="freshness-fresh-minutes" type="number" min="1" max="1440" step="1" value="10"></label>
           <label class="field"><span data-i18n="freshnessFreshColor">颜色</span><input id="freshness-fresh-color" type="color" value="#1d9bf0"></label>
         </div>
-        <div class="row">
+        <div class="row row-color">
           <label class="field"><span data-i18n="freshnessWarmMinutes">30 分钟内</span><input id="freshness-warm-minutes" type="number" min="1" max="1440" step="1" value="30"></label>
           <label class="field"><span data-i18n="freshnessWarmColor">颜色</span><input id="freshness-warm-color" type="color" value="#f7b928"></label>
         </div>
@@ -1043,8 +1110,7 @@
       </div>
 
       <p class="footer-line">
-        <a href="https://github.com/Icy-Cat/x-viral-monitor" target="_blank" rel="noopener">github.com/Icy-Cat/x-viral-monitor</a>
-        · <a href="https://x.com/intent/follow?screen_name=icycat" target="_blank" rel="noopener">X @icycat</a>
+        <a href="https://github.com/thelazylancer/twitter-plugin" target="_blank" rel="noopener">github.com/thelazylancer/twitter-plugin</a>
         · v<span id="popup-version"></span>
       </p>
     </section>

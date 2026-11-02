@@ -565,6 +565,7 @@
   "contentUpdateItemFilterRulesTitle": { "message": "Content filtering is steadier" },
   "contentUpdateItemFilterRulesBody": { "message": "Content filtering now avoids more false positives around normal Telegram mentions, while catching additional WeChat / Telegram funnel patterns in replies and profile bios." },
   "contentUpdateDismiss": { "message": "Got it" },
+  "contentClose": { "message": "Close" },
   "cfTitle":        { "message": "Content filter" },
   "cfLockedHint":   { "message": "Content filtering is free. You can enable it here." },
   "cfEnabled":      { "message": "Hide adult / ad / funnel replies" },
@@ -730,6 +731,42 @@
   },
   "contentCommentBoardRepostedYou": {
     "message": "reposted your post recently"
+  },
+  "contentFollowingTitle": {
+    "message": "Following list"
+  },
+  "contentFollowingScan": {
+    "message": "Scan"
+  },
+  "contentFollowingPause": {
+    "message": "Pause"
+  },
+  "contentFollowingResume": {
+    "message": "Resume"
+  },
+  "contentFollowingStop": {
+    "message": "Stop"
+  },
+  "contentFollowingSearch": {
+    "message": "Search handle or name"
+  },
+  "contentFollowingFilterAll": {
+    "message": "All"
+  },
+  "contentFollowingFilterNo": {
+    "message": "Not following back"
+  },
+  "contentFollowingFilterYes": {
+    "message": "Following back"
+  },
+  "contentFollowingEmpty": {
+    "message": "No records yet. Press Scan on your Following page."
+  },
+  "contentFollowingEmptyFilter": {
+    "message": "No accounts match this filter"
+  },
+  "contentFollowingCountLabel": {
+    "message": "Showing"
   },
   "contentCommentBoardBlue": {
     "message": "Blue member"

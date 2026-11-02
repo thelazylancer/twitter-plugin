@@ -563,6 +563,7 @@
   "contentUpdateItemFilterRulesTitle": { "message": "内容屏蔽更稳" },
   "contentUpdateItemFilterRulesBody": { "message": "内容屏蔽减少了普通 Telegram 讨论的误判，同时补充更多微信 / Telegram 引流广告特征，减少漏掉的广告回复和个人简介引流。" },
   "contentUpdateDismiss": { "message": "知道了" },
+  "contentClose": { "message": "关闭" },
   "cfTitle":        { "message": "内容屏蔽" },
   "cfLockedHint":   { "message": "内容屏蔽是免费功能，可直接开启。" },
   "cfEnabled":      { "message": "隐藏黄推 / 广告 / 引流回复" },
@@ -728,6 +729,42 @@
   },
   "contentCommentBoardRepostedYou": {
     "message": "刚转推过你"
+  },
+  "contentFollowingTitle": {
+    "message": "关注列表"
+  },
+  "contentFollowingScan": {
+    "message": "扫描"
+  },
+  "contentFollowingPause": {
+    "message": "暂停"
+  },
+  "contentFollowingResume": {
+    "message": "继续"
+  },
+  "contentFollowingStop": {
+    "message": "停止"
+  },
+  "contentFollowingSearch": {
+    "message": "搜索用户名或昵称"
+  },
+  "contentFollowingFilterAll": {
+    "message": "全部"
+  },
+  "contentFollowingFilterNo": {
+    "message": "未回关"
+  },
+  "contentFollowingFilterYes": {
+    "message": "已回关"
+  },
+  "contentFollowingEmpty": {
+    "message": "还没有记录，在你自己的「正在关注」页点「扫描」"
+  },
+  "contentFollowingEmptyFilter": {
+    "message": "没有符合条件的账号"
+  },
+  "contentFollowingCountLabel": {
+    "message": "显示"
   },
   "contentCommentBoardBlue": {
     "message": "蓝V会员"
