@@ -790,7 +790,7 @@
     "message": "Click again"
   },
   "recipHint": {
-    "message": "Counts interactions this browser has seen; inbound replies count only under your own posts."
+    "message": "Counts interactions this browser has seen; inbound replies count only under your own posts; one post counts once per direction."
   },
   "recipSync": {
     "message": "Open notifications"

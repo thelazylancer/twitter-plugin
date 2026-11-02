@@ -32,16 +32,20 @@ const authorRelationByHandle = new Map();
 // would let either keep the other alive.
 const recentInteractions = new Map();
 let interactionsSaveTimer = 0;
-// Give-and-take ledger: how many replies/likes I sent each person, and how many
-// replies/likes/reposts they sent my posts. Kept as counters because the popup
-// answers "is this relationship lopsided", not "what happened recently" — the
-// latter is recentInteractions. Both maps live here for the same reason: a
-// CreateTweet or notification response can be scanned before the bottom of this
-// script has executed. `seen` dedupes: X serves the same tweet from many
-// timelines, and a counter that trusts every observation would count one reply
-// dozens of times.
+// Give-and-take ledger: how many posts I engaged with per person, and how many
+// of my posts they engaged with. The unit is a post, not an action: replying to
+// a post and liking it is one investment in that person, because the question
+// the popup answers is "is this relationship lopsided", not "how many clicks
+// did I make". One record per handle + direction + post remembers which kinds
+// happened, so a later like on a post I already replied to does not move the
+// headline. X serves the same tweet from many timelines, and this record is
+// also the dedupe: a re-observation just sets the same kind again.
 const reciprocityLedger = new Map();
-const reciprocitySeen = new Map();
+const reciprocityPosts = new Map();
+// v1 reply events migrated to synthetic post records keyed by the reply id.
+// This set remembers those event keys so the reply can be re-fetched without
+// counting it a second time; the mapping is rebuilt from `posts` on load.
+const reciprocityLegacyEvents = new Set();
 let reciprocitySaveTimer = 0;
 let reciprocityHydrated = false;
 // Off-switch for the in-feed chip. The popup tab stays available either way.
@@ -3791,12 +3795,13 @@ function hydrateRecentInteractions(raw) {
 }
 
 // ── Give-and-take ledger ───────────────────────────────────────────────────
-// A counter per direction and kind rather than a rolling window: "I replied to
-// them eight times and they never replied to me" is the question the popup
-// answers, and that has no expiry. `seen` keeps the dedupe keys; a key is a
-// tweet id (outbound replies and inbound replies), a liked post id (outbound
-// likes), or actor + post id (inbound likes/reposts, where several people can
-// act on the same post).
+// Counters per direction and kind, plus one record per post that remembers
+// which kinds already moved them. "I engaged with eight of their posts and
+// they never touched mine" is the question the popup answers, and the counters
+// have no expiry. The record is also the dedupe: X serves the same tweet from
+// several timelines, and a counter that trusted every observation would count
+// one post dozens of times. The key is the post I engaged with (out) or my post
+// they engaged with (in), not the reply or notification that carried the fact.
 const RECIPROCITY_FIELDS = {
   'out:reply': 'outReply',
   'out:like': 'outLike',
@@ -3804,48 +3809,100 @@ const RECIPROCITY_FIELDS = {
   'in:like': 'inLike',
   'in:repost': 'inRepost',
 };
-// X serves the same tweet from many timelines, so an unpruned dedupe set grows
-// with every page scroll. A year covers the period in which the same event can
-// plausibly be fetched again; beyond it a duplicate would have to come from
-// pagination deep enough that it no longer matters.
-const RECIPROCITY_SEEN_TTL_MS = 365 * 24 * 60 * 60 * 1000;
-// The whole set is posted to the bridge on each save, so this is also a
-// message-size budget, not just a disk one. 5,000 events is more than a year
-// of ordinary give-and-take; beyond it the oldest key is forgotten and a
-// re-observation could count once more.
-const RECIPROCITY_SEEN_MAX = 5000;
+const RECIPROCITY_KIND_FLAGS = { reply: 'r', like: 'l', repost: 't' };
+const RECIPROCITY_FLAG_KINDS = { r: 'reply', l: 'like', t: 'repost' };
+// One record per handle + direction + post. The kinds bitmask is what keeps a
+// reply and a like on the same post from moving the headline twice; the record
+// is also the dedupe for X serving the same tweet from several timelines.
+const RECIPROCITY_POSTS_TTL_MS = 365 * 24 * 60 * 60 * 1000;
+// The whole map is posted to the bridge on each save, so this is also a
+// message-size budget, not just a disk one. Counts are cumulative; dropping an
+// old record only means a re-observation of that post could count once more,
+// exactly like the event set this replaces.
+const RECIPROCITY_POSTS_MAX = 5000;
 
-function recordReciprocity(handle, dir, kind, key, at) {
-  const field = RECIPROCITY_FIELDS[`${dir}:${kind}`];
-  const h = String(handle || '').replace(/^@/, '').toLowerCase();
-  if (!field || !h || !key) return;
-  // The storage round-trip is still in flight on a cold start, and a payload
-  // can land first. Queue instead of counting against an empty ledger: the
-  // loaded ledger already contains those events, and the queue is replayed
-  // through the same dedupe below.
-  if (!reciprocityHydrated) {
-    if (reciprocityPending.length < 500) reciprocityPending.push([h, dir, kind, key, at]);
-    return;
-  }
-  applyReciprocityEvent(h, dir, kind, field, key, at);
-}
-
-function applyReciprocityEvent(handle, dir, kind, field, key, at) {
-  if (reciprocitySeen.has(key)) return;
-  const when = Number.isFinite(at) && at > 0 ? at : Date.now();
-  // The dedupe TTL measures how long we remember an observation, not how old
-  // the tweet is: a two-year-old reply can be fetched today and must still
-  // collapse with the copy seen yesterday. `lastAt` keeps the event time.
-  reciprocitySeen.set(key, { h: handle, d: dir, k: kind, at: Date.now() });
-  const entry = reciprocityLedger.get(handle) || {
+function emptyReciprocityEntry() {
+  return {
+    outPosts: 0,
     outReply: 0,
     outLike: 0,
+    inPosts: 0,
     inReply: 0,
     inLike: 0,
     inRepost: 0,
     lastAt: 0,
   };
+}
+
+function reciprocityMapKey(dir, handle, postKey) {
+  return `${dir}|${handle}|${postKey}`;
+}
+
+function recordReciprocity(handle, dir, kind, postKey, at, eventKey = '') {
+  const field = RECIPROCITY_FIELDS[`${dir}:${kind}`];
+  const h = String(handle || '').replace(/^@/, '').toLowerCase();
+  const p = String(postKey || '');
+  if (!field || !h || !p) return;
+  // The storage round-trip is still in flight on a cold start, and a payload
+  // can land first. Queue instead of counting against an empty ledger: the
+  // loaded ledger already contains those events, and the queue is replayed
+  // through the same per-post dedupe below. The event key rides along because
+  // an old reply may already be represented by a synthetic migrated record.
+  if (!reciprocityHydrated) {
+    if (reciprocityPending.length < 500) {
+      reciprocityPending.push([h, dir, kind, p, at, String(eventKey || '')]);
+    }
+    return;
+  }
+  applyReciprocityEvent(h, dir, kind, p, at, eventKey);
+}
+
+function applyReciprocityEvent(handle, dir, kind, postKey, at, eventKey = '') {
+  const field = RECIPROCITY_FIELDS[`${dir}:${kind}`];
+  const flag = RECIPROCITY_KIND_FLAGS[kind];
+  if (!field || !flag) return;
+  const when = Number.isFinite(at) && at > 0 ? at : Date.now();
+  if (eventKey && absorbLegacyReciprocityEvent(handle, dir, kind, postKey, eventKey, when)) {
+    scheduleReciprocitySave();
+    if (typeof scheduleReciprocityPaint === 'function') scheduleReciprocityPaint();
+    return;
+  }
+  // The TTL measures how long we remember a post, not how old the post is: a
+  // two-year-old post can be fetched today and must still collapse with the
+  // copy seen yesterday. `lastAt` keeps the interaction time.
+  const mapKey = reciprocityMapKey(dir, handle, postKey);
+  let post = reciprocityPosts.get(mapKey);
+  if (post && post.k && post.k[flag]) {
+    // The post already contributed this kind. Do not refresh the dedupe TTL or
+    // schedule a save for the same reply/notification seen again two seconds
+    // later; only a genuinely newer event on the same post moves lastAt.
+    const seenEntry = reciprocityLedger.get(handle);
+    if (seenEntry && when > (seenEntry.lastAt || 0)) {
+      seenEntry.lastAt = when;
+      reciprocityLedger.set(handle, seenEntry);
+      scheduleReciprocitySave();
+      if (typeof scheduleReciprocityPaint === 'function') scheduleReciprocityPaint();
+    }
+    return;
+  }
+  const isNewPost = !post || !post.k || !Object.keys(post.k).length;
+  if (!post) {
+    post = { h: handle, d: dir, p: postKey, k: {}, at: Date.now() };
+    reciprocityPosts.set(mapKey, post);
+  } else if (!post.k) {
+    post.k = {};
+  }
+  post.at = Date.now();
+  const entry = reciprocityLedger.get(handle) || emptyReciprocityEntry();
+  // Only the first kind on a post moves the headline. A second kind still
+  // moves its own breakdown line, which is why the tooltip can show
+  // "replied 1 · liked 1" for a single post.
+  post.k[flag] = 1;
   entry[field] = (entry[field] || 0) + 1;
+  if (isNewPost) {
+    const postsField = dir === 'out' ? 'outPosts' : 'inPosts';
+    entry[postsField] = (entry[postsField] || 0) + 1;
+  }
   entry.lastAt = Math.max(entry.lastAt || 0, when);
   reciprocityLedger.set(handle, entry);
   scheduleReciprocitySave();
@@ -3854,24 +3911,82 @@ function applyReciprocityEvent(handle, dir, kind, field, key, at) {
   if (typeof scheduleReciprocityPaint === 'function') scheduleReciprocityPaint();
 }
 
-// Unliking withdraws the investment. The dedupe entry names the handle, so the
-// matching counter can be decremented — and liking the same post again later
-// counts once more, which is what the user did.
-function removeReciprocityEvent(key) {
-  if (!reciprocityHydrated) return;
-  const ev = reciprocitySeen.get(key);
-  if (!ev) return;
-  reciprocitySeen.delete(key);
-  const field = RECIPROCITY_FIELDS[`${ev.d}:${ev.k}`];
-  const entry = reciprocityLedger.get(ev.h);
-  if (!field || !entry) {
-    scheduleReciprocitySave();
-    if (typeof scheduleReciprocityPaint === 'function') scheduleReciprocityPaint();
-    return;
+// v1 reply keys used the reply id, not its parent, so those events migrated to
+// synthetic post records. When the same reply is fetched again, its parent is
+// now known; move the old count onto the real post record instead of counting
+// the reply a second time. If the real post was already counted, merging the
+// two records also removes the duplicate post from the headline.
+function absorbLegacyReciprocityEvent(handle, dir, kind, postKey, eventKey, when) {
+  if (kind !== 'reply' || !reciprocityLegacyEvents.has(eventKey)) return false;
+  // The two reply keys are direction-specific; a mismatched pair is a caller
+  // bug, and silently absorbing it would drop a real count.
+  if (dir === 'out' ? !eventKey.startsWith('or:') : !eventKey.startsWith('ir:')) return false;
+  reciprocityLegacyEvents.delete(eventKey);
+  const syntheticKey = reciprocityMapKey(dir, handle, `legacy:${eventKey}`);
+  const legacy = reciprocityPosts.get(syntheticKey);
+  reciprocityPosts.delete(syntheticKey);
+  const realKey = reciprocityMapKey(dir, handle, postKey);
+  let real = reciprocityPosts.get(realKey);
+  const entry = reciprocityLedger.get(handle);
+  if (!real) {
+    // The synthetic record was the only count for this post; moving it to the
+    // real key leaves every counter unchanged.
+    real = { h: handle, d: dir, p: postKey, k: {}, at: legacy?.at || 0 };
+    reciprocityPosts.set(realKey, real);
+  } else if (entry) {
+    const postsField = dir === 'out' ? 'outPosts' : 'inPosts';
+    if (entry[postsField] > 0) entry[postsField] -= 1;
+    for (const flag of Object.keys(legacy?.k || {})) {
+      if (!real.k[flag]) continue;
+      const kindName = RECIPROCITY_FLAG_KINDS[flag];
+      const field = RECIPROCITY_FIELDS[`${dir}:${kindName}`];
+      if (field && entry[field] > 0) entry[field] -= 1;
+    }
   }
+  if (legacy) {
+    for (const flag of Object.keys(legacy.k)) real.k[flag] = 1;
+  }
+  // This observation is also how long we remember the post, the same as a
+  // regular event; without the refresh an old synthetic record would keep an
+  // ancient TTL with it after the move.
+  real.at = Date.now();
+  const flag = RECIPROCITY_KIND_FLAGS[kind];
+  if (flag) real.k[flag] = 1;
+  if (entry) {
+    entry.lastAt = Math.max(entry.lastAt || 0, when);
+    const total = entry.outPosts + entry.outReply + entry.outLike
+      + entry.inPosts + entry.inReply + entry.inLike + entry.inRepost;
+    if (total <= 0) reciprocityLedger.delete(handle);
+    else reciprocityLedger.set(handle, entry);
+  }
+  return true;
+}
+
+// Unliking withdraws the like. The post record names the kinds, so removing
+// one kind leaves the headline alone when the same post was also a reply; the
+// post disappears from the headline only when no kind remains.
+function removeReciprocityEvent(handle, dir, kind, postKey) {
+  if (!reciprocityHydrated) return;
+  const h = String(handle || '').replace(/^@/, '').toLowerCase();
+  const field = RECIPROCITY_FIELDS[`${dir}:${kind}`];
+  const flag = RECIPROCITY_KIND_FLAGS[kind];
+  const p = String(postKey || '');
+  if (!h || !field || !flag || !p) return;
+  const entry = reciprocityLedger.get(h);
+  if (!entry) return;
+  const mapKey = reciprocityMapKey(dir, h, p);
+  const post = reciprocityPosts.get(mapKey);
+  if (!post || !post.k[flag]) return;
+  delete post.k[flag];
   if (entry[field] > 0) entry[field] -= 1;
-  const total = entry.outReply + entry.outLike + entry.inReply + entry.inLike + entry.inRepost;
-  if (total <= 0) reciprocityLedger.delete(ev.h);
+  if (!Object.keys(post.k).length) {
+    reciprocityPosts.delete(mapKey);
+    const postsField = dir === 'out' ? 'outPosts' : 'inPosts';
+    if (entry[postsField] > 0) entry[postsField] -= 1;
+  }
+  const total = entry.outPosts + entry.outReply + entry.outLike
+    + entry.inPosts + entry.inReply + entry.inLike + entry.inRepost;
+  if (total <= 0) reciprocityLedger.delete(h);
   scheduleReciprocitySave();
   if (typeof scheduleReciprocityPaint === 'function') scheduleReciprocityPaint();
 }
@@ -3882,21 +3997,27 @@ function flushReciprocity() {
     reciprocitySaveTimer = 0;
   }
   if (!reciprocityHydrated) return;
+  // A ledger entry is the count; a post record without one cannot move the
+  // headline and would make the next event on that post a silent no-op.
+  if (!reciprocityLedger.size) {
+    reciprocityPosts.clear();
+    return;
+  }
   const now = Date.now();
-  for (const [key, ev] of reciprocitySeen) {
-    if (now - ev.at > RECIPROCITY_SEEN_TTL_MS) reciprocitySeen.delete(key);
+  for (const [mapKey, post] of reciprocityPosts) {
+    if (now - post.at > RECIPROCITY_POSTS_TTL_MS) reciprocityPosts.delete(mapKey);
   }
-  if (reciprocitySeen.size > RECIPROCITY_SEEN_MAX) {
-    const oldest = [...reciprocitySeen.entries()].sort((a, b) => a[1].at - b[1].at);
-    const drop = oldest.length - RECIPROCITY_SEEN_MAX;
-    for (let i = 0; i < drop; i += 1) reciprocitySeen.delete(oldest[i][0]);
+  if (reciprocityPosts.size > RECIPROCITY_POSTS_MAX) {
+    const oldest = [...reciprocityPosts.entries()].sort((a, b) => a[1].at - b[1].at);
+    const drop = oldest.length - RECIPROCITY_POSTS_MAX;
+    for (let i = 0; i < drop; i += 1) reciprocityPosts.delete(oldest[i][0]);
   }
-  if (!reciprocityLedger.size) return;
   window.postMessage({
     type: 'XVM_RECIPROCITY_SAVE',
     reciprocity: {
       ledger: Object.fromEntries(reciprocityLedger),
-      seen: Object.fromEntries(reciprocitySeen),
+      posts: Object.fromEntries(reciprocityPosts),
+      version: 2,
       savedAt: Date.now(),
     },
   }, '*');
@@ -3911,6 +4032,106 @@ window.addEventListener('pagehide', () => {
   if (reciprocitySaveTimer) flushReciprocity();
 });
 
+function normalizeReciprocityEntry(entry) {
+  const outReply = Math.max(0, Math.floor(Number(entry?.outReply) || 0));
+  const outLike = Math.max(0, Math.floor(Number(entry?.outLike) || 0));
+  const inReply = Math.max(0, Math.floor(Number(entry?.inReply) || 0));
+  const inLike = Math.max(0, Math.floor(Number(entry?.inLike) || 0));
+  const inRepost = Math.max(0, Math.floor(Number(entry?.inRepost) || 0));
+  // v1 counted actions, so its sum is the closest thing to a post count we
+  // have. v2 stores the post count directly; preserving the old sum on
+  // upgrade keeps the chip from dropping numbers the user already saw.
+  const outPosts = entry?.outPosts == null
+    ? outReply + outLike
+    : Math.max(0, Math.floor(Number(entry.outPosts) || 0));
+  const inPosts = entry?.inPosts == null
+    ? inReply + inLike + inRepost
+    : Math.max(0, Math.floor(Number(entry.inPosts) || 0));
+  return {
+    outPosts,
+    outReply,
+    outLike,
+    inPosts,
+    inReply,
+    inLike,
+    inRepost,
+    lastAt: Number.isFinite(entry?.lastAt) ? entry.lastAt : 0,
+  };
+}
+
+function sanitizeReciprocityPost(record) {
+  if (!record || typeof record !== 'object') return null;
+  const d = record.d === 'in' ? 'in' : record.d === 'out' ? 'out' : '';
+  const h = String(record.h || '').replace(/^@/, '').toLowerCase();
+  const p = String(record.p || '');
+  if (!d || !h || !p) return null;
+  const allowed = d === 'out' ? ['r', 'l'] : ['r', 'l', 't'];
+  const k = {};
+  for (const flag of allowed) {
+    if (record.k?.[flag]) k[flag] = 1;
+  }
+  if (!Object.keys(k).length) return null;
+  const rawEvent = String(record.e || '');
+  const eventKey = /^(?:or|ir):/.test(rawEvent) ? rawEvent : '';
+  return {
+    h,
+    d,
+    p,
+    k,
+    at: Number(record.at) || 0,
+    ...(eventKey ? { e: eventKey } : {}),
+  };
+}
+
+function mergeReciprocityPost(record) {
+  const clean = sanitizeReciprocityPost(record);
+  if (!clean) return;
+  const mapKey = reciprocityMapKey(clean.d, clean.h, clean.p);
+  const existing = reciprocityPosts.get(mapKey);
+  if (!existing) {
+    reciprocityPosts.set(mapKey, clean);
+    if (clean.e) reciprocityLegacyEvents.add(clean.e);
+    return;
+  }
+  for (const flag of Object.keys(clean.k)) existing.k[flag] = 1;
+  if (!existing.e && clean.e) {
+    existing.e = clean.e;
+    reciprocityLegacyEvents.add(clean.e);
+  }
+  existing.at = Math.max(existing.at || 0, clean.at || 0);
+}
+
+// v1 stored one key per observed event. Likes and reposts already named the
+// acted-on post in their key, so those migrate to real post records and merge
+// with new events on the same post. Reply keys named the reply itself, not its
+// parent; those become synthetic records that keep the old event from being
+// counted again but cannot merge with a new like on the same parent.
+function migrateReciprocitySeen(eventKey, ev) {
+  if (!eventKey || !ev || typeof ev !== 'object') return null;
+  const d = ev.d === 'in' ? 'in' : ev.d === 'out' ? 'out' : '';
+  const h = String(ev.h || '').replace(/^@/, '').toLowerCase();
+  const kind = String(ev.k || '');
+  const flag = RECIPROCITY_KIND_FLAGS[kind];
+  if (!d || !h || !flag) return null;
+  if (d === 'out' && kind === 'repost') return null;
+  let p = '';
+  if (d === 'out' && kind === 'like') {
+    const m = /^ol:(\d+)$/.exec(eventKey);
+    if (m) p = m[1];
+  } else if (d === 'in' && (kind === 'like' || kind === 'repost')) {
+    const m = /^(?:il|it):[^:]+:(\d+)$/.exec(eventKey);
+    if (m) p = m[1];
+  }
+  return {
+    h,
+    d,
+    p: p || `legacy:${eventKey}`,
+    k: { [flag]: 1 },
+    at: Number(ev.at) || Date.now(),
+    ...(p ? {} : { e: eventKey }),
+  };
+}
+
 function hydrateReciprocity(raw, cleared) {
   // A later load that is not a clear would otherwise wipe events observed
   // since the first one; only the first hydration and an explicit clear reset.
@@ -3920,27 +4141,66 @@ function hydrateReciprocity(raw, cleared) {
     reciprocitySaveTimer = 0;
   }
   reciprocityLedger.clear();
-  reciprocitySeen.clear();
+  reciprocityPosts.clear();
+  reciprocityLegacyEvents.clear();
   if (cleared) reciprocityPending.length = 0;
+  const legacyEntries = new Set();
   for (const [handle, entry] of Object.entries(raw?.ledger || {})) {
     const key = String(handle || '').toLowerCase();
     if (!key || !entry || typeof entry !== 'object') continue;
-    const clean = { outReply: 0, outLike: 0, inReply: 0, inLike: 0, inRepost: 0, lastAt: 0 };
-    for (const field of Object.values(RECIPROCITY_FIELDS)) {
-      clean[field] = Math.max(0, Math.floor(Number(entry[field]) || 0));
-    }
-    clean.lastAt = Number.isFinite(entry.lastAt) ? entry.lastAt : 0;
-    reciprocityLedger.set(key, clean);
+    // A v1 entry has no post counters; its like/repost counters are event
+    // counts, which may include two kinds on the same post.
+    if (entry.inPosts == null) legacyEntries.add(key);
+    reciprocityLedger.set(key, normalizeReciprocityEntry(entry));
   }
-  for (const [key, ev] of Object.entries(raw?.seen || {})) {
-    if (!key || !ev || typeof ev !== 'object') continue;
-    const handle = String(ev.h || '').toLowerCase();
-    if (!handle) continue;
-    reciprocitySeen.set(key, { h: handle, d: String(ev.d || ''), k: String(ev.k || ''), at: Number(ev.at) || 0 });
+  // New saves carry `posts`. Old saves carry `seen`; fold it in too, so an
+  // upgrade keeps the dedupe it already had instead of counting those posts
+  // again on the next scroll.
+  const hasNewPosts = !!raw?.posts && typeof raw.posts === 'object'
+    && Object.keys(raw.posts).length > 0;
+  for (const record of Object.values(raw?.posts || {})) mergeReciprocityPost(record);
+  for (const [eventKey, ev] of Object.entries(raw?.seen || {})) {
+    mergeReciprocityPost(migrateReciprocitySeen(eventKey, ev));
+  }
+  // v1 counted a like and a repost on the same post separately. The post ids
+  // in those keys let the migration collapse them, but only when every old
+  // like/repost is present; a pruned seen map would make the distinct count
+  // too low and silently drop real posts. A save that already has v2 posts has
+  // done this once and must not be adjusted again.
+  if (!hasNewPosts) {
+    for (const handle of legacyEntries) {
+      const entry = reciprocityLedger.get(handle);
+      if (!entry) continue;
+      let seenLike = 0;
+      let seenRepost = 0;
+      const kindPosts = new Set();
+      for (const post of reciprocityPosts.values()) {
+        if (post.h !== handle || post.d !== 'in') continue;
+        if (!post.k.l && !post.k.t) continue;
+        kindPosts.add(post.p);
+        if (post.k.l) seenLike += 1;
+        if (post.k.t) seenRepost += 1;
+      }
+      if (seenLike === entry.inLike && seenRepost === entry.inRepost) {
+        const duplicate = entry.inLike + entry.inRepost - kindPosts.size;
+        if (duplicate > 0) entry.inPosts = Math.max(0, entry.inPosts - duplicate);
+      }
+    }
+  }
+  // The bridge caps handles and posts independently, so a post record can
+  // outlive the ledger entry it was counted in. Drop those instead of letting
+  // a later event set a kind that never reaches the headline.
+  for (const [mapKey, post] of reciprocityPosts) {
+    if (!reciprocityLedger.has(post.h)) {
+      reciprocityPosts.delete(mapKey);
+      if (post.e) reciprocityLegacyEvents.delete(post.e);
+    }
   }
   reciprocityHydrated = true;
   const pending = reciprocityPending.splice(0);
-  for (const [handle, dir, kind, key, at] of pending) recordReciprocity(handle, dir, kind, key, at);
+  for (const [handle, dir, kind, key, at, eventKey] of pending) {
+    recordReciprocity(handle, dir, kind, key, at, eventKey);
+  }
   if (typeof scheduleReciprocityPaint === 'function') scheduleReciprocityPaint();
 }
 
@@ -3958,21 +4218,26 @@ function observeReciprocityFromPayload(data) {
   const target = String(data.inReplyToScreenName ?? '').toLowerCase();
   if (author === me) {
     if (target && target !== me) {
-      recordReciprocity(target, 'out', 'reply', `or:${data.id}`, at);
+      // The investment is in the post I replied to, not in my reply. If the
+      // parent is missing, my reply id is the only stable key left.
+      recordReciprocity(target, 'out', 'reply', data.inReplyToStatusId || data.id, at, `or:${data.id}`);
     }
     return;
   }
   // `in_reply_to_screen_name` only names the immediate parent. If I replied
   // under Alice's post and Alice answers my reply, the parent is me but the
   // conversation is still Alice's; that is not give-and-take toward my post.
-  if (target === me && isReplyUnderMyOwnPost(data)) {
-    recordReciprocity(author, 'in', 'reply', `ir:${data.id}`, at);
+  // The root id is also the record key: two replies to the same post of mine
+  // are one investment.
+  const myRootId = target === me ? ownReplyRootId(data) : '';
+  if (myRootId) {
+    recordReciprocity(author, 'in', 'reply', myRootId, at, `ir:${data.id}`);
   }
   // Own Likes tab: records the posts liked before install. X serves this tab
-  // only to the account owner, and the like click records the same key when
+  // only to the account owner, and the like click records the same post when
   // the tab is unavailable, so neither path double-counts.
   if (isOwnLikesPage(me)) {
-    recordReciprocity(author, 'out', 'like', `ol:${data.id}`, at);
+    recordReciprocity(author, 'out', 'like', data.id, at);
   }
 }
 
@@ -3982,35 +4247,49 @@ function isOwnLikesPage(me = getLoggedInHandle()) {
   return !!m && m[1].toLowerCase() === me;
 }
 
-// The conversation id is the root status id. A reply to my reply in someone
-// else's thread has in_reply_to_screen_name = me but conversationId = theirs.
-// Prefer the root we have already parsed; when it is absent, the status page
-// currently open can prove ownership. An unknown root is not counted.
-function isReplyUnderMyOwnPost(data) {
-  const me = getLoggedInHandle();
-  if (!me || !data) return false;
-  const rootId = String(data.conversationId || '');
-  if (rootId) {
-    const root = tweetDataStore.get(rootId);
-    if (root?.screenName) return String(root.screenName).toLowerCase() === me;
-    const pageRootId = getStatusIdFromLocation();
-    if (pageRootId && pageRootId === rootId) return isOwnStatusPage();
-    return false;
-  }
-  // Some responses omit conversation_id_str. Walk the parent chain only as far
-  // as the payload store can prove it, and require a true root (no parent).
+// The conversation id is the root status id, and the root is the post of mine
+// that the other person engaged with. When the payload omits it, walk the
+// parent chain only as far as the payload store can prove it.
+function replyRootId(data) {
+  if (!data) return '';
+  const explicit = String(data.conversationId || '');
+  if (explicit) return explicit;
   let cur = data;
   const seen = new Set([String(data.id || '')]);
   for (let depth = 0; depth < 12 && cur?.inReplyToStatusId; depth += 1) {
     const parentId = String(cur.inReplyToStatusId);
-    if (seen.has(parentId)) return false;
+    if (seen.has(parentId)) return '';
     seen.add(parentId);
     const parent = tweetDataStore.get(parentId);
-    if (!parent) return false;
+    if (!parent) return '';
     cur = parent;
   }
-  if (cur === data || cur?.inReplyToStatusId) return false;
-  return !!cur?.screenName && String(cur.screenName).toLowerCase() === me;
+  if (cur === data || cur?.inReplyToStatusId) return '';
+  return String(cur?.id || '');
+}
+
+// A reply to my reply in someone else's thread has in_reply_to_screen_name =
+// me but its root belongs to the other person. Prefer the root we have already
+// parsed; when it is absent, the status page currently open can prove
+// ownership. An unknown root is not counted.
+function ownReplyRootId(data) {
+  const me = getLoggedInHandle();
+  if (!me || !data) return '';
+  const rootId = replyRootId(data);
+  if (!rootId) return '';
+  const root = tweetDataStore.get(rootId);
+  if (root?.screenName) {
+    return String(root.screenName).toLowerCase() === me ? rootId : '';
+  }
+  const pageRootId = getStatusIdFromLocation();
+  if (pageRootId && pageRootId === rootId) {
+    return isOwnStatusPage() ? rootId : '';
+  }
+  return '';
+}
+
+function isReplyUnderMyOwnPost(data) {
+  return !!ownReplyRootId(data);
 }
 
 // A like has no payload naming the liked post's author, so the click is the
@@ -4026,9 +4305,9 @@ document.addEventListener('click', (ev) => {
   const me = getLoggedInHandle();
   if (!id || !author || author === me) return;
   if (btn.getAttribute('data-testid') === 'like') {
-    recordReciprocity(author, 'out', 'like', `ol:${id}`, Date.now());
+    recordReciprocity(author, 'out', 'like', id, Date.now());
   } else {
-    removeReciprocityEvent(`ol:${id}`);
+    removeReciprocityEvent(author, 'out', 'like', id);
   }
 }, true);
 
@@ -4052,8 +4331,9 @@ function observeRepliersToMe() {
     const at = Number.isFinite(createdAt) && createdAt > 0 ? createdAt : now;
     recordInteraction(author, 'reply', at);
     // The payload path normally records this first; the DOM pass is what
-    // catches a reply whose payload omitted in_reply_to_screen_name.
-    recordReciprocity(author, 'in', 'reply', `ir:${id}`, at);
+    // catches a reply whose payload omitted in_reply_to_screen_name. Both use
+    // the root post as the record key, so seeing the same reply twice is free.
+    recordReciprocity(author, 'in', 'reply', rootId, at, `ir:${id}`);
   }
 }
 
@@ -4179,13 +4459,7 @@ function observeInteractionsFromNotifications() {
       // the notification itself exists because my post was acted on.
       if (kind !== 'reply') recordInteraction(actor, kind, at);
       if (postId) {
-        recordReciprocity(
-          actor,
-          'in',
-          kind,
-          `${kind === 'like' ? 'il' : 'it'}:${actor.toLowerCase()}:${postId}`,
-          at,
-        );
+        recordReciprocity(actor, 'in', kind, postId, at);
       }
     }
   }
@@ -5533,14 +5807,23 @@ function reciprocityTotals(entry) {
   const inReply = Math.max(0, Math.floor(Number(entry?.inReply) || 0));
   const inLike = Math.max(0, Math.floor(Number(entry?.inLike) || 0));
   const inRepost = Math.max(0, Math.floor(Number(entry?.inRepost) || 0));
+  // `mine`/`theirs` count posts, not actions: reply + like on one post is one
+  // investment. The per-kind numbers below still count the post once per kind,
+  // so they can sum to more than the headline; the hint explains why.
+  const outPosts = entry?.outPosts == null
+    ? outReply + outLike
+    : Math.max(0, Math.floor(Number(entry.outPosts) || 0));
+  const inPosts = entry?.inPosts == null
+    ? inReply + inLike + inRepost
+    : Math.max(0, Math.floor(Number(entry.inPosts) || 0));
   return {
     outReply,
     outLike,
     inReply,
     inLike,
     inRepost,
-    mine: outReply + outLike,
-    theirs: inReply + inLike + inRepost,
+    mine: outPosts,
+    theirs: inPosts,
   };
 }
 

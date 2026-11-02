@@ -384,9 +384,12 @@ const INTERACTIONS_MAX_ENTRIES = 2000;
 const FOLLOWING_MAX_ENTRIES = 20000;
 // The give-and-take ledger is cumulative, so it is capped rather than aged out.
 // 5,000 handles is far beyond the number of people one account can invest in
-// within a year; the event set is what actually needs room, because every
-// dedupe key is one observed reply, like, or repost.
+// within a year; the post map is what actually needs room, because every entry
+// is one post in one direction.
 const RECIPROCITY_MAX_HANDLES = 5000;
+const RECIPROCITY_MAX_POSTS = 5000;
+// v1 saves carried an event map instead. Keep the old cap for a tab that is
+// still running the previous content script during an upgrade.
 const RECIPROCITY_MAX_EVENTS = 5000;
 // Timestamp of the last clear the popup performed. A save posted just before
 // the clear message reached the page can land after the key was removed; this
@@ -1559,9 +1562,9 @@ window.addEventListener('message', (event) => {
     return;
   }
 
-  // Give-and-take ledger. The content script owns the counters and the dedupe
-  // keys; this side only stores them, with a cap so a runaway writer cannot
-  // fill the local quota. The popup reads the same key directly.
+  // Give-and-take ledger. The content script owns the post counters and the
+  // per-post records; this side only stores them, with caps so a runaway writer
+  // cannot fill the local quota. The popup reads the same key directly.
   if (type === 'XVM_RECIPROCITY_REQUEST') {
     safeChromeCall(() => {
       chrome.storage.local.get({ xvmReciprocity: null }, (items) => {
@@ -1585,17 +1588,28 @@ window.addEventListener('message', (event) => {
       .filter(([, entry]) => entry && typeof entry === 'object')
       .sort((a, b) => (Number(b[1].lastAt) || 0) - (Number(a[1].lastAt) || 0))
       .slice(0, RECIPROCITY_MAX_HANDLES);
-    const seen = Object.entries(raw.seen || {})
-      .filter(([, entry]) => entry && typeof entry === 'object')
-      .sort((a, b) => (Number(b[1].at) || 0) - (Number(a[1].at) || 0))
-      .slice(0, RECIPROCITY_MAX_EVENTS);
+    const keptHandles = new Set(ledger.map(([handle]) => handle));
+    const stored = {
+      ledger: Object.fromEntries(ledger),
+      version: 2,
+    };
+    if (raw.posts && typeof raw.posts === 'object') {
+      const posts = Object.entries(raw.posts)
+        .filter(([, entry]) => entry && typeof entry === 'object')
+        .filter(([, entry]) => keptHandles.has(String(entry.h || '').toLowerCase()))
+        .sort((a, b) => (Number(b[1].at) || 0) - (Number(a[1].at) || 0))
+        .slice(0, RECIPROCITY_MAX_POSTS);
+      stored.posts = Object.fromEntries(posts);
+    } else if (raw.seen && typeof raw.seen === 'object') {
+      const seen = Object.entries(raw.seen)
+        .filter(([, entry]) => entry && typeof entry === 'object')
+        .filter(([, entry]) => keptHandles.has(String(entry.h || '').toLowerCase()))
+        .sort((a, b) => (Number(b[1].at) || 0) - (Number(a[1].at) || 0))
+        .slice(0, RECIPROCITY_MAX_EVENTS);
+      stored.seen = Object.fromEntries(seen);
+    }
     safeChromeCall(() => {
-      chrome.storage.local.set({
-        xvmReciprocity: {
-          ledger: Object.fromEntries(ledger),
-          seen: Object.fromEntries(seen),
-        },
-      });
+      chrome.storage.local.set({ xvmReciprocity: stored });
     });
     return;
   }

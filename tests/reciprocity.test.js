@@ -1,5 +1,5 @@
-// Give-and-take ledger: my replies/likes toward a handle vs their replies/
-// likes/reposts toward me. The content script observes, the popup renders.
+// Give-and-take ledger: the posts I engaged with per handle vs the posts of
+// mine they engaged with. The content script observes, the popup renders.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -14,8 +14,8 @@ const popupHtml = readFileSync(resolve(repo, 'popup.html'), 'utf8');
 const popupScript = readFileSync(resolve(repo, 'popup-reciprocity.js'), 'utf8');
 const dashboardJs = readFileSync(resolve(repo, 'popup-dashboard.js'), 'utf8');
 
-// Run the ledger block for real: the counters, dedupe, hydration replay, and
-// save payload are the parts that are easy to get subtly wrong.
+// Run the ledger block for real: the post counters, per-post dedupe, hydration
+// replay, and save payload are the parts that are easy to get subtly wrong.
 function loadLedger() {
   const start = contentJs.indexOf('const RECIPROCITY_FIELDS');
   const end = contentJs.indexOf('// Whoever replied to the root of one of my own posts replied to me.');
@@ -40,7 +40,8 @@ function loadLedger() {
   ctx.sent = [];
   vm.runInNewContext(`
     const reciprocityLedger = new Map();
-    const reciprocitySeen = new Map();
+    const reciprocityPosts = new Map();
+    const reciprocityLegacyEvents = new Set();
     let reciprocitySaveTimer = 0;
     let reciprocityHydrated = false;
     const reciprocityPending = [];
@@ -52,7 +53,8 @@ function loadLedger() {
       observeReciprocityFromPayload,
       flushReciprocity,
       ledger: reciprocityLedger,
-      seen: reciprocitySeen,
+      posts: reciprocityPosts,
+      legacyEvents: reciprocityLegacyEvents,
       tweetDataStore,
     };
   `, ctx);
@@ -62,38 +64,71 @@ function loadLedger() {
 }
 
 describe('give-and-take ledger', () => {
-  it('counts my reply against the person I replied to, once', () => {
+  it('counts my reply against the post I replied to, once', () => {
     const api = loadLedger();
     api.hydrateReciprocity(null, false);
     const payload = {
       id: 'reply-1',
       screenName: 'Me',
       inReplyToScreenName: 'alice',
+      inReplyToStatusId: 'alice-post-1',
       createdAt: '2026-01-01T00:00:00.000Z',
     };
     api.observeReciprocityFromPayload(payload);
     api.observeReciprocityFromPayload(payload); // the same tweet in another response
     const entry = api.ledger.get('alice');
     expect(entry.outReply).toBe(1);
+    expect(entry.outPosts).toBe(1);
     expect(entry.inReply).toBe(0);
-    expect(api.seen.has('or:reply-1')).toBe(true);
+    expect(entry.inPosts).toBe(0);
+    expect(api.posts.size).toBe(1);
     api.flushReciprocity();
   });
 
-  it('counts their reply to me and ignores my reply to myself', () => {
+  it('does not refresh the post record when the same event is observed again', () => {
+    const api = loadLedger();
+    api.hydrateReciprocity(null, false);
+    const payload = {
+      id: 'reply-1',
+      screenName: 'Me',
+      inReplyToScreenName: 'alice',
+      inReplyToStatusId: 'alice-post-1',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+    api.observeReciprocityFromPayload(payload);
+    const post = [...api.posts.values()][0];
+    const touchedAt = post.at;
+    const firstLastAt = api.ledger.get('alice').lastAt;
+    // The DOM and notification scans re-see the same reply every couple of
+    // seconds; that must not keep the post's TTL alive or queue a save.
+    api.observeReciprocityFromPayload(payload);
+    expect(post.at).toBe(touchedAt);
+    expect(api.ledger.get('alice').lastAt).toBe(firstLastAt);
+    // A second, newer reply on the same post stays one post but moves lastAt.
+    api.observeReciprocityFromPayload({ ...payload, id: 'reply-2', createdAt: '2026-02-01T00:00:00.000Z' });
+    expect(api.ledger.get('alice').outReply).toBe(1);
+    expect(api.ledger.get('alice').outPosts).toBe(1);
+    expect(api.ledger.get('alice').lastAt).toBe(Date.parse('2026-02-01T00:00:00.000Z'));
+    expect(post.at).toBe(touchedAt);
+    api.flushReciprocity();
+  });
+
+  it('counts their reply to my post and ignores replies that are not under my post', () => {
     const api = loadLedger();
     api.hydrateReciprocity(null, false);
     api.tweetDataStore.set('my-root', { id: 'my-root', screenName: 'me', conversationId: 'my-root' });
     api.observeReciprocityFromPayload({
-      id: 'r2', screenName: 'alice', inReplyToScreenName: 'me', conversationId: 'my-root',
+      id: 'r2', screenName: 'alice', inReplyToScreenName: 'me',
+      inReplyToStatusId: 'my-root', conversationId: 'my-root',
     });
     api.observeReciprocityFromPayload({ id: 'r3', screenName: 'me', inReplyToScreenName: 'me' });
     // Alice replying inside her own thread is not a reply to me.
     api.observeReciprocityFromPayload({ id: 'r4', screenName: 'alice', inReplyToScreenName: 'alice' });
-    expect(api.ledger.get('alice').inReply).toBe(1);
+    const entry = api.ledger.get('alice');
+    expect(entry.inReply).toBe(1);
+    expect(entry.inPosts).toBe(1);
     expect(api.ledger.get('me')).toBeUndefined();
-    expect(api.seen.has('ir:r2')).toBe(true);
-    expect(api.seen.has('ir:r4')).toBe(false);
+    expect(api.posts.size).toBe(1);
     api.flushReciprocity();
   });
 
@@ -112,7 +147,7 @@ describe('give-and-take ledger', () => {
       conversationId: 'alice-root',
     });
     expect(api.ledger.get('alice')).toBeUndefined();
-    expect(api.seen.has('ir:alice-answer')).toBe(false);
+    expect(api.posts.size).toBe(0);
     api.flushReciprocity();
   });
 
@@ -130,11 +165,13 @@ describe('give-and-take ledger', () => {
       inReplyToStatusId: 'my-reply',
       conversationId: 'my-root',
     });
-    expect(api.ledger.get('alice').inReply).toBe(1);
+    const entry = api.ledger.get('alice');
+    expect(entry.inReply).toBe(1);
+    expect(entry.inPosts).toBe(1);
     api.flushReciprocity();
   });
 
-  it('walks the parent chain when the payload omits conversation_id', () => {
+  it('walks the parent chain and keys the interaction by the root post', () => {
     const api = loadLedger();
     api.hydrateReciprocity(null, false);
     api.tweetDataStore.set('my-root', { id: 'my-root', screenName: 'me' });
@@ -147,30 +184,252 @@ describe('give-and-take ledger', () => {
       inReplyToScreenName: 'me',
       inReplyToStatusId: 'my-reply',
     });
-    expect(api.ledger.get('alice').inReply).toBe(1);
+    // A like notification on the root is the same post, not a second one.
+    api.recordReciprocity('alice', 'in', 'like', 'my-root', 200);
+    const entry = api.ledger.get('alice');
+    expect(entry.inReply).toBe(1);
+    expect(entry.inLike).toBe(1);
+    expect(entry.inPosts).toBe(1);
     api.flushReciprocity();
   });
 
-  it('replays queued observations after hydration without double-counting stored events', () => {
+  it('counts one post once when I both reply to it and like it', () => {
     const api = loadLedger();
-    api.recordReciprocity('alice', 'out', 'reply', 'or:r1', 100);
-    api.recordReciprocity('alice', 'out', 'reply', 'or:r2', 200);
+    api.hydrateReciprocity(null, false);
+    api.recordReciprocity('alice', 'out', 'reply', 'alice-post-1', 100);
+    api.recordReciprocity('alice', 'out', 'like', 'alice-post-1', 200);
+    const entry = api.ledger.get('alice');
+    expect(entry.outReply).toBe(1);
+    expect(entry.outLike).toBe(1);
+    expect(entry.outPosts).toBe(1);
+    expect(entry.inPosts).toBe(0);
+    // A second post is a second investment.
+    api.recordReciprocity('alice', 'out', 'like', 'alice-post-2', 300);
+    expect(entry.outLike).toBe(2);
+    expect(entry.outPosts).toBe(2);
+    api.flushReciprocity();
+  });
+
+  it('counts one of my posts once when they reply, like, and repost it', () => {
+    const api = loadLedger();
+    api.hydrateReciprocity(null, false);
+    api.recordReciprocity('alice', 'in', 'reply', 'my-post-1', 100);
+    api.recordReciprocity('alice', 'in', 'like', 'my-post-1', 200);
+    api.recordReciprocity('alice', 'in', 'repost', 'my-post-1', 300);
+    const entry = api.ledger.get('alice');
+    expect(entry.inReply).toBe(1);
+    expect(entry.inLike).toBe(1);
+    expect(entry.inRepost).toBe(1);
+    expect(entry.inPosts).toBe(1);
+    expect(entry.outPosts).toBe(0);
+    api.recordReciprocity('alice', 'in', 'like', 'my-post-2', 400);
+    expect(entry.inLike).toBe(2);
+    expect(entry.inPosts).toBe(2);
+    api.flushReciprocity();
+  });
+
+  it('collapses an old like and repost on the same post during migration', () => {
+    const api = loadLedger();
+    const at = Date.now();
+    api.hydrateReciprocity({
+      ledger: { alice: { outReply: 0, outLike: 0, inReply: 0, inLike: 1, inRepost: 1, lastAt: at } },
+      seen: {
+        'il:alice:9': { h: 'alice', d: 'in', k: 'like', at },
+        'it:alice:9': { h: 'alice', d: 'in', k: 'repost', at },
+      },
+    }, false);
+    const entry = api.ledger.get('alice');
+    expect(entry.inLike).toBe(1);
+    expect(entry.inRepost).toBe(1);
+    expect(entry.inPosts).toBe(1);
+    api.flushReciprocity();
+  });
+
+  it('keeps two different posts apart during migration', () => {
+    const api = loadLedger();
+    const at = Date.now();
+    api.hydrateReciprocity({
+      ledger: { alice: { outReply: 0, outLike: 0, inReply: 0, inLike: 1, inRepost: 1, lastAt: at } },
+      seen: {
+        'il:alice:9': { h: 'alice', d: 'in', k: 'like', at },
+        'it:alice:10': { h: 'alice', d: 'in', k: 'repost', at },
+      },
+    }, false);
+    expect(api.ledger.get('alice').inPosts).toBe(2);
+    api.flushReciprocity();
+  });
+
+  it('does not collapse when the old seen map is incomplete', () => {
+    // Two likes and one repost were counted, but the seen map only retains one
+    // like (the cap or TTL pruned the other). Reducing to the seen post count
+    // would drop a post that is still in the counters.
+    const api = loadLedger();
+    const at = Date.now();
+    api.hydrateReciprocity({
+      ledger: { alice: { outReply: 0, outLike: 0, inReply: 0, inLike: 2, inRepost: 1, lastAt: at } },
+      seen: {
+        'il:alice:9': { h: 'alice', d: 'in', k: 'like', at },
+        'it:alice:9': { h: 'alice', d: 'in', k: 'repost', at },
+      },
+    }, false);
+    expect(api.ledger.get('alice').inPosts).toBe(3);
+    api.flushReciprocity();
+  });
+
+  it('replays queued observations after hydration without double-counting a stored post', () => {
+    const api = loadLedger();
+    api.recordReciprocity('alice', 'out', 'like', '5', 100);
+    api.recordReciprocity('alice', 'out', 'like', '6', 200);
+    api.hydrateReciprocity({
+      ledger: { alice: { outReply: 0, outLike: 1, inReply: 0, inLike: 0, inRepost: 0, lastAt: 100 } },
+      seen: { 'ol:5': { h: 'alice', d: 'out', k: 'like', at: 100 } },
+    }, false);
+    const entry = api.ledger.get('alice');
+    expect(entry.outLike).toBe(2);
+    expect(entry.outPosts).toBe(2);
+    api.flushReciprocity();
+  });
+
+  it('merges a stored like with a new reply on the same post during migration', () => {
+    const api = loadLedger();
+    api.hydrateReciprocity({
+      ledger: { alice: { outReply: 0, outLike: 1, inReply: 0, inLike: 0, inRepost: 0, lastAt: 100 } },
+      seen: { 'ol:5': { h: 'alice', d: 'out', k: 'like', at: 100 } },
+    }, false);
+    api.recordReciprocity('alice', 'out', 'reply', '5', 200);
+    const entry = api.ledger.get('alice');
+    expect(entry.outLike).toBe(1);
+    expect(entry.outReply).toBe(1);
+    expect(entry.outPosts).toBe(1);
+    api.flushReciprocity();
+  });
+
+  it('moves an old reply onto its real post when the reply is fetched again', () => {
+    const api = loadLedger();
     api.hydrateReciprocity({
       ledger: { alice: { outReply: 1, outLike: 0, inReply: 0, inLike: 0, inRepost: 0, lastAt: 100 } },
-      seen: { 'or:r1': { h: 'alice', d: 'out', k: 'reply', at: 100 } },
+      seen: { 'or:reply-1': { h: 'alice', d: 'out', k: 'reply', at: 100 } },
     }, false);
-    expect(api.ledger.get('alice').outReply).toBe(2);
+    expect(api.ledger.get('alice').outPosts).toBe(1);
+    expect(api.posts.has('out|alice|legacy:or:reply-1')).toBe(true);
+    // The same reply arrives in a timeline payload, now with its parent id.
+    api.observeReciprocityFromPayload({
+      id: 'reply-1',
+      screenName: 'me',
+      inReplyToScreenName: 'alice',
+      inReplyToStatusId: 'alice-post-1',
+    });
+    const entry = api.ledger.get('alice');
+    expect(entry.outPosts).toBe(1);
+    expect(entry.outReply).toBe(1);
+    expect(api.posts.has('out|alice|legacy:or:reply-1')).toBe(false);
+    expect(api.posts.has('out|alice|alice-post-1')).toBe(true);
+    // A like on the parent now lands on the same record.
+    api.recordReciprocity('alice', 'out', 'like', 'alice-post-1', 200);
+    expect(entry.outLike).toBe(1);
+    expect(entry.outPosts).toBe(1);
+    api.flushReciprocity();
+  });
+
+  it('merges an old reply into a post that was already counted under its real id', () => {
+    const api = loadLedger();
+    api.hydrateReciprocity({
+      ledger: { alice: { outReply: 1, outLike: 0, inReply: 0, inLike: 0, inRepost: 0, lastAt: 100 } },
+      seen: { 'or:reply-1': { h: 'alice', d: 'out', k: 'reply', at: 100 } },
+    }, false);
+    // A like on the same parent is seen before the old reply is fetched again.
+    api.recordReciprocity('alice', 'out', 'like', 'alice-post-1', 150);
+    expect(api.ledger.get('alice').outPosts).toBe(2);
+    api.observeReciprocityFromPayload({
+      id: 'reply-1',
+      screenName: 'me',
+      inReplyToScreenName: 'alice',
+      inReplyToStatusId: 'alice-post-1',
+    });
+    const entry = api.ledger.get('alice');
+    expect(entry.outPosts).toBe(1);
+    expect(entry.outReply).toBe(1);
+    expect(entry.outLike).toBe(1);
+    expect(api.posts.get('out|alice|alice-post-1').k).toEqual({ l: 1, r: 1 });
+    api.flushReciprocity();
+  });
+
+  it('moves an old inbound reply onto my real post when it is fetched again', () => {
+    const api = loadLedger();
+    api.tweetDataStore.set('my-root', { id: 'my-root', screenName: 'me', conversationId: 'my-root' });
+    api.hydrateReciprocity({
+      ledger: { alice: { outReply: 0, outLike: 0, inReply: 1, inLike: 0, inRepost: 0, lastAt: 100 } },
+      seen: { 'ir:r2': { h: 'alice', d: 'in', k: 'reply', at: 100 } },
+    }, false);
+    expect(api.ledger.get('alice').inPosts).toBe(1);
+    api.observeReciprocityFromPayload({
+      id: 'r2',
+      screenName: 'alice',
+      inReplyToScreenName: 'me',
+      inReplyToStatusId: 'my-root',
+      conversationId: 'my-root',
+    });
+    const entry = api.ledger.get('alice');
+    expect(entry.inPosts).toBe(1);
+    expect(entry.inReply).toBe(1);
+    expect(api.posts.has('in|alice|legacy:ir:r2')).toBe(false);
+    expect(api.posts.has('in|alice|my-root')).toBe(true);
+    // A like notification on my post merges with the migrated reply.
+    api.recordReciprocity('alice', 'in', 'like', 'my-root', 200);
+    expect(entry.inLike).toBe(1);
+    expect(entry.inPosts).toBe(1);
+    api.flushReciprocity();
+  });
+
+  it('keeps the legacy reply mapping across a save and reload', () => {
+    const api = loadLedger();
+    const seenAt = Date.now();
+    api.hydrateReciprocity({
+      ledger: { alice: { outReply: 1, outLike: 0, inReply: 0, inLike: 0, inRepost: 0, lastAt: 100 } },
+      seen: { 'or:reply-1': { h: 'alice', d: 'out', k: 'reply', at: seenAt } },
+    }, false);
+    api.flushReciprocity();
+    const save = api.sent.find((m) => m.type === 'XVM_RECIPROCITY_SAVE');
+    // The bridge drops the old seen map; the event key has to survive on the
+    // synthetic record or the next page load would count the reply again.
+    expect(save.reciprocity.posts['out|alice|legacy:or:reply-1'].e).toBe('or:reply-1');
+    const next = loadLedger();
+    next.hydrateReciprocity(save.reciprocity, false);
+    next.observeReciprocityFromPayload({
+      id: 'reply-1',
+      screenName: 'me',
+      inReplyToScreenName: 'alice',
+      inReplyToStatusId: 'alice-post-1',
+    });
+    const entry = next.ledger.get('alice');
+    expect(entry.outPosts).toBe(1);
+    expect(entry.outReply).toBe(1);
+    expect(next.posts.has('out|alice|alice-post-1')).toBe(true);
+    next.flushReciprocity();
+  });
+
+  it('keeps a post counted after an unlike when I also replied to it', () => {
+    const api = loadLedger();
+    api.hydrateReciprocity(null, false);
+    api.recordReciprocity('alice', 'out', 'reply', '5', 100);
+    api.recordReciprocity('alice', 'out', 'like', '5', 200);
+    expect(api.ledger.get('alice').outPosts).toBe(1);
+    api.removeReciprocityEvent('alice', 'out', 'like', '5');
+    const entry = api.ledger.get('alice');
+    expect(entry.outLike).toBe(0);
+    expect(entry.outReply).toBe(1);
+    expect(entry.outPosts).toBe(1);
     api.flushReciprocity();
   });
 
   it('withdraws a like on unlike, and forgets the handle when it hits zero', () => {
     const api = loadLedger();
     api.hydrateReciprocity(null, false);
-    api.recordReciprocity('alice', 'out', 'like', 'ol:5', 100);
-    expect(api.ledger.get('alice').outLike).toBe(1);
-    api.removeReciprocityEvent('ol:5');
+    api.recordReciprocity('alice', 'out', 'like', '5', 100);
+    expect(api.ledger.get('alice').outPosts).toBe(1);
+    api.removeReciprocityEvent('alice', 'out', 'like', '5');
     expect(api.ledger.get('alice')).toBeUndefined();
-    expect(api.seen.has('ol:5')).toBe(false);
+    expect(api.posts.size).toBe(0);
     api.flushReciprocity();
   });
 
@@ -180,53 +439,58 @@ describe('give-and-take ledger', () => {
     api.setPath('/me/likes');
     api.observeReciprocityFromPayload({ id: 'post-9', screenName: 'alice', inReplyToScreenName: '' });
     expect(api.ledger.get('alice').outLike).toBe(1);
+    expect(api.ledger.get('alice').outPosts).toBe(1);
     api.flushReciprocity();
   });
 
   it('clearing wipes the ledger and stops a pending save from restoring it', () => {
     const api = loadLedger();
     api.hydrateReciprocity(null, false);
-    api.recordReciprocity('alice', 'in', 'like', 'il:alice:9', 100);
+    api.recordReciprocity('alice', 'in', 'like', '9', 100);
     api.hydrateReciprocity(null, true);
     expect(api.ledger.size).toBe(0);
-    expect(api.seen.size).toBe(0);
+    expect(api.posts.size).toBe(0);
     api.flushReciprocity();
     expect(api.sent.filter((m) => m.type === 'XVM_RECIPROCITY_SAVE')).toHaveLength(0);
   });
 
-  it('saves counters and dedupe keys together', () => {
+  it('saves per-post counters and the post records together', () => {
     const api = loadLedger();
     api.hydrateReciprocity(null, false);
-    api.recordReciprocity('alice', 'in', 'repost', 'it:alice:9', 100);
+    api.recordReciprocity('alice', 'in', 'repost', '9', 100);
     api.flushReciprocity();
     const save = api.sent.find((m) => m.type === 'XVM_RECIPROCITY_SAVE');
     expect(save.reciprocity.ledger.alice.inRepost).toBe(1);
-    expect(save.reciprocity.seen['it:alice:9']).toMatchObject({ h: 'alice', d: 'in', k: 'repost' });
-    expect(Number.isFinite(save.reciprocity.seen['it:alice:9'].at)).toBe(true);
+    expect(save.reciprocity.ledger.alice.inPosts).toBe(1);
+    expect(save.reciprocity.posts['in|alice|9']).toMatchObject({
+      h: 'alice', d: 'in', p: '9', k: { t: 1 },
+    });
+    expect(Number.isFinite(save.reciprocity.posts['in|alice|9'].at)).toBe(true);
+    expect(save.reciprocity.version).toBe(2);
     expect(Number.isFinite(save.reciprocity.savedAt)).toBe(true);
   });
 });
 
 describe('give-and-take capture', () => {
-  it('records my replies and their replies from the tweet payload', () => {
-    expect(contentJs).toContain("recordReciprocity(target, 'out', 'reply', `or:${data.id}`, at)");
-    expect(contentJs).toContain("recordReciprocity(author, 'in', 'reply', `ir:${data.id}`, at)");
+  it('records my replies against the parent post and their replies against mine', () => {
+    expect(contentJs).toContain("recordReciprocity(target, 'out', 'reply', data.inReplyToStatusId || data.id, at, `or:${data.id}`)");
+    expect(contentJs).toContain("recordReciprocity(author, 'in', 'reply', myRootId, at, `ir:${data.id}`)");
   });
 
   it('records likes on click and withdraws them on unlike', () => {
     expect(contentJs).toContain('button[data-testid="like"], button[data-testid="unlike"]');
-    expect(contentJs).toContain("recordReciprocity(author, 'out', 'like', `ol:${id}`, Date.now())");
-    expect(contentJs).toContain('removeReciprocityEvent(`ol:${id}`)');
+    expect(contentJs).toContain("recordReciprocity(author, 'out', 'like', id, Date.now())");
+    expect(contentJs).toContain("removeReciprocityEvent(author, 'out', 'like', id)");
   });
 
   it('backfills likes from the account owner’s Likes tab', () => {
     expect(contentJs).toContain('function isOwnLikesPage(me = getLoggedInHandle())');
-    expect(contentJs).toContain("recordReciprocity(author, 'out', 'like', `ol:${data.id}`, at)");
+    expect(contentJs).toContain("recordReciprocity(author, 'out', 'like', data.id, at)");
   });
 
   it('records likes and reposts from notifications against the acted-on post', () => {
     expect(contentJs).toContain('function notificationStatusId(cell, me)');
-    expect(contentJs).toContain("`${kind === 'like' ? 'il' : 'it'}:${actor.toLowerCase()}:${postId}`");
+    expect(contentJs).toContain("recordReciprocity(actor, 'in', kind, postId, at)");
     // Mentions inside the liked post must not become actors.
     expect(contentJs).toContain('cell.querySelectorAll(\'a[href^="/"] img\')');
   });
@@ -237,7 +501,7 @@ describe('give-and-take capture', () => {
     // list under my own status — never from the notification actor.
     expect(contentJs).toContain("if (kind !== 'reply') recordInteraction(actor, kind, at);");
     expect(contentJs).toContain("const postId = kind === 'like' || kind === 'repost' ? notificationStatusId(cell, me) : '';");
-    expect(contentJs).toContain('if (target === me && isReplyUnderMyOwnPost(data)) {');
+    expect(contentJs).toContain('const myRootId = target === me ? ownReplyRootId(data) : \'\';');
     expect(contentJs).toContain('data.inReplyToStatusId !== rootId');
   });
 
@@ -250,17 +514,19 @@ describe('give-and-take capture', () => {
     expect(contentJs).toContain('return articleOwnStatusId(post);');
   });
 
-  it('dedupes every event and queues observations until the store loads', () => {
-    expect(contentJs).toContain('if (reciprocitySeen.has(key)) return;');
+  it('dedupes by post and queues observations until the store loads', () => {
+    expect(contentJs).toContain('const mapKey = reciprocityMapKey(dir, handle, postKey);');
+    expect(contentJs).toContain('if (post && post.k && post.k[flag]) {');
     expect(contentJs).toContain('if (!reciprocityHydrated) {');
     expect(contentJs).toContain('reciprocityPending.push');
-    expect(contentJs).toContain('for (const [handle, dir, kind, key, at] of pending) recordReciprocity');
+    expect(contentJs).toContain('for (const [handle, dir, kind, key, at, eventKey] of pending) {');
   });
 
   it('caps the stored ledger and forwards a popup clear to open tabs', () => {
     expect(bridgeJs).toContain("type === 'XVM_RECIPROCITY_SAVE'");
     expect(bridgeJs).toContain('xvmReciprocity');
-    expect(bridgeJs).toContain('RECIPROCITY_MAX_EVENTS');
+    expect(bridgeJs).toContain('RECIPROCITY_MAX_POSTS');
+    expect(bridgeJs).toContain('raw.posts');
     expect(bridgeJs).toContain("type: 'XVM_RECIPROCITY_LOAD', reciprocity: null, cleared: true");
     expect(contentJs).toContain('hydrateReciprocity(event.data.reciprocity, event.data.cleared === true)');
   });
@@ -272,6 +538,12 @@ describe('in-feed reciprocity chip', () => {
     expect(contentJs).toContain('const entry = reciprocityLedger.get(handle)');
     expect(contentJs).toContain("`${i18n('recipMine')} ${t.mine} : ${t.theirs}`");
     expect(contentJs).toContain('chip.classList.toggle(\'xvm-recip--oneway\', t.mine > 0 && t.theirs === 0)');
+  });
+
+  it('counts posts, not actions, in the headline', () => {
+    expect(contentJs).toContain("const outPosts = entry?.outPosts == null");
+    expect(contentJs).toContain('mine: outPosts');
+    expect(contentJs).toContain('theirs: inPosts');
   });
 
   it('leaves the corner to 未关注 and skips self / promoted / quoted posts', () => {
@@ -333,9 +605,11 @@ describe('reciprocity panel', () => {
     expect(popupScript).toContain('sum.mine > 0 && sum.theirs === 0');
   });
 
-  it('counts replies and likes as mine, replies/likes/reposts as theirs', () => {
-    expect(popupScript).toContain('mine: outReply + outLike');
-    expect(popupScript).toContain('theirs: inReply + inLike + inRepost');
+  it('counts one post once per direction', () => {
+    expect(popupScript).toContain("const outPosts = entry?.outPosts == null ? outReply + outLike : count(entry, 'outPosts');");
+    expect(popupScript).toContain("const inPosts = entry?.inPosts == null ? inReply + inLike + inRepost : count(entry, 'inPosts');");
+    expect(popupScript).toContain('mine: outPosts');
+    expect(popupScript).toContain('theirs: inPosts');
   });
 
   it('clears the stored ledger in two steps', () => {

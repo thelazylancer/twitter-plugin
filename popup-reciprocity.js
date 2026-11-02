@@ -5,8 +5,12 @@
 // chrome.storage.local under xvmReciprocity; this panel only reads and renders
 // them. A row compares:
 //
-//   mine   = replies I sent them + their posts I liked
-//   theirs = replies they sent me + my posts they liked + my posts they reposted
+//   mine   = posts I replied to + posts I liked
+//   theirs = my posts they replied to + my posts they liked + my posts they reposted
+//
+// A post counts once per direction even when I both replied to it and liked
+// it. The per-kind numbers below still count the post once for each kind, so
+// the tooltip can show two lines for one post; `mine`/`theirs` stay the union.
 //
 // The imbalance (mine - theirs) is the sort key, so the people who take the
 // most without giving back sit at the top. A one-way filter keeps exactly the
@@ -34,21 +38,28 @@
   }
 
   // Components are kept separately so the tooltip can explain a number that
-  // looks surprising ("they invested 4" = two likes and two reposts).
+  // looks surprising ("they invested 4" = two likes and two reposts). `mine`
+  // and `theirs` are the distinct post counts; the components can overlap when
+  // the same post was both replied to and liked.
   function totals(entry) {
     const outReply = count(entry, 'outReply');
     const outLike = count(entry, 'outLike');
     const inReply = count(entry, 'inReply');
     const inLike = count(entry, 'inLike');
     const inRepost = count(entry, 'inRepost');
+    // Entries written before the per-post rule stored only action counters.
+    // Falling back to their sum keeps the panel readable until the content
+    // script hydrates and saves the normalized shape.
+    const outPosts = entry?.outPosts == null ? outReply + outLike : count(entry, 'outPosts');
+    const inPosts = entry?.inPosts == null ? inReply + inLike + inRepost : count(entry, 'inPosts');
     return {
       outReply,
       outLike,
       inReply,
       inLike,
       inRepost,
-      mine: outReply + outLike,
-      theirs: inReply + inLike + inRepost,
+      mine: outPosts,
+      theirs: inPosts,
     };
   }
 

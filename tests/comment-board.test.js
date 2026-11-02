@@ -96,6 +96,8 @@ function loadReplierObserver() {
     return contentJs.slice(start, end);
   };
   vm.runInNewContext(`
+    ${sliceFunction('replyRootId')}
+    ${sliceFunction('ownReplyRootId')}
     ${sliceFunction('isReplyUnderMyOwnPost')}
     ${sliceFunction('observeReplierFromPayload')}
     this.observe = observeReplierFromPayload;
