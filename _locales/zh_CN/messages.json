@@ -771,5 +771,62 @@
   },
   "contentCommentBoardBlue": {
     "message": "蓝V会员"
+  },
+  "tabReciprocity": {
+    "message": "互惠"
+  },
+  "recipFilterAll": {
+    "message": "全部"
+  },
+  "recipFilterOneWay": {
+    "message": "单向"
+  },
+  "recipClear": {
+    "message": "清空"
+  },
+  "recipClearConfirm": {
+    "message": "再点一次"
+  },
+  "recipHint": {
+    "message": "只统计本机浏览时看到的互动。"
+  },
+  "recipSync": {
+    "message": "打开通知页"
+  },
+  "recipEmpty": {
+    "message": "还没有记录。正常逛 X 时，你的回复和点赞会记在这里；再打开一次通知页，对方给你的赞和转推也会补上。"
+  },
+  "recipEmptyFilter": {
+    "message": "这个筛选下没有记录。"
+  },
+  "recipMine": {
+    "message": "我"
+  },
+  "recipTheirs": {
+    "message": "对方"
+  },
+  "recipReply": {
+    "message": "回复"
+  },
+  "recipLike": {
+    "message": "赞"
+  },
+  "recipRepost": {
+    "message": "转推"
+  },
+  "recipInlineTitle": {
+    "message": "在帖子上显示"
+  },
+  "recipInlineDesc": {
+    "message": "在已关注且有互惠记录的账号的帖子右上角显示投入比。未关注的人右上角仍显示未关注标记。"
+  },
+  "recipRanking": {
+    "message": "排行"
+  },
+  "recipPeople": {
+    "message": "人"
+  },
+  "contentRecipLastAt": {
+    "message": "最近互动"
   }
 }

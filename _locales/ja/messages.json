@@ -771,5 +771,62 @@
   },
   "contentCommentBoardBlue": {
     "message": "Blue会員"
+  },
+  "tabReciprocity": {
+    "message": "互恵"
+  },
+  "recipFilterAll": {
+    "message": "すべて"
+  },
+  "recipFilterOneWay": {
+    "message": "一方通行"
+  },
+  "recipClear": {
+    "message": "消去"
+  },
+  "recipClearConfirm": {
+    "message": "もう一度押す"
+  },
+  "recipHint": {
+    "message": "このブラウザで見えたインタラクションだけを集計します。"
+  },
+  "recipSync": {
+    "message": "通知ページを開く"
+  },
+  "recipEmpty": {
+    "message": "まだ記録がありません。X を見ている間の返信といいねがここに記録されます。通知ページを開くと、相手からのいいねとリポストも補記されます。"
+  },
+  "recipEmptyFilter": {
+    "message": "このフィルターに一致する記録はありません。"
+  },
+  "recipMine": {
+    "message": "自分"
+  },
+  "recipTheirs": {
+    "message": "相手"
+  },
+  "recipReply": {
+    "message": "返信"
+  },
+  "recipLike": {
+    "message": "いいね"
+  },
+  "recipRepost": {
+    "message": "リポスト"
+  },
+  "recipInlineTitle": {
+    "message": "投稿に表示"
+  },
+  "recipInlineDesc": {
+    "message": "フォロー中で記録のあるアカウントの投稿右上にやり取りの比率を表示します。未フォローの人は未フォローマークのままです。"
+  },
+  "recipRanking": {
+    "message": "ランキング"
+  },
+  "recipPeople": {
+    "message": "人"
+  },
+  "contentRecipLastAt": {
+    "message": "最近の交流"
   }
 }

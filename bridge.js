@@ -304,6 +304,13 @@ const CONTENT_MESSAGE_KEYS = [
   'contentAiInviteTitle',
   'contentAiInviteFollowedTitle',
   'contentAiInviteFollowedToast',
+  'contentRecipLastAt',
+  'recipMine',
+  'recipTheirs',
+  'recipReply',
+  'recipLike',
+  'recipRepost',
+  'recipHint',
 ];
 
 const DEFAULT_FEATURES = {
@@ -346,6 +353,7 @@ const DEFAULT_FEATURES = {
   freshnessWarmColor: '#f7b928',
   unfollowedEnabled: true,
   unfollowedBlueOnly: true,
+  reciprocityInlineEnabled: true,
 };
 const STORAGE_DEFAULTS = { ...DEFAULT_THRESHOLDS, ...DEFAULT_FEATURES };
 const RELEASE_NOTES_SEEN_KEY = 'xvm_release_notes_seen_version';
@@ -374,6 +382,16 @@ const INTERACTIONS_MAX_ENTRIES = 2000;
 // X caps following at 10,000, so this never bites in practice. It exists so a
 // runaway writer cannot fill the 10 MB local quota.
 const FOLLOWING_MAX_ENTRIES = 20000;
+// The give-and-take ledger is cumulative, so it is capped rather than aged out.
+// 5,000 handles is far beyond the number of people one account can invest in
+// within a year; the event set is what actually needs room, because every
+// dedupe key is one observed reply, like, or repost.
+const RECIPROCITY_MAX_HANDLES = 5000;
+const RECIPROCITY_MAX_EVENTS = 5000;
+// Timestamp of the last clear the popup performed. A save posted just before
+// the clear message reached the page can land after the key was removed; this
+// keeps that stale write from resurrecting the cleared ledger.
+let reciprocityClearedAt = 0;
 
 function newestInteractionAt(entry) {
   let newest = 0;
@@ -611,6 +629,7 @@ async function pushSettings(raw) {
     freshnessWarmColor: raw?.freshnessWarmColor,
     unfollowedEnabled: raw?.unfollowedEnabled !== false,
     unfollowedBlueOnly: raw?.unfollowedBlueOnly !== false,
+    reciprocityInlineEnabled: raw?.reciprocityInlineEnabled !== false,
     language: normalizeLanguage(raw?.language),
     effectiveLanguage: getEffectiveLanguageId(raw?.language),
     messages: await getLocalizedMessages(raw?.language),
@@ -1540,6 +1559,47 @@ window.addEventListener('message', (event) => {
     return;
   }
 
+  // Give-and-take ledger. The content script owns the counters and the dedupe
+  // keys; this side only stores them, with a cap so a runaway writer cannot
+  // fill the local quota. The popup reads the same key directly.
+  if (type === 'XVM_RECIPROCITY_REQUEST') {
+    safeChromeCall(() => {
+      chrome.storage.local.get({ xvmReciprocity: null }, (items) => {
+        // Always answer, even with null: the content script uses the reply to
+        // stop queueing observations made during the round-trip.
+        window.postMessage({
+          type: 'XVM_RECIPROCITY_LOAD',
+          reciprocity: items.xvmReciprocity || null,
+        }, '*');
+      });
+    });
+    return;
+  }
+
+  if (type === 'XVM_RECIPROCITY_SAVE' && event.data.reciprocity) {
+    const raw = event.data.reciprocity;
+    // The popup may have cleared the store while this save was in flight; the
+    // content script has not heard about it yet. Drop the stale write.
+    if ((Number(raw.savedAt) || 0) < reciprocityClearedAt) return;
+    const ledger = Object.entries(raw.ledger || {})
+      .filter(([, entry]) => entry && typeof entry === 'object')
+      .sort((a, b) => (Number(b[1].lastAt) || 0) - (Number(a[1].lastAt) || 0))
+      .slice(0, RECIPROCITY_MAX_HANDLES);
+    const seen = Object.entries(raw.seen || {})
+      .filter(([, entry]) => entry && typeof entry === 'object')
+      .sort((a, b) => (Number(b[1].at) || 0) - (Number(a[1].at) || 0))
+      .slice(0, RECIPROCITY_MAX_EVENTS);
+    safeChromeCall(() => {
+      chrome.storage.local.set({
+        xvmReciprocity: {
+          ledger: Object.fromEntries(ledger),
+          seen: Object.fromEntries(seen),
+        },
+      });
+    });
+    return;
+  }
+
   if (type === 'XVM_LEADERBOARD_DISABLE') {
     safeChromeCall(() => {
       chrome.storage.sync.set({ featureVelocityLeaderboard: false }, () => {
@@ -1689,6 +1749,14 @@ safeChromeCall(() => {
 safeChromeCall(() => {
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === 'local') {
+      // The popup clears the ledger by removing the key. Forward that to an
+      // open tab so its in-memory copy cannot save the cleared events back on
+      // the next interaction. A save always writes a value, never removes it,
+      // so this cannot fire on our own writes.
+      if (changes.xvmReciprocity && changes.xvmReciprocity.newValue === undefined) {
+        reciprocityClearedAt = Date.now();
+        window.postMessage({ type: 'XVM_RECIPROCITY_LOAD', reciprocity: null, cleared: true }, '*');
+      }
       if (changes.bookmarkRefreshAt) {
         refreshFolders();
       }
@@ -1719,7 +1787,7 @@ safeChromeCall(() => {
     const aiTouched = changes.aiProvider || changes.aiOpenAIPlatform || changes.aiBaseUrl || changes.aiModel || changes.aiReplyCount || changes.aiLanguage || changes.replyLanguage;
     const grokTouched = changes.grokCommentPrompt || changes.grokPromptTemplates || changes.grokSelectedPromptId || changes.grokEnterToReply || changes.authorReplyPrompt || changes.inviteFollowPrompt || changes.language || aiTouched;
     const bookmarkTimelineInjectTouched = changes.featureBookmarkTimelineInject || changes.bookmarkTimelineInjectFolderIds || changes.bookmarkTimelineInjectEvery;
-    if (!changes.trending && !changes.viral && !changes.featureVelocityLeaderboard && !changes.featureCommentBoard && !changes.commentBoardCount && !changes.commentBoardColumns && !changes.featureCopyAsMarkdown && !changes.featureStarChart && !changes.featureBookmarkFolders && !bookmarkTimelineInjectTouched && !changes.showBookmarkCount && !changes.leaderboardEdgeHideEnabled && !changes.badgeStyle && !changes.leaderboardCount && !changes.leaderboardColumns && !changes.language && !grokTouched) return;
+    if (!changes.trending && !changes.viral && !changes.featureVelocityLeaderboard && !changes.featureCommentBoard && !changes.commentBoardCount && !changes.commentBoardColumns && !changes.featureCopyAsMarkdown && !changes.featureStarChart && !changes.featureBookmarkFolders && !bookmarkTimelineInjectTouched && !changes.showBookmarkCount && !changes.leaderboardEdgeHideEnabled && !changes.badgeStyle && !changes.leaderboardCount && !changes.leaderboardColumns && !changes.language && !changes.reciprocityInlineEnabled && !grokTouched) return;
 
     safeChromeCall(() => {
       chrome.storage.sync.get(STORAGE_DEFAULTS, (items) => {

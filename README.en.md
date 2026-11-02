@@ -12,6 +12,7 @@ A personal fork of [Icy-Cat/x-viral-monitor](https://github.com/Icy-Cat/x-viral-
 - Reply assist on your own posts, with the thread's original post and the comment being answered as context
 - Comment hot board — ranks reply sections by how crowded and fresh they are
 - Comment filtering, recent repliers, and Following records
+- Reciprocity ledger — compares the replies and likes you send each person with the replies, likes, and reposts they send your posts, sorted by imbalance; a one-way filter surfaces people who never give back. A compact `me : them` chip appears at the top-right of posts when this browser has a record for the author, and can be turned off from Marks → Reciprocity. Only interactions seen by this browser are counted
 - Velocity badges, velocity leaderboard, bookmark counts, Markdown copy, Thank-You Star Chart
 - English / Chinese / Japanese UI
 

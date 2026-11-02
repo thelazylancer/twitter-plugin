@@ -32,6 +32,21 @@ const authorRelationByHandle = new Map();
 // would let either keep the other alive.
 const recentInteractions = new Map();
 let interactionsSaveTimer = 0;
+// Give-and-take ledger: how many replies/likes I sent each person, and how many
+// replies/likes/reposts they sent my posts. Kept as counters because the popup
+// answers "is this relationship lopsided", not "what happened recently" — the
+// latter is recentInteractions. Both maps live here for the same reason: a
+// CreateTweet or notification response can be scanned before the bottom of this
+// script has executed. `seen` dedupes: X serves the same tweet from many
+// timelines, and a counter that trusts every observation would count one reply
+// dozens of times.
+const reciprocityLedger = new Map();
+const reciprocitySeen = new Map();
+let reciprocitySaveTimer = 0;
+let reciprocityHydrated = false;
+// Off-switch for the in-feed chip. The popup tab stays available either way.
+let reciprocityInlineEnabled = true;
+const reciprocityPending = [];
 // handle -> { name, followsMe, seenAt } for accounts that appeared on my own
 // Following timeline. Same reason for living up here: the Following response
 // hook can fire while the script is still executing.
@@ -316,8 +331,10 @@ window.addEventListener('message', (event) => {
   applyFreshnessSettings(event.data);
   unfollowedEnabled = event.data.unfollowedEnabled !== false;
   unfollowedBlueOnly = event.data.unfollowedBlueOnly !== false;
+  reciprocityInlineEnabled = event.data.reciprocityInlineEnabled !== false;
   clearUnfollowedLabels();
   paintUnfollowed();
+  paintReciprocityMarks();
   applyBadgeStyle();
   // Apply showBookmarkCount BEFORE renderBadges so the very first
   // post-load render respects the persisted setting — otherwise the
@@ -859,6 +876,7 @@ function scanForTweets(obj) {
       tweetDataStore.set(data.id, data);
       found = true;
       if (typeof observeReplierFromPayload === 'function') observeReplierFromPayload(data);
+      if (typeof observeReciprocityFromPayload === 'function') observeReciprocityFromPayload(data);
     }
   }
 
@@ -2928,6 +2946,12 @@ window.addEventListener('message', (event) => {
   if (event.data?.type === 'XVM_FOLLOWING_LOAD' && event.data.following) {
     hydrateFollowingIndex(event.data.following);
   }
+  if (event.data?.type === 'XVM_RECIPROCITY_LOAD') {
+    // A null payload is still meaningful: it marks the store as hydrated so
+    // events stop queueing, and it is how the popup's "clear" reaches an open
+    // tab (bridge.js forwards a removed storage key).
+    hydrateReciprocity(event.data.reciprocity, event.data.cleared === true);
+  }
 });
 window.postMessage({ type: 'XVM_LB_POS_REQUEST' }, '*');
 window.postMessage({ type: 'XVM_LB_HEIGHT_REQUEST' }, '*');
@@ -2935,6 +2959,7 @@ window.postMessage({ type: 'XVM_LB_SIZE_REQUEST' }, '*');
 window.postMessage({ type: 'XVM_CB_STATE_REQUEST' }, '*');
 window.postMessage({ type: 'XVM_INTERACTIONS_REQUEST' }, '*');
 window.postMessage({ type: 'XVM_FOLLOWING_REQUEST' }, '*');
+window.postMessage({ type: 'XVM_RECIPROCITY_REQUEST' }, '*');
 
 function installLeaderboardDrag() {
   if (!leaderboardEl) return;
@@ -3762,6 +3787,214 @@ function hydrateRecentInteractions(raw) {
   }
 }
 
+// ── Give-and-take ledger ───────────────────────────────────────────────────
+// A counter per direction and kind rather than a rolling window: "I replied to
+// them eight times and they never replied to me" is the question the popup
+// answers, and that has no expiry. `seen` keeps the dedupe keys; a key is a
+// tweet id (outbound replies and inbound replies), a liked post id (outbound
+// likes), or actor + post id (inbound likes/reposts, where several people can
+// act on the same post).
+const RECIPROCITY_FIELDS = {
+  'out:reply': 'outReply',
+  'out:like': 'outLike',
+  'in:reply': 'inReply',
+  'in:like': 'inLike',
+  'in:repost': 'inRepost',
+};
+// X serves the same tweet from many timelines, so an unpruned dedupe set grows
+// with every page scroll. A year covers the period in which the same event can
+// plausibly be fetched again; beyond it a duplicate would have to come from
+// pagination deep enough that it no longer matters.
+const RECIPROCITY_SEEN_TTL_MS = 365 * 24 * 60 * 60 * 1000;
+// The whole set is posted to the bridge on each save, so this is also a
+// message-size budget, not just a disk one. 5,000 events is more than a year
+// of ordinary give-and-take; beyond it the oldest key is forgotten and a
+// re-observation could count once more.
+const RECIPROCITY_SEEN_MAX = 5000;
+
+function recordReciprocity(handle, dir, kind, key, at) {
+  const field = RECIPROCITY_FIELDS[`${dir}:${kind}`];
+  const h = String(handle || '').replace(/^@/, '').toLowerCase();
+  if (!field || !h || !key) return;
+  // The storage round-trip is still in flight on a cold start, and a payload
+  // can land first. Queue instead of counting against an empty ledger: the
+  // loaded ledger already contains those events, and the queue is replayed
+  // through the same dedupe below.
+  if (!reciprocityHydrated) {
+    if (reciprocityPending.length < 500) reciprocityPending.push([h, dir, kind, key, at]);
+    return;
+  }
+  applyReciprocityEvent(h, dir, kind, field, key, at);
+}
+
+function applyReciprocityEvent(handle, dir, kind, field, key, at) {
+  if (reciprocitySeen.has(key)) return;
+  const when = Number.isFinite(at) && at > 0 ? at : Date.now();
+  // The dedupe TTL measures how long we remember an observation, not how old
+  // the tweet is: a two-year-old reply can be fetched today and must still
+  // collapse with the copy seen yesterday. `lastAt` keeps the event time.
+  reciprocitySeen.set(key, { h: handle, d: dir, k: kind, at: Date.now() });
+  const entry = reciprocityLedger.get(handle) || {
+    outReply: 0,
+    outLike: 0,
+    inReply: 0,
+    inLike: 0,
+    inRepost: 0,
+    lastAt: 0,
+  };
+  entry[field] = (entry[field] || 0) + 1;
+  entry.lastAt = Math.max(entry.lastAt || 0, when);
+  reciprocityLedger.set(handle, entry);
+  scheduleReciprocitySave();
+  // The paint helpers live with the other article overlays far below; the
+  // typeof guard keeps this block runnable in the extracted unit tests.
+  if (typeof scheduleReciprocityPaint === 'function') scheduleReciprocityPaint();
+}
+
+// Unliking withdraws the investment. The dedupe entry names the handle, so the
+// matching counter can be decremented — and liking the same post again later
+// counts once more, which is what the user did.
+function removeReciprocityEvent(key) {
+  if (!reciprocityHydrated) return;
+  const ev = reciprocitySeen.get(key);
+  if (!ev) return;
+  reciprocitySeen.delete(key);
+  const field = RECIPROCITY_FIELDS[`${ev.d}:${ev.k}`];
+  const entry = reciprocityLedger.get(ev.h);
+  if (!field || !entry) {
+    scheduleReciprocitySave();
+    if (typeof scheduleReciprocityPaint === 'function') scheduleReciprocityPaint();
+    return;
+  }
+  if (entry[field] > 0) entry[field] -= 1;
+  const total = entry.outReply + entry.outLike + entry.inReply + entry.inLike + entry.inRepost;
+  if (total <= 0) reciprocityLedger.delete(ev.h);
+  scheduleReciprocitySave();
+  if (typeof scheduleReciprocityPaint === 'function') scheduleReciprocityPaint();
+}
+
+function flushReciprocity() {
+  if (reciprocitySaveTimer) {
+    clearTimeout(reciprocitySaveTimer);
+    reciprocitySaveTimer = 0;
+  }
+  if (!reciprocityHydrated) return;
+  const now = Date.now();
+  for (const [key, ev] of reciprocitySeen) {
+    if (now - ev.at > RECIPROCITY_SEEN_TTL_MS) reciprocitySeen.delete(key);
+  }
+  if (reciprocitySeen.size > RECIPROCITY_SEEN_MAX) {
+    const oldest = [...reciprocitySeen.entries()].sort((a, b) => a[1].at - b[1].at);
+    const drop = oldest.length - RECIPROCITY_SEEN_MAX;
+    for (let i = 0; i < drop; i += 1) reciprocitySeen.delete(oldest[i][0]);
+  }
+  if (!reciprocityLedger.size) return;
+  window.postMessage({
+    type: 'XVM_RECIPROCITY_SAVE',
+    reciprocity: {
+      ledger: Object.fromEntries(reciprocityLedger),
+      seen: Object.fromEntries(reciprocitySeen),
+      savedAt: Date.now(),
+    },
+  }, '*');
+}
+
+function scheduleReciprocitySave() {
+  if (reciprocitySaveTimer) return;
+  reciprocitySaveTimer = setTimeout(flushReciprocity, 5000);
+}
+
+window.addEventListener('pagehide', () => {
+  if (reciprocitySaveTimer) flushReciprocity();
+});
+
+function hydrateReciprocity(raw, cleared) {
+  // A later load that is not a clear would otherwise wipe events observed
+  // since the first one; only the first hydration and an explicit clear reset.
+  if (reciprocityHydrated && !cleared) return;
+  if (reciprocitySaveTimer) {
+    clearTimeout(reciprocitySaveTimer);
+    reciprocitySaveTimer = 0;
+  }
+  reciprocityLedger.clear();
+  reciprocitySeen.clear();
+  if (cleared) reciprocityPending.length = 0;
+  for (const [handle, entry] of Object.entries(raw?.ledger || {})) {
+    const key = String(handle || '').toLowerCase();
+    if (!key || !entry || typeof entry !== 'object') continue;
+    const clean = { outReply: 0, outLike: 0, inReply: 0, inLike: 0, inRepost: 0, lastAt: 0 };
+    for (const field of Object.values(RECIPROCITY_FIELDS)) {
+      clean[field] = Math.max(0, Math.floor(Number(entry[field]) || 0));
+    }
+    clean.lastAt = Number.isFinite(entry.lastAt) ? entry.lastAt : 0;
+    reciprocityLedger.set(key, clean);
+  }
+  for (const [key, ev] of Object.entries(raw?.seen || {})) {
+    if (!key || !ev || typeof ev !== 'object') continue;
+    const handle = String(ev.h || '').toLowerCase();
+    if (!handle) continue;
+    reciprocitySeen.set(key, { h: handle, d: String(ev.d || ''), k: String(ev.k || ''), at: Number(ev.at) || 0 });
+  }
+  reciprocityHydrated = true;
+  const pending = reciprocityPending.splice(0);
+  for (const [handle, dir, kind, key, at] of pending) recordReciprocity(handle, dir, kind, key, at);
+  if (typeof scheduleReciprocityPaint === 'function') scheduleReciprocityPaint();
+}
+
+// A reply names its parent, so one payload answers both directions: my reply
+// to someone is investment in them; their reply to me is investment in me.
+// scanForTweets sees every response, which also makes the user's own Reply tab
+// a free backfill for replies made before this build was installed.
+function observeReciprocityFromPayload(data) {
+  if (!data?.screenName || !data.id) return;
+  const me = getLoggedInHandle();
+  if (!me) return;
+  const author = data.screenName.toLowerCase();
+  const parsed = data.createdAt ? new Date(data.createdAt).getTime() : 0;
+  const at = Number.isFinite(parsed) && parsed > 0 ? parsed : Date.now();
+  const target = String(data.inReplyToScreenName ?? '').toLowerCase();
+  if (author === me) {
+    if (target && target !== me) {
+      recordReciprocity(target, 'out', 'reply', `or:${data.id}`, at);
+    }
+    return;
+  }
+  if (target === me) {
+    recordReciprocity(author, 'in', 'reply', `ir:${data.id}`, at);
+  }
+  // Own Likes tab: records the posts liked before install. X serves this tab
+  // only to the account owner, and the like click records the same key when
+  // the tab is unavailable, so neither path double-counts.
+  if (isOwnLikesPage(me)) {
+    recordReciprocity(author, 'out', 'like', `ol:${data.id}`, at);
+  }
+}
+
+function isOwnLikesPage(me = getLoggedInHandle()) {
+  if (!me) return false;
+  const m = /^\/([^/]+)\/likes\/?$/.exec(window.location.pathname);
+  return !!m && m[1].toLowerCase() === me;
+}
+
+// A like has no payload naming the liked post's author, so the click is the
+// observation point. Capture phase because X's own handler may stop bubbling.
+document.addEventListener('click', (ev) => {
+  const target = ev.target instanceof Element ? ev.target : null;
+  const btn = target?.closest?.('button[data-testid="like"], button[data-testid="unlike"]');
+  if (!btn) return;
+  const article = btn.closest('article[data-testid="tweet"]');
+  if (!article || isPromotedArticle(article)) return;
+  const id = getTweetIdFromArticle(article);
+  const author = articleHandle(article);
+  const me = getLoggedInHandle();
+  if (!id || !author || author === me) return;
+  if (btn.getAttribute('data-testid') === 'like') {
+    recordReciprocity(author, 'out', 'like', `ol:${id}`, Date.now());
+  } else {
+    removeReciprocityEvent(`ol:${id}`);
+  }
+}, true);
+
 // Whoever replied to the root of one of my own posts replied to me. Observed
 // while the page is already open, so this costs no request and needs no
 // permission — the replies are simply on screen. Everything else about the
@@ -3779,7 +4012,11 @@ function observeRepliersToMe() {
     const author = articleHandle(article);
     if (!author) continue;
     const createdAt = data.createdAt ? new Date(data.createdAt).getTime() : 0;
-    recordInteraction(author, 'reply', Number.isFinite(createdAt) && createdAt > 0 ? createdAt : now);
+    const at = Number.isFinite(createdAt) && createdAt > 0 ? createdAt : now;
+    recordInteraction(author, 'reply', at);
+    // The payload path normally records this first; the DOM pass is what
+    // catches a reply whose payload omitted in_reply_to_screen_name.
+    recordReciprocity(author, 'in', 'reply', `ir:${id}`, at);
   }
 }
 
@@ -3827,13 +4064,44 @@ function notificationKindOf(text) {
 // is filtered by the caller.
 function notificationActors(cell) {
   const out = new Set();
-  for (const a of cell.querySelectorAll('a[href^="/"]')) {
-    const m = /^\/([A-Za-z0-9_]{1,15})(?:$|[/?])/.exec(a.getAttribute('href') || '');
-    if (!m) continue;
-    if (RESERVED_PROFILE_PATHS.has(m[1].toLowerCase())) continue;
+  const add = (a) => {
+    const m = /^\/([A-Za-z0-9_]{1,15})(?:$|[/?])/.exec(a?.getAttribute('href') || '');
+    if (!m) return;
+    if (RESERVED_PROFILE_PATHS.has(m[1].toLowerCase())) return;
     out.add(m[1]);
+  };
+  // A notification's actors are the avatars stacked at the top. Falling back to
+  // every profile link would count @mentions inside the liked post as people who
+  // liked it, so avatars inside the embedded post are skipped too — that also
+  // drops the author of a quoted post. If the whole cell is laid out as one
+  // tweet element, the first pass finds nothing and the avatar-only fallback
+  // still keeps mentions out.
+  const post = cell.querySelector('[data-testid="tweet"]');
+  const avatarLinks = [...cell.querySelectorAll('a[href^="/"] img')].map((img) => img.closest('a'));
+  for (const a of avatarLinks) {
+    if (post && a && post.contains(a)) continue;
+    add(a);
+  }
+  if (!out.size) {
+    for (const a of avatarLinks) add(a);
+  }
+  if (!out.size) {
+    for (const a of cell.querySelectorAll('a[href^="/"]')) add(a);
   }
   return out;
+}
+
+// The embedded post in a like/repost notification is the post that was acted
+// on. Requiring its author to be me keeps a notification about someone else's
+// post — including a quote of mine — out of my inbound counters. The id is the
+// embedded post's own timestamp link, not the first status link in the cell:
+// a quote card carries the quoted post's link too.
+function notificationStatusId(cell, me) {
+  const post = cell.querySelector('[data-testid="tweet"]');
+  if (!post) return '';
+  const author = articleHandle(post);
+  if (!author || !me || author !== me.toLowerCase()) return '';
+  return articleOwnStatusId(post);
 }
 
 function observeInteractionsFromNotifications() {
@@ -3857,9 +4125,28 @@ function observeInteractionsFromNotifications() {
       cell.dataset.xvmNotifStamp = stampValue;
     }
     if (!kind) continue;
+    // Only likes and reposts need the ledger here: replies already arrive with
+    // their own tweet id through scanForTweets, and using the notification's
+    // status link for a reply could point at the post being replied to instead
+    // of the reply itself.
+    const postId = kind === 'like' || kind === 'repost' ? notificationStatusId(cell, me) : '';
     for (const actor of notificationActors(cell)) {
       if (actor.toLowerCase() === me) continue;
-      recordInteraction(actor, kind, at);
+      // A notification row can be "X replied to their own post" — it says
+      // nothing about the parent being me. Replies are recorded only from the
+      // tweet payload, where in_reply_to_screen_name proves the target, and
+      // from the reply list under my own status. Likes and reposts are safe:
+      // the notification itself exists because my post was acted on.
+      if (kind !== 'reply') recordInteraction(actor, kind, at);
+      if (postId) {
+        recordReciprocity(
+          actor,
+          'in',
+          kind,
+          `${kind === 'like' ? 'il' : 'it'}:${actor.toLowerCase()}:${postId}`,
+          at,
+        );
+      }
     }
   }
 }
@@ -5191,6 +5478,132 @@ function paintUnfollowed(root = document) {
   });
 }
 
+// === Reciprocity chip ===
+// The same corner the 未关注 chip uses, for the opposite case: an account you
+// follow (or one whose follow state X did not send) with a local give-and-take
+// record. The two never appear together — an explicit `following === false`
+// leaves the corner to 未关注. Numbers only; the popup tab owns the verdict and
+// the warning that inbound likes/reposts are only as complete as notifications
+// browsing. The title carries the breakdown for the hover case.
+function reciprocityTotals(entry) {
+  const outReply = Math.max(0, Math.floor(Number(entry?.outReply) || 0));
+  const outLike = Math.max(0, Math.floor(Number(entry?.outLike) || 0));
+  const inReply = Math.max(0, Math.floor(Number(entry?.inReply) || 0));
+  const inLike = Math.max(0, Math.floor(Number(entry?.inLike) || 0));
+  const inRepost = Math.max(0, Math.floor(Number(entry?.inRepost) || 0));
+  return {
+    outReply,
+    outLike,
+    inReply,
+    inLike,
+    inRepost,
+    mine: outReply + outLike,
+    theirs: inReply + inLike + inRepost,
+  };
+}
+
+function reciprocityChipText(entry) {
+  const t = reciprocityTotals(entry);
+  return `${i18n('recipMine')} ${t.mine} : ${t.theirs}`;
+}
+
+function reciprocityChipTitle(entry) {
+  const t = reciprocityTotals(entry);
+  const mine = [];
+  if (t.outReply) mine.push(`${i18n('recipReply')} ${t.outReply}`);
+  if (t.outLike) mine.push(`${i18n('recipLike')} ${t.outLike}`);
+  const theirs = [];
+  if (t.inReply) theirs.push(`${i18n('recipReply')} ${t.inReply}`);
+  if (t.inLike) theirs.push(`${i18n('recipLike')} ${t.inLike}`);
+  if (t.inRepost) theirs.push(`${i18n('recipRepost')} ${t.inRepost}`);
+  const lines = [
+    `${i18n('recipMine')}: ${mine.join(' · ') || 0}`,
+    `${i18n('recipTheirs')}: ${theirs.join(' · ') || 0}`,
+  ];
+  if (Number.isFinite(entry?.lastAt) && entry.lastAt > 0) {
+    const date = new Date(entry.lastAt);
+    if (!Number.isNaN(date.getTime())) {
+      lines.push(`${i18n('contentRecipLastAt')}: ${date.toLocaleDateString()}`);
+    }
+  }
+  lines.push(i18n('recipHint'));
+  return lines.join('\n');
+}
+
+function removeReciprocityMark(article) {
+  ownArticleNodes(article, '.xvm-recip').forEach((node) => node.remove());
+}
+
+function clearReciprocityMarks(root = document) {
+  root.querySelectorAll?.('.xvm-recip').forEach((node) => node.remove());
+}
+
+function paintReciprocityMarks(root = document) {
+  const articles = root.querySelectorAll?.('article[data-testid="tweet"]') || [];
+  if (!reciprocityInlineEnabled || !reciprocityHydrated) {
+    if (!reciprocityInlineEnabled) clearReciprocityMarks(root);
+    return;
+  }
+  const me = getLoggedInHandle();
+  for (const article of articles) {
+    // Quoted posts are articles too; a chip belongs on the outer post, not
+    // inside the quote card's own header.
+    if (article.parentElement?.closest?.('article[data-testid="tweet"]')) continue;
+    const handle = articleHandle(article);
+    if (!handle || (me && handle === me) || isPromotedArticle(article)) {
+      removeReciprocityMark(article);
+      continue;
+    }
+    const entry = reciprocityLedger.get(handle);
+    if (!entry) {
+      removeReciprocityMark(article);
+      continue;
+    }
+    const t = reciprocityTotals(entry);
+    if (t.mine + t.theirs <= 0) {
+      removeReciprocityMark(article);
+      continue;
+    }
+    // 未关注 owns this corner when X says I do not follow the author. An
+    // unknown state still gets the chip: most timeline payloads omit the
+    // field, and hiding a record the user asked for is worse than showing it.
+    if (relationForComment(article)?.following === false) {
+      removeReciprocityMark(article);
+      continue;
+    }
+    article.dataset.xvmOverlayHost = '1';
+    const chips = ownArticleNodes(article, '.xvm-recip');
+    let chip = chips.shift() || null;
+    chips.forEach((node) => node.remove());
+    if (!chip) {
+      chip = document.createElement('span');
+      chip.className = 'xvm-recip';
+      // The chip is only an indicator, but it needs pointer events for the
+      // native title. Swallow the click so it cannot open the post underneath.
+      const swallow = (event) => event.stopPropagation();
+      chip.addEventListener('click', swallow);
+      chip.addEventListener('pointerdown', swallow);
+      article.appendChild(chip);
+    }
+    const text = reciprocityChipText(entry);
+    const title = reciprocityChipTitle(entry);
+    if (chip.textContent !== text) chip.textContent = text;
+    if (chip.title !== title) chip.title = title;
+    chip.classList.toggle('xvm-recip--oneway', t.mine > 0 && t.theirs === 0);
+  }
+}
+
+// Batches the repaint after a like/reply, a hydration, or a clear. The two
+// second tick and the mutation observer are the backstops for everything else.
+let reciprocityPaintTimer = 0;
+function scheduleReciprocityPaint() {
+  if (reciprocityPaintTimer) return;
+  reciprocityPaintTimer = setTimeout(() => {
+    reciprocityPaintTimer = 0;
+    paintReciprocityMarks();
+  }, 100);
+}
+
 // X flips the follow button optimistically and never re-sends the payload the
 // relation store was built from, so one click makes every cached relation stale
 // in place. Repaint as soon as the click settles rather than waiting for the
@@ -5202,6 +5615,7 @@ function repaintFollowState() {
   document.querySelectorAll('article[data-xvm-unfollowed-stamped]')
     .forEach((article) => article.removeAttribute('data-xvm-unfollowed-stamped'));
   paintUnfollowed();
+  paintReciprocityMarks();
   if (commentBoardEnabled) renderCommentBoard();
 }
 
@@ -5652,6 +6066,7 @@ setInterval(() => {
   observeInteractionsFromNotifications();
   paintFreshness();
   paintUnfollowed();
+  paintReciprocityMarks();
   injectAuthorReplyButtons();
   syncPageSurfaceTheme();
 }, 2000);
@@ -5719,6 +6134,7 @@ const observer = new MutationObserver((mutations) => {
     injectAuthorReplyButtons();
     paintFreshness();
     paintUnfollowed();
+    paintReciprocityMarks();
   }
   if (touchedComposer) scheduleComposerInject();
 });
@@ -5765,6 +6181,7 @@ if (document.body) {
   injectAuthorReplyButtons();
   paintFreshness();
   paintUnfollowed();
+  paintReciprocityMarks();
   bootGrokInjectorRetries();
 } else {
   document.addEventListener('DOMContentLoaded', () => {
@@ -5774,6 +6191,7 @@ if (document.body) {
     injectAuthorReplyButtons();
     paintFreshness();
     paintUnfollowed();
+    paintReciprocityMarks();
     bootGrokInjectorRetries();
   });
 }

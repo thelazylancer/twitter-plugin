@@ -1,7 +1,7 @@
 // === Tab router + toast + cross-script glue ===
 //
 // Tab layout (mock A, locked 2026-05-19 after 3rd UI pivot). Routes:
-//   <button role="tab" data-tab="pro|filter|leaderboard|ai|about"> click
+//   <button role="tab" data-tab="pro|filter|leaderboard|ai|marks|about"> click
 //     → body.dataset.tab = …
 //     → CSS [data-tab-panel="…"][data-active="1"] shows the panel
 //
@@ -20,6 +20,9 @@
   // surface. Hidden here as well as in CSS so a persisted "pro" tab can never
   // leave the popup with no visible panel.
   const HIDDEN_TABS = new Set(globalThis.__xvmIsCommunityDevBuild === true ? ['pro'] : []);
+  // The reciprocity ranking moved into Marks. Honouring the old persisted tab
+  // lands returning users on the panel instead of the AI tab.
+  const LEGACY_TAB_ALIASES = { reciprocity: 'marks' };
   const ACTIVE_TAB_KEY = 'xvm_popup_active_tab';
 
   // Critical bug fix (Codex polish item 3): the previous t(key) signature
@@ -34,8 +37,13 @@
     return key;
   }
 
+  function normalizeTab(name) {
+    return LEGACY_TAB_ALIASES[name] || name;
+  }
+
   function isValidTab(name) {
-    return TABS.includes(name) && !HIDDEN_TABS.has(name);
+    const tab = normalizeTab(name);
+    return TABS.includes(tab) && !HIDDEN_TABS.has(tab);
   }
 
   function persistTab(name) {
@@ -67,6 +75,7 @@
   }
 
   function setTab(name, opts = {}) {
+    name = normalizeTab(name);
     if (!isValidTab(name)) name = 'ai';
     const persist = opts.persist !== false;
     document.body.dataset.tab = name;

@@ -265,6 +265,7 @@ describe('#45 popup tabs structure (mock A)', () => {
       'src/premium/content-filter/popup-content-filter.js',
       'popup.js',
       'popup-dashboard.js',
+      'popup-reciprocity.js',
     ]);
   });
 
@@ -359,10 +360,12 @@ describe('#45 popup-dashboard.js tab router', () => {
   it('exposes setTab function + TABS whitelist', () => {
     expect(/function\s+setTab\s*\(/.test(dashJs)).toBe(true);
     expect(/TABS\s*=\s*\[\s*['"]pro['"]\s*,\s*['"]filter['"]\s*,\s*['"]leaderboard['"]\s*,\s*['"]ai['"]\s*,\s*['"]marks['"]\s*,\s*['"]about['"]\s*\]/.test(dashJs)).toBe(true);
+    // The old reciprocity tab now lives in Marks; a persisted tab must land there.
+    expect(/LEGACY_TAB_ALIASES\s*=\s*\{\s*reciprocity:\s*['"]marks['"]\s*\}/.test(dashJs)).toBe(true);
   });
   it('drops the Pro tab in community builds, where every Pro feature is already on', () => {
     expect(dashJs).toContain("globalThis.__xvmIsCommunityDevBuild === true ? ['pro'] : []");
-    expect(/return\s+TABS\.includes\(name\)\s*&&\s*!HIDDEN_TABS\.has\(name\)/.test(dashJs)).toBe(true);
+    expect(/const\s+tab\s*=\s*normalizeTab\(name\);\s*return\s+TABS\.includes\(tab\)\s*&&\s*!HIDDEN_TABS\.has\(tab\)/.test(dashJs)).toBe(true);
     // setTab must fall back rather than paint an empty panel for a hidden tab.
     expect(/if\s*\(!isValidTab\(name\)\)\s*name\s*=\s*['"]ai['"]/.test(dashJs)).toBe(true);
     expect(/function\s+applyBuildChannel\(\)/.test(dashJs)).toBe(true);

@@ -220,6 +220,115 @@
     [role="tabpanel"][data-active="1"] { display: block; }
     body:not([data-tab-ready="1"]) .popup { visibility: hidden; }
 
+    /* === Reciprocity panel (inside Marks) === */
+    .recip-toolbar {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      margin-bottom: 7px;
+    }
+    .recip-filters {
+      display: inline-flex; gap: 2px; padding: 2px;
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      background: var(--surface-2);
+    }
+    .recip-filter {
+      height: 28px; padding: 8px 12px;
+      border: 0; border-radius: var(--radius-xs);
+      background: transparent; color: var(--muted);
+      font: inherit; font-size: var(--fs-meta); font-weight: 600; line-height: 1;
+      cursor: pointer;
+    }
+    .recip-filter:hover { color: var(--text-2); }
+    .recip-filter.is-active {
+      background: var(--surface); color: var(--text);
+      box-shadow: 0 1px 2px rgba(36, 24, 15, 0.10);
+    }
+    .recip-filter:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .recip-clear {
+      height: 28px; padding: 6px 12px;
+      border: 1px solid var(--border); border-radius: 999px;
+      background: transparent; color: var(--muted);
+      font: inherit; font-size: var(--fs-meta); font-weight: 600; line-height: 1;
+      cursor: pointer;
+    }
+    .recip-clear:hover { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+    .recip-clear.is-confirm { color: var(--danger); border-color: var(--danger); }
+    .recip-clear:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .recip-hint {
+      margin: 0 0 6px;
+      color: var(--muted); font-size: var(--fs-micro); line-height: 1.5;
+    }
+    .recip-hint a {
+      margin-left: 4px;
+      color: var(--accent-text); text-decoration: underline; text-underline-offset: 2px;
+    }
+    .recip-details { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--border); }
+    .recip-summary {
+      display: flex; align-items: baseline; gap: 8px;
+      cursor: pointer; list-style: none;
+      color: var(--text-2); font-size: var(--fs-meta); font-weight: 700;
+    }
+    .recip-summary::-webkit-details-marker { display: none; }
+    .recip-summary-meta {
+      color: var(--muted); font-size: var(--fs-micro); font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    .recip-summary-chev {
+      width: 12px; height: 12px; margin-left: auto; align-self: center;
+      color: var(--muted); transition: transform 0.15s ease;
+    }
+    .recip-details[open] .recip-summary-chev { transform: rotate(180deg); }
+    .recip-body { padding-top: 8px; }
+    .recip-list { list-style: none; margin: 0; padding: 0; }
+    .recip-row {
+      padding: 8px 2px 9px;
+      border-bottom: 1px solid var(--border);
+    }
+    .recip-row:last-child { border-bottom: 0; }
+    .recip-top {
+      display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+    }
+    .recip-handle {
+      min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      color: var(--text); font-size: var(--fs-body); font-weight: 600;
+      text-decoration: none;
+    }
+    .recip-handle:hover { text-decoration: underline; text-underline-offset: 2px; }
+    .recip-ratio {
+      flex: 0 0 auto;
+      color: var(--muted); font-size: var(--fs-micro);
+      font-variant-numeric: tabular-nums;
+    }
+    .recip-row.is-oneway .recip-ratio { color: var(--danger); font-weight: 700; }
+    .recip-tag {
+      margin-left: 5px; padding: 1px 5px;
+      border-radius: 999px; background: color-mix(in srgb, var(--danger) 12%, transparent);
+      color: var(--danger); font-size: 9.5px; font-weight: 700; vertical-align: 1px;
+    }
+    .recip-bar {
+      display: flex; gap: 2px; height: 4px;
+      margin: 6px 0 5px;
+      border-radius: 999px; overflow: hidden;
+      background: var(--surface-2);
+    }
+    .recip-bar span { display: block; height: 100%; }
+    .recip-bar-mine { background: var(--accent); }
+    .recip-bar-theirs { background: var(--ok); }
+    .recip-meta {
+      display: flex; justify-content: space-between; gap: 8px;
+      color: var(--muted); font-size: var(--fs-micro);
+      font-variant-numeric: tabular-nums;
+    }
+    .recip-meta b { color: var(--text-2); font-weight: 600; }
+    .recip-empty {
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      padding: 30px 18px;
+      color: var(--muted); font-size: var(--fs-meta); line-height: 1.55;
+      text-align: center;
+    }
+    .recip-empty[hidden] { display: none; }
+    .recip-empty-icon { display: block; width: 26px; height: 26px; opacity: 0.45; }
+    .recip-empty-icon svg { width: 100%; height: 100%; }
+
     /* === Pro tab === */
     .pro-banner {
       background: var(--surface);
@@ -1067,6 +1176,47 @@
           <label class="switch" for="feat-unfollowed-blue" aria-label="只标蓝 V"><input id="feat-unfollowed-blue" type="checkbox" checked><span class="slider"></span></label>
         </div>
       </div>
+
+      <div class="panel-card">
+        <h3 data-i18n="tabReciprocity">互惠</h3>
+        <div class="feature-row">
+          <div class="ft-body">
+            <label for="recip-inline-toggle" id="recip-inline-title"><div class="ft-title" data-i18n="recipInlineTitle">Show on posts</div></label>
+            <div class="ft-desc" data-i18n="recipInlineDesc">Adds the ratio to the top-right of posts from accounts with a local record. Only appears when this browser has one.</div>
+          </div>
+          <label class="switch" for="recip-inline-toggle" aria-labelledby="recip-inline-title">
+            <input id="recip-inline-toggle" type="checkbox" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <details class="recip-details">
+          <summary class="recip-summary">
+            <span data-i18n="recipRanking">Ranking</span>
+            <span class="recip-summary-meta" id="recip-summary-meta"></span>
+            <svg class="recip-summary-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+          </summary>
+          <div class="recip-body">
+            <div class="recip-toolbar">
+              <div class="recip-filters" role="group" aria-label="Reciprocity filter">
+                <button type="button" class="recip-filter is-active" data-filter="all" aria-pressed="true" data-i18n="recipFilterAll">All</button>
+                <button type="button" class="recip-filter" data-filter="oneway" aria-pressed="false" data-i18n="recipFilterOneWay">One-way</button>
+              </div>
+              <button type="button" id="recip-clear" class="recip-clear" data-i18n="recipClear">Clear</button>
+            </div>
+            <p class="recip-hint">
+              <span data-i18n="recipHint">Only interactions seen while browsing are counted.</span>
+              <a href="https://x.com/notifications" target="_blank" rel="noopener" data-i18n="recipSync">Open notifications</a>
+            </p>
+            <ul id="recip-list" class="recip-list"></ul>
+            <div id="recip-empty" class="recip-empty" hidden>
+              <span class="recip-empty-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg>
+              </span>
+              <span id="recip-empty-text"></span>
+            </div>
+          </div>
+        </details>
+      </div>
     </section>
 
     <!-- ============ Tab: About ============ -->
@@ -1128,5 +1278,6 @@
   <script src="src/premium/content-filter/popup-content-filter.js"></script>
   <script src="popup.js"></script>
   <script src="popup-dashboard.js"></script>
+  <script src="popup-reciprocity.js"></script>
 </body>
 </html>

@@ -773,5 +773,62 @@
   },
   "contentCommentBoardBlue": {
     "message": "Blue member"
+  },
+  "tabReciprocity": {
+    "message": "Ratio"
+  },
+  "recipFilterAll": {
+    "message": "All"
+  },
+  "recipFilterOneWay": {
+    "message": "One-way"
+  },
+  "recipClear": {
+    "message": "Clear"
+  },
+  "recipClearConfirm": {
+    "message": "Click again"
+  },
+  "recipHint": {
+    "message": "Counts interactions this browser has seen."
+  },
+  "recipSync": {
+    "message": "Open notifications"
+  },
+  "recipEmpty": {
+    "message": "Nothing recorded yet. Your replies and likes will appear here as you browse X. Open notifications once so likes and reposts from others are picked up too."
+  },
+  "recipEmptyFilter": {
+    "message": "No one matches this filter."
+  },
+  "recipMine": {
+    "message": "Me"
+  },
+  "recipTheirs": {
+    "message": "Them"
+  },
+  "recipReply": {
+    "message": "Replies"
+  },
+  "recipLike": {
+    "message": "Likes"
+  },
+  "recipRepost": {
+    "message": "Reposts"
+  },
+  "recipInlineTitle": {
+    "message": "Show on posts"
+  },
+  "recipInlineDesc": {
+    "message": "Adds the ratio to the top-right of posts from followed accounts with a local record. Accounts you do not follow keep the unfollowed mark."
+  },
+  "recipRanking": {
+    "message": "Ranking"
+  },
+  "recipPeople": {
+    "message": "people"
+  },
+  "contentRecipLastAt": {
+    "message": "Last interaction"
   }
 }

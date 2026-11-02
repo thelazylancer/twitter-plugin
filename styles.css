@@ -1881,6 +1881,35 @@ article[data-testid="tweet"][data-xvm-overlay-host="1"] {
   color: #fff;
 }
 
+/* Give-and-take chip: same corner as 未关注 (the two are mutually exclusive).
+   Neutral gray for a two-way record, X's like red for "I gave, they have not
+   given back" as far as this browser has seen. Pointer events are on only so
+   the native title can show the breakdown; clicks are swallowed in JS. */
+.xvm-recip {
+  position: absolute;
+  top: 8px;
+  right: 48px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #536471;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+  cursor: default;
+  pointer-events: auto;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.45);
+}
+
+.xvm-recip--oneway {
+  background: #f4212e;
+}
+
 .xvm-author-reply-row {
   position: absolute;
   right: 12px;

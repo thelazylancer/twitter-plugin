@@ -198,6 +198,7 @@ const DEFAULT_FEATURES = {
   freshnessWarmColor: '#f7b928',
   unfollowedEnabled: true,
   unfollowedBlueOnly: true,
+  reciprocityInlineEnabled: true,
 };
 const STORAGE_DEFAULTS = { ...DEFAULT_THRESHOLDS, ...DEFAULT_FEATURES };
 const AI_PLATFORM_PRESETS = {

@@ -31,6 +31,7 @@ const ITEMS = [
   'popup.html',
   'popup.js',
   'popup-dashboard.js', // mock A tab router (also handles theme + nav events)
+  'popup-reciprocity.js', // give-and-take panel (reads xvmReciprocity)
   'starchart.js',
   'styles.css',
 ];
