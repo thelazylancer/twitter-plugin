@@ -734,6 +734,17 @@ html[data-xvm-surface="dark"][data-xvm-badge-style="inline-classic"] .xvm-badge:
   transition: background 0.12s;
 }
 .xvm-lb-item:hover { background: rgba(191, 90, 42, 0.10); }
+/* Rows are reachable by Tab; the inset outline stays inside the 24px row so
+   the panel's own border and the adjacent rows stay crisp. */
+.xvm-lb-item:focus-visible {
+  outline: 2px solid #bf5a2a;
+  outline-offset: -2px;
+  background: rgba(191, 90, 42, 0.12);
+}
+.xvm-lb[data-theme="dark"] .xvm-lb-item:focus-visible {
+  outline-color: #22d3ee;
+  background: rgba(6, 182, 212, 0.16);
+}
 .xvm-lb-rank {
   width: 14px;
   text-align: center;

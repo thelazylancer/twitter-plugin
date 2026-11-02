@@ -1843,6 +1843,16 @@ function ensureLeaderboard() {
     ev.stopPropagation();
     if (li.dataset.id) jumpToLeaderboardTweet(li.dataset.id, li);
   });
+  // Rows carry role="button" + tabindex, so they must also answer the two
+  // keys a button answers. Enter on a focused row scrolls to the tweet.
+  leaderboardEl.querySelector('.xvm-lb-list')?.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    const li = ev.target.closest?.('.xvm-lb-item');
+    if (!li) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (li.dataset.id) jumpToLeaderboardTweet(li.dataset.id, li);
+  });
   applyLeaderboardWidth();
   applyLeaderboardHeight();
   applyLeaderboardPosition();
@@ -4473,6 +4483,18 @@ const DEFAULT_CB_COLUMNS = [
 ];
 let commentBoardColumns = DEFAULT_CB_COLUMNS.map((c) => ({ ...c }));
 
+function activateCommentBoardRow(li) {
+  const entry = commentBoardItemMeta.get(li.dataset.id);
+  if (!entry) return;
+  // The article may have been virtualized away while the panel stayed put;
+  // fall back to the recorded page offset in that case.
+  if (entry.article?.isConnected) {
+    entry.article.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } else {
+    window.scrollTo({ top: entry.pageY - 120, behavior: 'smooth' });
+  }
+}
+
 function ensureCommentBoard() {
   if (commentBoardEl) return commentBoardEl;
   const el = document.createElement('div');
@@ -4504,15 +4526,15 @@ function ensureCommentBoard() {
     const li = ev.target.closest?.('.xvm-cb-item');
     if (!li) return;
     ev.stopPropagation();
-    const entry = commentBoardItemMeta.get(li.dataset.id);
-    if (!entry) return;
-    // The article may have been virtualized away while the panel stayed put;
-    // fall back to the recorded page offset in that case.
-    if (entry.article?.isConnected) {
-      entry.article.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    } else {
-      window.scrollTo({ top: entry.pageY - 120, behavior: 'smooth' });
-    }
+    activateCommentBoardRow(li);
+  });
+  el.querySelector('.xvm-lb-list')?.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    const li = ev.target.closest?.('.xvm-cb-item');
+    if (!li) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    activateCommentBoardRow(li);
   });
   commentBoardEl = el;
   applyCommentBoardSize();
@@ -4574,14 +4596,24 @@ function renderCommentBoard() {
     ));
     const html = top.map((t, i) => {
       const cells = visibleCols.map((c) => CB_COLUMN_RENDERERS[c.id](t, i)).join('');
-      return `<li class="xvm-lb-item xvm-cb-item" data-id="${lbEscapeHtml(t.id)}">${cells}</li>`;
+      const handle = (t.handle || '').trim() || `(${i18n('contentFallbackTweetLabel')})`;
+      let label = `${i + 1}. ${handle} · ${i18n('contentCommentBoardReplies')} ${formatViews(t.replies)}`;
+      const relation = commentRelationLabel(t);
+      if (relation) label += ` · ${relation}`;
+      return `<li class="xvm-lb-item xvm-cb-item" data-id="${lbEscapeHtml(t.id)}" role="button" tabindex="0" aria-label="${lbEscapeHtml(label)}">${cells}</li>`;
     }).join('');
     // Scores on the status page decay slowly; most two-second passes produce
     // the same rows. Replacing them anyway would interrupt selection and
     // reattach listeners for no visible change.
     if (html !== commentBoardHtml) {
+      const focusedId = list.contains(document.activeElement)
+        ? document.activeElement.dataset.id
+        : '';
       commentBoardHtml = html;
       list.innerHTML = html;
+      if (focusedId) {
+        list.querySelector(`.xvm-cb-item[data-id="${CSS.escape(focusedId)}"]`)?.focus({ preventScroll: true });
+      }
     }
   });
 }
@@ -5407,14 +5439,24 @@ function renderLeaderboard() {
         : t.velocity >= velocityThresholds.trending ? 'orange'
           : 'green';
       const cells = visibleCols.map((c) => LB_COLUMN_RENDERERS[c.id](t, i)).join('');
-      return `<li class="xvm-lb-item xvm-lb-${tier}" data-id="${t.id}">${cells}</li>`;
+      const handle = (t.handle || '').trim() || `(${i18n('contentFallbackTweetLabel')})`;
+      const label = `${i + 1}. ${handle} · ${formatVelocity(t.velocity)}/h · ${i18n('contentLeaderboardTotalViews')} ${formatViews(t.views)}`;
+      return `<li class="xvm-lb-item xvm-lb-${tier}" data-id="${lbEscapeHtml(t.id)}" role="button" tabindex="0" aria-label="${lbEscapeHtml(label)}">${cells}</li>`;
     }).join('');
     // An unchanged list keeps its nodes, text selection, and the delegated
     // listener. The tick reruns every two seconds, so most passes land here.
     const rebuilt = html !== leaderboardHtml;
+    const focusedId = rebuilt && list.contains(document.activeElement)
+      ? document.activeElement.dataset.id
+      : '';
     if (rebuilt) {
       leaderboardHtml = html;
       list.innerHTML = html;
+      // A live score update can replace the row under the keyboard focus.
+      // Put focus back on the same tweet instead of dropping it to <body>.
+      if (focusedId) {
+        list.querySelector(`.xvm-lb-item[data-id="${CSS.escape(focusedId)}"]`)?.focus({ preventScroll: true });
+      }
     }
 
     // Restore link highlight if the linked item is in the freshly rendered list

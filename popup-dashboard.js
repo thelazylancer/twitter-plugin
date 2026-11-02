@@ -73,6 +73,8 @@
     document.querySelectorAll('[role="tab"][data-tab]').forEach((btn) => {
       const active = btn.dataset.tab === name;
       btn.setAttribute('aria-selected', String(active));
+      // Roving tabindex: Tab enters the strip once, arrow keys move inside it.
+      btn.tabIndex = active ? 0 : -1;
       // The strip scrolls on narrow locales; the chosen tab must never be the
       // one hiding past the edge.
       if (active && typeof btn.scrollIntoView === 'function') {
@@ -122,8 +124,32 @@
   }
 
   function wireTabButtons() {
-    document.querySelectorAll('[role="tab"][data-tab]').forEach((btn) => {
+    const tabbar = document.querySelector('.tabbar');
+    const tabs = document.querySelectorAll('[role="tab"][data-tab]');
+    tabs.forEach((btn) => {
+      if (!btn.id) btn.id = `xvm-tab-${btn.dataset.tab}`;
+      btn.setAttribute('aria-controls', `tabpanel-${btn.dataset.tab}`);
+      const panel = document.getElementById(`tabpanel-${btn.dataset.tab}`);
+      if (panel) panel.setAttribute('aria-labelledby', btn.id);
       btn.addEventListener('click', () => setTab(btn.dataset.tab));
+    });
+    // Standard tablist keys. Only visible tabs participate, so the Pro tab
+    // hidden in community builds cannot trap the arrow keys.
+    tabbar?.addEventListener('keydown', (ev) => {
+      const steps = { ArrowRight: 1, ArrowLeft: -1 };
+      const isStep = Object.prototype.hasOwnProperty.call(steps, ev.key);
+      if (!isStep && ev.key !== 'Home' && ev.key !== 'End') return;
+      const visible = [...tabbar.querySelectorAll('[role="tab"][data-tab]')]
+        .filter((btn) => !btn.hidden && btn.offsetParent !== null);
+      if (!visible.length) return;
+      const current = visible.indexOf(document.activeElement);
+      if (current === -1) return;
+      ev.preventDefault();
+      const next = ev.key === 'Home' ? 0
+        : ev.key === 'End' ? visible.length - 1
+          : (current + steps[ev.key] + visible.length) % visible.length;
+      visible[next].focus();
+      setTab(visible[next].dataset.tab);
     });
     window.addEventListener('hashchange', () => {
       const hashTab = readHashTab();
