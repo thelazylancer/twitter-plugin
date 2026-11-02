@@ -723,6 +723,12 @@
   "contentCommentBoardRepliedYou": {
     "message": "刚回复过你"
   },
+  "contentCommentBoardLikedYou": {
+    "message": "刚赞过你"
+  },
+  "contentCommentBoardRepostedYou": {
+    "message": "刚转推过你"
+  },
   "contentCommentBoardBlue": {
     "message": "蓝V会员"
   }

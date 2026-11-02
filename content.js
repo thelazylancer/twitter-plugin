@@ -21,13 +21,17 @@ let unfollowedEnabled = true;
 let unfollowedBlueOnly = true;
 const authorRelationStore = new Map();
 const authorRelationByHandle = new Map();
-// handle -> ms of their newest reply to one of my own posts. Declared up here
-// with the other stores rather than beside the panel code, because it is written
-// from scanForTweets, which can run on a network response that lands while this
-// script is still executing — a const further down would still be in its
-// temporal dead zone at that point.
-const recentRepliers = new Map();
-let repliersSaveTimer = 0;
+// handle -> { reply, like, repost }, each an epoch-ms timestamp. Declared up
+// here with the other stores rather than beside the panel code, because it is
+// written from scanForTweets, which can run on a network response that lands
+// while this script is still executing — a const further down would still be in
+// its temporal dead zone at that point.
+//
+// Each kind ages out on its own: a reply from twenty minutes ago and a like from
+// Monday are different facts about a person, and folding them into one timestamp
+// would let either keep the other alive.
+const recentInteractions = new Map();
+let interactionsSaveTimer = 0;
 
 // === i18n ===
 let localizedStrings = {};
@@ -2818,15 +2822,15 @@ window.addEventListener('message', (event) => {
       applyCommentBoardPosition();
     }
   }
-  if (event.data?.type === 'XVM_REPLIERS_LOAD' && event.data.repliers) {
-    hydrateRecentRepliers(event.data.repliers);
+  if (event.data?.type === 'XVM_INTERACTIONS_LOAD' && event.data.interactions) {
+    hydrateRecentInteractions(event.data.interactions);
   }
 });
 window.postMessage({ type: 'XVM_LB_POS_REQUEST' }, '*');
 window.postMessage({ type: 'XVM_LB_HEIGHT_REQUEST' }, '*');
 window.postMessage({ type: 'XVM_LB_SIZE_REQUEST' }, '*');
 window.postMessage({ type: 'XVM_CB_STATE_REQUEST' }, '*');
-window.postMessage({ type: 'XVM_REPLIERS_REQUEST' }, '*');
+window.postMessage({ type: 'XVM_INTERACTIONS_REQUEST' }, '*');
 
 function installLeaderboardDrag() {
   if (!leaderboardEl) return;
@@ -3414,11 +3418,25 @@ const CB_RATIO_SATURATION = 5;
 // CB_RATIO_SATURATION because the two answer different questions: saturation is
 // "how much of the ratio term has this earned", this is "is it worth a look".
 const CB_RATIO_HOT = 0.9;
-// How long a reply to one of your own posts keeps its pull. Deliberately short:
-// this is a browsing-session signal, not a relationship. Two hours covers the
-// span in which "they just replied to me" still means "they are here now", and
-// it is also what keeps the stored map self-clearing.
+// How long a reply to one of your own posts keeps its pull on the ranking.
+// Deliberately short: this is a browsing-session signal, not a relationship.
+// Two hours covers the span in which "they just replied to me" still means
+// "they are here now".
 const CB_REPLIER_TTL_MS = 2 * 60 * 60 * 1000;
+// How long the interaction marker stays on a row. Longer than the boost on
+// purpose: the boost answers "is this crowd live", the marker answers "has this
+// person noticed me" — and that question still has a useful answer days later.
+const CB_INTERACTION_TTL_MS = 3 * 24 * 60 * 60 * 1000;
+const CB_INTERACTION_KINDS = ['reply', 'like', 'repost'];
+// Glyphs and the i18n key each one borrows. The key is stored, not resolved:
+// localizedStrings lands after this const, so resolving here would freeze the
+// raw key into the renderer.
+const CB_INTERACTION_MARKS = { reply: '↩', like: '♥', repost: '⟳' };
+const CB_INTERACTION_LABELS = {
+  reply: 'contentCommentBoardRepliedYou',
+  like: 'contentCommentBoardLikedYou',
+  repost: 'contentCommentBoardRepostedYou',
+};
 // What that is worth in feed mode. A nudge rather than a tier: the feed panel is
 // still about where the crowd is, so 1.6 lets a 40-reply post edge past a
 // 60-reply one of the same age without burying the busy threads.
@@ -3470,6 +3488,18 @@ function cbRatioIsHot(ratio) {
 // that already has a timestamp does not pay for a second Date.now().
 function cbReplierIsRecent(at, nowMs) {
   return Number.isFinite(at) && nowMs - at < CB_REPLIER_TTL_MS;
+}
+
+// The kinds still inside the marker window, newest-agnostic. Returns [] for an
+// unknown handle so the renderer can treat "no entry" and "all expired" alike.
+function cbInteractionKinds(entry, nowMs) {
+  if (!entry || typeof entry !== 'object') return [];
+  const out = [];
+  for (const kind of CB_INTERACTION_KINDS) {
+    const at = entry[kind];
+    if (Number.isFinite(at) && nowMs - at < CB_INTERACTION_TTL_MS) out.push(kind);
+  }
+  return out;
 }
 
 // One row per person. 互关机会 is a list of people, so when someone replied
@@ -3554,54 +3584,75 @@ function isOwnStatusPage() {
 // than at the next write.
 function isRecentReplier(handle) {
   const key = String(handle || '').toLowerCase();
-  return key ? cbReplierIsRecent(recentRepliers.get(key), Date.now()) : false;
+  if (!key) return false;
+  return cbReplierIsRecent(recentInteractions.get(key)?.reply, Date.now());
 }
 
-function recordReplierToMe(handle, at) {
+// What the row marker shows: every kind still inside CB_INTERACTION_TTL_MS.
+function interactionKindsFor(handle) {
   const key = String(handle || '').toLowerCase();
-  if (!key || !Number.isFinite(at)) return;
-  const prev = recentRepliers.get(key);
-  // Newest reply wins, and re-observing the same one writes the same value —
-  // which is what makes the record idempotent across the two-second re-render.
-  if (prev !== undefined && prev >= at) return;
-  recentRepliers.set(key, at);
-  scheduleRepliersSave();
+  return key ? cbInteractionKinds(recentInteractions.get(key), Date.now()) : [];
 }
 
-function flushRecentRepliers() {
-  if (repliersSaveTimer) {
-    clearTimeout(repliersSaveTimer);
-    repliersSaveTimer = 0;
+// Newest observation of a kind wins, and re-observing the same one writes the
+// same value — which is what makes the record idempotent across re-renders.
+// Kinds are stored side by side rather than merged into one timestamp so each
+// can expire on its own schedule.
+function recordInteraction(handle, kind, at) {
+  const key = String(handle || '').toLowerCase();
+  if (!key || !CB_INTERACTION_KINDS.includes(kind) || !Number.isFinite(at)) return;
+  const prev = recentInteractions.get(key);
+  if (Number.isFinite(prev?.[kind]) && prev[kind] >= at) return;
+  recentInteractions.set(key, { ...prev, [kind]: at });
+  scheduleInteractionsSave();
+}
+
+function flushRecentInteractions() {
+  if (interactionsSaveTimer) {
+    clearTimeout(interactionsSaveTimer);
+    interactionsSaveTimer = 0;
   }
   // Drop what has expired before writing, so the stored map cannot outgrow the
   // window it describes.
   const now = Date.now();
-  for (const [handle, at] of recentRepliers) {
-    if (!cbReplierIsRecent(at, now)) recentRepliers.delete(handle);
+  for (const [handle, entry] of recentInteractions) {
+    const kept = {};
+    for (const kind of CB_INTERACTION_KINDS) {
+      const at = entry?.[kind];
+      if (Number.isFinite(at) && now - at < CB_INTERACTION_TTL_MS) kept[kind] = at;
+    }
+    if (Object.keys(kept).length) recentInteractions.set(handle, kept);
+    else recentInteractions.delete(handle);
   }
-  if (!recentRepliers.size) return;
+  if (!recentInteractions.size) return;
   window.postMessage({
-    type: 'XVM_REPLIERS_SAVE',
-    repliers: Object.fromEntries(recentRepliers),
+    type: 'XVM_INTERACTIONS_SAVE',
+    interactions: Object.fromEntries(recentInteractions),
   }, '*');
 }
 
-function scheduleRepliersSave() {
-  if (repliersSaveTimer) return;
-  repliersSaveTimer = setTimeout(flushRecentRepliers, 5000);
+function scheduleInteractionsSave() {
+  if (interactionsSaveTimer) return;
+  interactionsSaveTimer = setTimeout(flushRecentInteractions, 5000);
 }
 
 // A pending save would otherwise be dropped when the tab goes away — which is
 // exactly when the browsing session this signal describes has ended.
 window.addEventListener('pagehide', () => {
-  if (repliersSaveTimer) flushRecentRepliers();
+  if (interactionsSaveTimer) flushRecentInteractions();
 });
 
-function hydrateRecentRepliers(raw) {
+function hydrateRecentInteractions(raw) {
   const now = Date.now();
-  for (const [handle, at] of Object.entries(raw || {})) {
+  for (const [handle, entry] of Object.entries(raw || {})) {
     const key = String(handle || '').toLowerCase();
-    if (key && cbReplierIsRecent(at, now)) recentRepliers.set(key, at);
+    if (!key || !entry || typeof entry !== 'object') continue;
+    const kept = {};
+    for (const kind of CB_INTERACTION_KINDS) {
+      const at = entry[kind];
+      if (Number.isFinite(at) && now - at < CB_INTERACTION_TTL_MS) kept[kind] = at;
+    }
+    if (Object.keys(kept).length) recentInteractions.set(key, kept);
   }
 }
 
@@ -3622,7 +3673,7 @@ function observeRepliersToMe() {
     const author = articleHandle(article);
     if (!author) continue;
     const createdAt = data.createdAt ? new Date(data.createdAt).getTime() : 0;
-    recordReplierToMe(author, Number.isFinite(createdAt) && createdAt > 0 ? createdAt : now);
+    recordInteraction(author, 'reply', Number.isFinite(createdAt) && createdAt > 0 ? createdAt : now);
   }
 }
 
@@ -3640,7 +3691,60 @@ function observeReplierFromPayload(data) {
   const me = getLoggedInHandle();
   if (!me || data.inReplyToScreenName.toLowerCase() !== me) return;
   const createdAt = data.createdAt ? new Date(data.createdAt).getTime() : 0;
-  recordReplierToMe(data.screenName, Number.isFinite(createdAt) && createdAt > 0 ? createdAt : Date.now());
+  recordInteraction(data.screenName, 'reply', Number.isFinite(createdAt) && createdAt > 0 ? createdAt : Date.now());
+}
+
+// ── Notifications page ─────────────────────────────────────────────────────
+// Likes and reposts never appear in a tweet payload, so the notifications
+// timeline is the only place they surface. The cell's own <time> is used as the
+// timestamp: it is when the notification happened, which is what the window is
+// supposed to measure — stamping at observation time would keep refreshing it
+// for as long as the page stayed open.
+const NOTIFICATION_ACTIONS = [
+  ['reply', /replied to|回复了|返信しました/i],
+  ['repost', /reposted|retweeted|转推了|リポストしました/i],
+  ['like', /liked|赞了|いいねしました/i],
+];
+
+function notificationKindOf(text) {
+  // Only the head of the cell: the quoted post below it can contain any word,
+  // including the ones being matched for.
+  const head = String(text || '').slice(0, 160);
+  for (const [kind, re] of NOTIFICATION_ACTIONS) {
+    if (re.test(head)) return kind;
+  }
+  return null;
+}
+
+// The actor is whichever profile link the cell carries. Reserved paths are
+// dropped so a nav link can never be mistaken for a handle; the account owner
+// is filtered by the caller.
+function notificationActors(cell) {
+  const out = new Set();
+  for (const a of cell.querySelectorAll('a[href^="/"]')) {
+    const m = /^\/([A-Za-z0-9_]{1,15})(?:$|[/?])/.exec(a.getAttribute('href') || '');
+    if (!m) continue;
+    if (RESERVED_PROFILE_PATHS.has(m[1].toLowerCase())) continue;
+    out.add(m[1]);
+  }
+  return out;
+}
+
+function observeInteractionsFromNotifications() {
+  if (window.location.pathname !== '/notifications') return;
+  const me = getLoggedInHandle();
+  if (!me) return;
+  for (const cell of document.querySelectorAll('[data-testid="cellInnerDiv"]')) {
+    const stamp = cell.querySelector('time[datetime]');
+    const at = Date.parse(stamp?.getAttribute('datetime') || '');
+    if (!Number.isFinite(at)) continue;
+    const kind = notificationKindOf(cell.textContent);
+    if (!kind) continue;
+    for (const actor of notificationActors(cell)) {
+      if (actor.toLowerCase() === me) continue;
+      recordInteraction(actor, kind, at);
+    }
+  }
 }
 
 // Ranks whatever is mounted. Scope matches the leaderboard, but the sort key
@@ -3697,6 +3801,10 @@ function collectCommentRanked() {
       // flag false on status pages also keeps the row marker honest: it only
       // ever appears where it actually moved the ranking.
       repliedYou: !statusPage && isRecentReplier(author),
+      // Feed mode only, matching repliedYou: 本页热点 is where the user asked
+      // for "has this person noticed me" to show up. 互关机会 already answers a
+      // different question with its own weights.
+      interactions: statusPage ? [] : interactionKindsFor(author),
     };
     entry.score = statusPage ? cbStatusScore(entry) : cbFeedScore(entry);
     commentBoardItemMeta.set(id, entry);
@@ -3750,12 +3858,14 @@ const CB_COLUMN_RENDERERS = {
   rank: (_t, i) => `<span class="xvm-lb-rank">${i + 1}</span>`,
   handle: (t) => {
     const handle = (t.handle || '').trim() || i18n('contentFallbackTweetLabel');
-    // Only ever set where it moved the ranking (feed mode), so a marker on
-    // screen always means the row was actually boosted.
-    const replied = t.repliedYou
-      ? `<span class="xvm-cb-replied" title="${i18n('contentCommentBoardRepliedYou')}" aria-label="${i18n('contentCommentBoardRepliedYou')}">↩</span>`
-      : '';
-    return `<span class="xvm-lb-handle" title="${lbEscapeHtml(handle)}">${lbEscapeHtml(handle)}</span>${replied}`;
+    // One glyph per interaction kind still inside its window. Unlike the old
+    // reply-only marker this is information, not a receipt for the boost: a
+    // reply can be too old to boost and still worth seeing.
+    const marks = (t.interactions || []).map((kind) => {
+      const label = lbEscapeHtml(i18n(CB_INTERACTION_LABELS[kind]));
+      return `<span class="xvm-cb-interact xvm-cb-interact--${kind}" title="${label}" aria-label="${label}">${CB_INTERACTION_MARKS[kind]}</span>`;
+    }).join('');
+    return `<span class="xvm-lb-handle" title="${lbEscapeHtml(handle)}">${lbEscapeHtml(handle)}</span>${marks}`;
   },
   preview: (t) => {
     const text = (t.text || '').replace(/\s+/g, ' ').trim();
@@ -4928,6 +5038,7 @@ setInterval(() => {
   // Ungated by the panel toggle: this observes, it does not display, and a user
   // who has the panel off today may turn it on tomorrow.
   observeRepliersToMe();
+  observeInteractionsFromNotifications();
   paintFreshness();
   paintUnfollowed();
   injectAuthorReplyButtons();

@@ -725,6 +725,12 @@
   "contentCommentBoardRepliedYou": {
     "message": "replied to you recently"
   },
+  "contentCommentBoardLikedYou": {
+    "message": "liked your post recently"
+  },
+  "contentCommentBoardRepostedYou": {
+    "message": "reposted your post recently"
+  },
   "contentCommentBoardBlue": {
     "message": "Blue member"
   }

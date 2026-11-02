@@ -60,8 +60,10 @@ function loadScoring() {
     + ' this.cbDisplayRatio = cbDisplayRatio; this.cbRatioIsHot = cbRatioIsHot;'
     + ' this.cbOneRowPerAuthor = cbOneRowPerAuthor;'
     + ' this.cbReplierIsRecent = cbReplierIsRecent;'
+    + ' this.cbInteractionKinds = cbInteractionKinds;'
     + ' this.CB_RATIO_HOT = CB_RATIO_HOT;'
     + ' this.CB_REPLIER_TTL_MS = CB_REPLIER_TTL_MS;'
+    + ' this.CB_INTERACTION_TTL_MS = CB_INTERACTION_TTL_MS;'
     + ' this.CB_FEED_REPLIER_BOOST = CB_FEED_REPLIER_BOOST;',
     ctx,
   );
@@ -422,8 +424,8 @@ describe('comment board wiring', () => {
   });
 });
 
-describe('repliers to your own posts', () => {
-  it('reads them off the payload, so any timeline counts', () => {
+describe('people who interacted with your own posts', () => {
+  it('reads replies off the payload, so any timeline counts', () => {
     // scanForTweets walks every GraphQL response X sends, so the notifications
     // timeline needs no reader of its own — and no testid is guessed at.
     expect(contentJs).toContain('observeReplierFromPayload(data)');
@@ -436,14 +438,14 @@ describe('repliers to your own posts', () => {
     // "他们的访问时间是要根据回复的时间来着" — the window has to measure when
     // they replied, or scrolling past the same reply would keep it alive.
     expect(contentJs).toContain("const createdAt = data.createdAt ? new Date(data.createdAt).getTime() : 0;");
-    expect(contentJs).toContain('recordReplierToMe(data.screenName, Number.isFinite(createdAt) && createdAt > 0 ? createdAt : Date.now());');
+    expect(contentJs).toContain("recordInteraction(data.screenName, 'reply', Number.isFinite(createdAt) && createdAt > 0 ? createdAt : Date.now());");
   });
 
   it('is declared before the code that writes to it can run', () => {
     // scanForTweets can fire on a response that lands while this script is still
     // executing; a const beside the panel code would still be in its temporal
     // dead zone at that point, and the write would throw.
-    const decl = contentJs.indexOf('const recentRepliers = new Map();');
+    const decl = contentJs.indexOf('const recentInteractions = new Map();');
     const scanner = contentJs.indexOf('function scanForTweets(');
     const writer = contentJs.indexOf('function observeReplierFromPayload(');
     expect(decl).toBeGreaterThan(-1);
@@ -457,43 +459,88 @@ describe('repliers to your own posts', () => {
     expect(contentJs).toContain('if (!data || data.inReplyToStatusId !== rootId) continue;');
   });
 
-  it('keeps one timestamp per handle and re-observing it is a no-op', () => {
+  it('gives every kind its own clock and makes re-observation a no-op', () => {
     // Both observers run on every tick, so a write that is not idempotent would
     // push the expiry out on every pass and the entry would never age out.
-    expect(contentJs).toContain('if (prev !== undefined && prev >= at) return;');
-    expect(contentJs).toContain('return key ? cbReplierIsRecent(recentRepliers.get(key), Date.now()) : false;');
+    expect(contentJs).toContain('if (Number.isFinite(prev?.[kind]) && prev[kind] >= at) return;');
+    expect(contentJs).toContain('return cbReplierIsRecent(recentInteractions.get(key)?.reply, Date.now());');
   });
 
   it('persists through the bridge, debounced', () => {
-    expect(contentJs).toContain("type: 'XVM_REPLIERS_SAVE'");
-    expect(contentJs).toContain("type: 'XVM_REPLIERS_REQUEST'");
-    expect(bridgeJs).toContain("type === 'XVM_REPLIERS_SAVE'");
-    expect(bridgeJs).toContain("type === 'XVM_REPLIERS_REQUEST'");
-    expect(bridgeJs).toContain('REPLIERS_MAX_ENTRIES');
-    expect(contentJs).toContain('setTimeout(flushRecentRepliers, 5000)');
+    expect(contentJs).toContain("type: 'XVM_INTERACTIONS_SAVE'");
+    expect(contentJs).toContain("type: 'XVM_INTERACTIONS_REQUEST'");
+    expect(bridgeJs).toContain("type === 'XVM_INTERACTIONS_SAVE'");
+    expect(bridgeJs).toContain("type === 'XVM_INTERACTIONS_REQUEST'");
+    expect(bridgeJs).toContain('INTERACTIONS_MAX_ENTRIES');
+    expect(contentJs).toContain('setTimeout(flushRecentInteractions, 5000)');
+  });
+
+  it('folds the old one-timestamp map into the new shape on read', () => {
+    // An upgrade must not throw away what the user had already observed.
+    expect(bridgeJs).toContain('function withLegacyRepliers(');
+    expect(bridgeJs).toContain('chrome.storage.local.get({ xvmInteractions: null, xvmRecentRepliers: null }');
   });
 
   it('drops what has expired before it is written', () => {
     // The stored map has to describe the same window the reader applies, or it
-    // outgrows the two hours it claims to cover.
-    expect(contentJs).toContain('if (!cbReplierIsRecent(at, now)) recentRepliers.delete(handle);');
+    // outgrows the three days it claims to cover.
+    expect(contentJs).toContain('if (Number.isFinite(at) && now - at < CB_INTERACTION_TTL_MS) kept[kind] = at;');
   });
 
   it('keeps observing even when the panel is off', () => {
     // Observing is not displaying, and the panel can be switched on later.
     expect(contentJs).toContain('observeRepliersToMe();');
+    expect(contentJs).toContain('observeInteractionsFromNotifications();');
     expect(contentJs).not.toContain('if (commentBoardEnabled) observeRepliersToMe();');
+    expect(contentJs).not.toContain('if (commentBoardEnabled) observeInteractionsFromNotifications();');
   });
 
-  it('boosts feed mode only', () => {
+  it('boosts feed mode only, and only on the short reply window', () => {
     expect(contentJs).toContain('repliedYou: !statusPage && isRecentReplier(author),');
     expect(contentJs).toContain('return entry.repliedYou ? base * CB_FEED_REPLIER_BOOST : base;');
+    expect(contentJs).toContain('const CB_REPLIER_TTL_MS = 2 * 60 * 60 * 1000;');
   });
 
-  it('marks the row only where the boost applied', () => {
-    expect(contentJs).toContain("xvm-cb-replied");
-    expect(styles).toContain('.xvm-cb .xvm-cb-replied {');
-    expect(styles).toContain('.xvm-lb[data-theme="dark"] .xvm-cb .xvm-cb-replied');
+  it('marks the row for every kind still inside the three-day window', () => {
+    expect(contentJs).toContain('interactions: statusPage ? [] : interactionKindsFor(author),');
+    expect(contentJs).toContain('xvm-cb-interact--${kind}');
+    expect(styles).toContain('.xvm-cb .xvm-cb-interact {');
+    expect(styles).toContain('.xvm-lb[data-theme="dark"] .xvm-cb .xvm-cb-interact--reply');
+    expect(contentJs).toContain('const CB_INTERACTION_TTL_MS = 3 * 24 * 60 * 60 * 1000;');
+  });
+
+  it('reads likes and reposts off the notifications page', () => {
+    // They never appear in a tweet payload, so the page is the only source —
+    // and the cell's own <time> is the timestamp that matters.
+    expect(contentJs).toContain("if (window.location.pathname !== '/notifications') return;");
+    expect(contentJs).toContain("const at = Date.parse(stamp?.getAttribute('datetime') || '');");
+    expect(contentJs).toContain("['like', /liked|赞了|いいねしました/i],");
+    expect(contentJs).toContain("['repost', /reposted|retweeted|转推了|リポストしました/i],");
+  });
+});
+
+describe('interaction window', () => {
+  it('keeps each kind only while it is inside the three-day window', () => {
+    const { cbInteractionKinds, CB_INTERACTION_TTL_MS } = loadScoring();
+    const now = 1_800_000_000_000;
+    const fresh = now - 60 * 60 * 1000;
+    const stale = now - CB_INTERACTION_TTL_MS - 1;
+
+    expect(cbInteractionKinds({ reply: fresh, like: stale, repost: fresh }, now))
+      .toEqual(['reply', 'repost']);
+    expect(cbInteractionKinds({ like: stale }, now)).toEqual([]);
+    expect(cbInteractionKinds(null, now)).toEqual([]);
+    expect(CB_INTERACTION_TTL_MS).toBe(3 * 24 * 60 * 60 * 1000);
+  });
+
+  it('a stale like does not keep a fresh reply inside the window, or the reverse', () => {
+    // The whole point of per-kind timestamps: one kind expiring must not delete
+    // the entry, and one kind being fresh must not resurrect another.
+    const { cbInteractionKinds } = loadScoring();
+    const now = 1_800_000_000_000;
+    const stale = now - 10 * 24 * 60 * 60 * 1000;
+    expect(cbInteractionKinds({ reply: now, like: stale }, now)).toEqual(['reply']);
+    expect(cbInteractionKinds({ reply: stale, like: now }, now)).toEqual(['like']);
   });
 });
 

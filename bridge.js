@@ -145,6 +145,8 @@ const CONTENT_MESSAGE_KEYS = [
   'contentCommentBoardRatio',
   'contentCommentBoardRatioHot',
   'contentCommentBoardRepliedYou',
+  'contentCommentBoardLikedYou',
+  'contentCommentBoardRepostedYou',
   'contentCommentBoardBlue',
   'contentCommentBoardMutual',
   'contentCommentBoardFollowing',
@@ -350,10 +352,35 @@ const BOOKMARK_TIMELINE_STORAGE_LOCK = 'xvm-bookmark-timeline-storage';
 const BOOKMARK_TIMELINE_MANUAL_LOCK = 'xvm-bookmark-timeline-manual-refresh';
 const BOOKMARK_TIMELINE_MANUAL_TTL_MS = 30 * 1000;
 const BOOKMARK_TIMELINE_MAX_ENTRIES_PER_FOLDER = 120;
-// The replier map is short-lived by design (the content script drops anything
-// past its TTL), so this cap only ever bites if the TTL is raised. It exists so
-// a bug in the TTL cannot turn a two-hour signal into unbounded storage.
-const REPLIERS_MAX_ENTRIES = 2000;
+// The interaction map is short-lived by design (the content script drops
+// anything past its TTL), so this cap only ever bites if the TTL is raised. It
+// exists so a bug in the TTL cannot turn a three-day signal into unbounded
+// storage.
+const INTERACTIONS_MAX_ENTRIES = 2000;
+
+function newestInteractionAt(entry) {
+  let newest = 0;
+  for (const at of Object.values(entry || {})) {
+    if (Number.isFinite(at) && at > newest) newest = at;
+  }
+  return newest;
+}
+
+// v1 stored `handle -> replyTimestamp`. Fold it into `{ reply }` on read so an
+// upgrade keeps what the user had already observed instead of starting empty.
+function withLegacyRepliers(interactions, legacy) {
+  const out = {};
+  for (const [handle, entry] of Object.entries(interactions || {})) {
+    if (!handle || !entry || typeof entry !== 'object') continue;
+    out[handle] = { ...entry };
+  }
+  for (const [handle, at] of Object.entries(legacy || {})) {
+    if (!handle || !Number.isFinite(at)) continue;
+    const entry = out[handle] || {};
+    if (!Number.isFinite(entry.reply) || entry.reply < at) out[handle] = { ...entry, reply: at };
+  }
+  return Object.keys(out).length ? out : null;
+}
 // X returns ~20 tweets per BookmarkFolderTimeline page regardless of count, so we
 // must follow the bottom cursor to gather a folder's full contents (runaway guard).
 const BOOKMARK_TIMELINE_MAX_PAGES = 10;
@@ -1447,24 +1474,27 @@ window.addEventListener('message', (event) => {
   // content script owns the TTL and sends an already-pruned map, so the two
   // sides cannot disagree about what "recent" means; this side is a dumb
   // round-trip plus a size cap, because the map is written on every render.
-  if (type === 'XVM_REPLIERS_REQUEST') {
+  if (type === 'XVM_INTERACTIONS_REQUEST') {
     safeChromeCall(() => {
-      chrome.storage.local.get({ xvmRecentRepliers: null }, (items) => {
-        if (items.xvmRecentRepliers) {
-          window.postMessage({ type: 'XVM_REPLIERS_LOAD', repliers: items.xvmRecentRepliers }, '*');
+      chrome.storage.local.get({ xvmInteractions: null, xvmRecentRepliers: null }, (items) => {
+        const interactions = withLegacyRepliers(items.xvmInteractions, items.xvmRecentRepliers);
+        if (interactions) {
+          window.postMessage({ type: 'XVM_INTERACTIONS_LOAD', interactions }, '*');
         }
       });
     });
     return;
   }
 
-  if (type === 'XVM_REPLIERS_SAVE' && event.data.repliers) {
-    const entries = Object.entries(event.data.repliers)
-      .filter(([, at]) => Number.isFinite(at))
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, REPLIERS_MAX_ENTRIES);
+  if (type === 'XVM_INTERACTIONS_SAVE' && event.data.interactions) {
+    const entries = Object.entries(event.data.interactions)
+      .filter(([, entry]) => entry && typeof entry === 'object')
+      .sort((a, b) => newestInteractionAt(b[1]) - newestInteractionAt(a[1]))
+      .slice(0, INTERACTIONS_MAX_ENTRIES);
     safeChromeCall(() => {
-      chrome.storage.local.set({ xvmRecentRepliers: Object.fromEntries(entries) });
+      chrome.storage.local.set({ xvmInteractions: Object.fromEntries(entries) }, () => {
+        chrome.storage.local.remove('xvmRecentRepliers');
+      });
     });
     return;
   }

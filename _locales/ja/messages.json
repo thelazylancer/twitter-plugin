@@ -718,6 +718,12 @@
   "contentCommentBoardRepliedYou": {
     "message": "あなたに返信したばかり"
   },
+  "contentCommentBoardLikedYou": {
+    "message": "あなたにいいねしたばかり"
+  },
+  "contentCommentBoardRepostedYou": {
+    "message": "あなたのポストをリポストしたばかり"
+  },
   "contentCommentBoardBlue": {
     "message": "Blue会員"
   }
