@@ -6,7 +6,9 @@
 (function () {
   const STORAGE_KEY = 'xvm_content_filter_v1';
   const RULES_KEY = 'xvm_content_filter_rules_remote_v1';
-  const REMOTE_RULES_URL = 'https://raw.githubusercontent.com/Icy-Cat/x-viral-monitor/main/src/premium/content-filter/rules.json';
+  // Must match isolated.js: the popup previews the same payload the content
+  // script runs, and both must serve this fork rather than upstream.
+  const REMOTE_RULES_URL = 'https://raw.githubusercontent.com/thelazylancer/twitter-plugin/main/src/premium/content-filter/rules.json';
   const REMOTE_RULES_CURRENT_VERSION = 2;
   let cachedRemoteRules = null;
   let cachedFetchedAt = 0;

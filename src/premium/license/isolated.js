@@ -62,7 +62,10 @@
   // ship new filter heuristics without rebuilding the extension. Cached in
   // chrome.storage with a 6h TTL; cold-start falls back to the bundled
   // rules.js when cache is empty AND fetch fails.
-  const REMOTE_RULES_URL = 'https://raw.githubusercontent.com/Icy-Cat/x-viral-monitor/main/src/premium/content-filter/rules.json';
+  // This fork's own rules.json. The upstream URL would silently replace the
+  // rules tuned here with Icy-Cat's, and the README's "push to main, live in
+  // six hours" promise only holds for a URL that serves this repository.
+  const REMOTE_RULES_URL = 'https://raw.githubusercontent.com/thelazylancer/twitter-plugin/main/src/premium/content-filter/rules.json';
   const REMOTE_RULES_TTL_MS = 6 * 60 * 60 * 1000;
   // Even on failure, never re-attempt more than once per 5 min. Multi-tab
   // users would otherwise hammer raw.githubusercontent.com per page load.

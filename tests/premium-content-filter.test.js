@@ -19,6 +19,7 @@ const syncRulesScript = readFileSync(resolve(repo, 'scripts/sync-rules.mjs'), 'u
 const popupHtml = readFileSync(resolve(repo, 'popup.html'), 'utf8');
 const rateFilter = readFileSync(resolve(repo, 'src/premium/rate-filter/filter.js'), 'utf8');
 const content = readFileSync(resolve(repo, 'content.js'), 'utf8');
+const FORK_RULES_URL = 'https://raw.githubusercontent.com/thelazylancer/twitter-plugin/main/src/premium/content-filter/rules.json';
 
 function loadDebug(overrides = {}) {
   const win = {
@@ -1123,7 +1124,7 @@ describe('#123 XVM content filter v1', () => {
 
   it('isolated bridge wires the remote-rules fetch, cache, and postMessage path', () => {
     expect(isolated).toMatch(/CONTENT_FILTER_RULES_KEY\s*=\s*['"]xvm_content_filter_rules_remote_v1['"]/);
-    expect(isolated).toMatch(/REMOTE_RULES_URL\s*=\s*['"]https:\/\/raw\.githubusercontent\.com\/Icy-Cat\/x-viral-monitor\/main\/src\/premium\/content-filter\/rules\.json['"]/);
+    expect(isolated).toContain(`REMOTE_RULES_URL = '${FORK_RULES_URL}'`);
     expect(isolated).toMatch(/XVM_CONTENT_FILTER_RULES_UPDATE/);
     expect(isolated).toMatch(/fetchRemoteContentFilterRules/);
     expect(isolated).toMatch(/pushCachedContentFilterRules/);
@@ -1148,6 +1149,17 @@ describe('#123 XVM content filter v1', () => {
   it('manifest grants host_permissions for the remote rules host', () => {
     expect(Array.isArray(manifest.host_permissions)).toBe(true);
     expect(manifest.host_permissions).toContain('https://raw.githubusercontent.com/*');
+  });
+
+  it('fetches rules from this fork rather than upstream', () => {
+    // Pointing at Icy-Cat meant the fork's tuned rules never reached an
+    // installed extension: the remote payload replaced them at runtime, and
+    // the README's six-hour rollout promise covered a repository this fork
+    // cannot push to.
+    for (const source of [isolated, popupFilter]) {
+      expect(source).toContain(`REMOTE_RULES_URL = '${FORK_RULES_URL}'`);
+      expect(source).not.toContain('Icy-Cat/x-viral-monitor');
+    }
   });
 
   it('uses the generated PNG icon set for the toolbar action', () => {
