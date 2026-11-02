@@ -790,7 +790,7 @@
     "message": "Click again"
   },
   "recipHint": {
-    "message": "Counts interactions this browser has seen."
+    "message": "Counts interactions this browser has seen; inbound replies count only under your own posts."
   },
   "recipSync": {
     "message": "Open notifications"
@@ -820,7 +820,7 @@
     "message": "Show on posts"
   },
   "recipInlineDesc": {
-    "message": "Adds the ratio to the top-right of posts from followed accounts with a local record. Accounts you do not follow keep the unfollowed mark."
+    "message": "Adds the ratio to the top-right of home-timeline posts from followed accounts with a local record. Accounts you do not follow keep the unfollowed mark."
   },
   "recipRanking": {
     "message": "Ranking"

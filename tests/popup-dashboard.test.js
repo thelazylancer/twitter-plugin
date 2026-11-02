@@ -726,6 +726,7 @@ describe('update notice modal', () => {
     expect(contentJs).toContain('function isVisibleCommentArticleForContext(ctx, article, tweetId =');
     expect(contentJs).toContain('inReplyToStatusId: legacy.in_reply_to_status_id_str');
     expect(contentJs).toContain('inReplyToScreenName: legacy.in_reply_to_screen_name');
+    expect(contentJs).toContain('conversationId: legacy.conversation_id_str');
     expect(contentJs).toContain('return !!(rootTweetId && data.inReplyToStatusId === rootTweetId)');
     expect(contentJs).not.toContain('data.inReplyToScreenName ||');
     expect(contentJs).toContain('function isArticleHiddenByXvmFilters(article)');

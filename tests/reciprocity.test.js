@@ -31,6 +31,9 @@ function loadLedger() {
     document: { addEventListener: () => {} },
     Element: class {},
     getLoggedInHandle: () => 'me',
+    getStatusIdFromLocation: () => '',
+    isOwnStatusPage: () => false,
+    tweetDataStore: new Map(),
     setTimeout,
     clearTimeout,
   };
@@ -50,6 +53,7 @@ function loadLedger() {
       flushReciprocity,
       ledger: reciprocityLedger,
       seen: reciprocitySeen,
+      tweetDataStore,
     };
   `, ctx);
   ctx.api.sent = ctx.sent;
@@ -79,7 +83,10 @@ describe('give-and-take ledger', () => {
   it('counts their reply to me and ignores my reply to myself', () => {
     const api = loadLedger();
     api.hydrateReciprocity(null, false);
-    api.observeReciprocityFromPayload({ id: 'r2', screenName: 'alice', inReplyToScreenName: 'me' });
+    api.tweetDataStore.set('my-root', { id: 'my-root', screenName: 'me', conversationId: 'my-root' });
+    api.observeReciprocityFromPayload({
+      id: 'r2', screenName: 'alice', inReplyToScreenName: 'me', conversationId: 'my-root',
+    });
     api.observeReciprocityFromPayload({ id: 'r3', screenName: 'me', inReplyToScreenName: 'me' });
     // Alice replying inside her own thread is not a reply to me.
     api.observeReciprocityFromPayload({ id: 'r4', screenName: 'alice', inReplyToScreenName: 'alice' });
@@ -87,6 +94,60 @@ describe('give-and-take ledger', () => {
     expect(api.ledger.get('me')).toBeUndefined();
     expect(api.seen.has('ir:r2')).toBe(true);
     expect(api.seen.has('ir:r4')).toBe(false);
+    api.flushReciprocity();
+  });
+
+  it('does not count a reply to my reply inside the other person’s thread', () => {
+    const api = loadLedger();
+    api.hydrateReciprocity(null, false);
+    api.tweetDataStore.set('alice-root', { id: 'alice-root', screenName: 'alice', conversationId: 'alice-root' });
+    api.tweetDataStore.set('my-reply', {
+      id: 'my-reply', screenName: 'me', inReplyToStatusId: 'alice-root', conversationId: 'alice-root',
+    });
+    api.observeReciprocityFromPayload({
+      id: 'alice-answer',
+      screenName: 'alice',
+      inReplyToScreenName: 'me',
+      inReplyToStatusId: 'my-reply',
+      conversationId: 'alice-root',
+    });
+    expect(api.ledger.get('alice')).toBeUndefined();
+    expect(api.seen.has('ir:alice-answer')).toBe(false);
+    api.flushReciprocity();
+  });
+
+  it('counts a reply to my reply when the conversation root is my post', () => {
+    const api = loadLedger();
+    api.hydrateReciprocity(null, false);
+    api.tweetDataStore.set('my-root', { id: 'my-root', screenName: 'me', conversationId: 'my-root' });
+    api.tweetDataStore.set('my-reply', {
+      id: 'my-reply', screenName: 'me', inReplyToStatusId: 'my-root', conversationId: 'my-root',
+    });
+    api.observeReciprocityFromPayload({
+      id: 'alice-answer',
+      screenName: 'alice',
+      inReplyToScreenName: 'me',
+      inReplyToStatusId: 'my-reply',
+      conversationId: 'my-root',
+    });
+    expect(api.ledger.get('alice').inReply).toBe(1);
+    api.flushReciprocity();
+  });
+
+  it('walks the parent chain when the payload omits conversation_id', () => {
+    const api = loadLedger();
+    api.hydrateReciprocity(null, false);
+    api.tweetDataStore.set('my-root', { id: 'my-root', screenName: 'me' });
+    api.tweetDataStore.set('my-reply', {
+      id: 'my-reply', screenName: 'me', inReplyToStatusId: 'my-root',
+    });
+    api.observeReciprocityFromPayload({
+      id: 'alice-answer',
+      screenName: 'alice',
+      inReplyToScreenName: 'me',
+      inReplyToStatusId: 'my-reply',
+    });
+    expect(api.ledger.get('alice').inReply).toBe(1);
     api.flushReciprocity();
   });
 
@@ -176,7 +237,7 @@ describe('give-and-take capture', () => {
     // list under my own status — never from the notification actor.
     expect(contentJs).toContain("if (kind !== 'reply') recordInteraction(actor, kind, at);");
     expect(contentJs).toContain("const postId = kind === 'like' || kind === 'repost' ? notificationStatusId(cell, me) : '';");
-    expect(contentJs).toContain('if (target === me) {');
+    expect(contentJs).toContain('if (target === me && isReplyUnderMyOwnPost(data)) {');
     expect(contentJs).toContain('data.inReplyToStatusId !== rootId');
   });
 
@@ -219,6 +280,14 @@ describe('in-feed reciprocity chip', () => {
     expect(contentJs).toContain('isPromotedArticle(article)');
     expect(contentJs).toContain('article.parentElement?.closest?.(\'article[data-testid="tweet"]\')');
     expect(contentJs).toContain('function removeReciprocityMark');
+  });
+
+  it('only paints on the home timeline and clears the chip when navigating away', () => {
+    expect(contentJs).toContain("const onHome = scopeFromPath() === 'home';");
+    expect(contentJs).toContain('!reciprocityInlineEnabled || !reciprocityHydrated || !onHome');
+    expect(contentJs).toContain('if (!reciprocityInlineEnabled || !onHome) clearReciprocityMarks(root);');
+    // The SPA navigation hook must repaint, not wait for the 2s tick.
+    expect(contentJs).toContain('clearLink();\n    // Drop chips when leaving home;');
   });
 
   it('refreshes after ledger changes and exposes the breakdown on hover', () => {

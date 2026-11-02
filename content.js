@@ -984,6 +984,9 @@ function extractTweetData(result) {
     screenName,
     inReplyToStatusId: legacy.in_reply_to_status_id_str || '',
     inReplyToScreenName: legacy.in_reply_to_screen_name || '',
+    // The root status id. A reply's immediate parent may be my own reply in
+    // someone else's thread; only the conversation id says whose post it is.
+    conversationId: legacy.conversation_id_str || '',
     views: viewCount,
     likes: legacy.favorite_count || 0,
     retweets: legacy.retweet_count || 0,
@@ -3959,7 +3962,10 @@ function observeReciprocityFromPayload(data) {
     }
     return;
   }
-  if (target === me) {
+  // `in_reply_to_screen_name` only names the immediate parent. If I replied
+  // under Alice's post and Alice answers my reply, the parent is me but the
+  // conversation is still Alice's; that is not give-and-take toward my post.
+  if (target === me && isReplyUnderMyOwnPost(data)) {
     recordReciprocity(author, 'in', 'reply', `ir:${data.id}`, at);
   }
   // Own Likes tab: records the posts liked before install. X serves this tab
@@ -3974,6 +3980,37 @@ function isOwnLikesPage(me = getLoggedInHandle()) {
   if (!me) return false;
   const m = /^\/([^/]+)\/likes\/?$/.exec(window.location.pathname);
   return !!m && m[1].toLowerCase() === me;
+}
+
+// The conversation id is the root status id. A reply to my reply in someone
+// else's thread has in_reply_to_screen_name = me but conversationId = theirs.
+// Prefer the root we have already parsed; when it is absent, the status page
+// currently open can prove ownership. An unknown root is not counted.
+function isReplyUnderMyOwnPost(data) {
+  const me = getLoggedInHandle();
+  if (!me || !data) return false;
+  const rootId = String(data.conversationId || '');
+  if (rootId) {
+    const root = tweetDataStore.get(rootId);
+    if (root?.screenName) return String(root.screenName).toLowerCase() === me;
+    const pageRootId = getStatusIdFromLocation();
+    if (pageRootId && pageRootId === rootId) return isOwnStatusPage();
+    return false;
+  }
+  // Some responses omit conversation_id_str. Walk the parent chain only as far
+  // as the payload store can prove it, and require a true root (no parent).
+  let cur = data;
+  const seen = new Set([String(data.id || '')]);
+  for (let depth = 0; depth < 12 && cur?.inReplyToStatusId; depth += 1) {
+    const parentId = String(cur.inReplyToStatusId);
+    if (seen.has(parentId)) return false;
+    seen.add(parentId);
+    const parent = tweetDataStore.get(parentId);
+    if (!parent) return false;
+    cur = parent;
+  }
+  if (cur === data || cur?.inReplyToStatusId) return false;
+  return !!cur?.screenName && String(cur.screenName).toLowerCase() === me;
 }
 
 // A like has no payload naming the liked post's author, so the click is the
@@ -4033,6 +4070,9 @@ function observeReplierFromPayload(data) {
   if (!data?.inReplyToScreenName || !data.screenName) return;
   const me = getLoggedInHandle();
   if (!me || data.inReplyToScreenName.toLowerCase() !== me) return;
+  // Same rule as the ledger: a reply under the other person's post is not a
+  // reply to mine, even when its immediate parent is my reply.
+  if (!isReplyUnderMyOwnPost(data)) return;
   const createdAt = data.createdAt ? new Date(data.createdAt).getTime() : 0;
   recordInteraction(data.screenName, 'reply', Number.isFinite(createdAt) && createdAt > 0 ? createdAt : Date.now());
 }
@@ -5479,12 +5519,14 @@ function paintUnfollowed(root = document) {
 }
 
 // === Reciprocity chip ===
-// The same corner the 未关注 chip uses, for the opposite case: an account you
+// Home timeline only: the feed is where the user decides whether to engage;
+// profile, status, search, and list pages keep the old uncluttered look. The
+// same corner the 未关注 chip uses, for the opposite case: an account you
 // follow (or one whose follow state X did not send) with a local give-and-take
 // record. The two never appear together — an explicit `following === false`
-// leaves the corner to 未关注. Numbers only; the popup tab owns the verdict and
-// the warning that inbound likes/reposts are only as complete as notifications
-// browsing. The title carries the breakdown for the hover case.
+// leaves the corner to 未关注. Numbers only; the Marks panel owns the verdict
+// and the warning that inbound likes/reposts are only as complete as
+// notifications browsing. The title carries the breakdown for the hover case.
 function reciprocityTotals(entry) {
   const outReply = Math.max(0, Math.floor(Number(entry?.outReply) || 0));
   const outLike = Math.max(0, Math.floor(Number(entry?.outLike) || 0));
@@ -5540,8 +5582,11 @@ function clearReciprocityMarks(root = document) {
 
 function paintReciprocityMarks(root = document) {
   const articles = root.querySelectorAll?.('article[data-testid="tweet"]') || [];
-  if (!reciprocityInlineEnabled || !reciprocityHydrated) {
-    if (!reciprocityInlineEnabled) clearReciprocityMarks(root);
+  const onHome = scopeFromPath() === 'home';
+  if (!reciprocityInlineEnabled || !reciprocityHydrated || !onHome) {
+    // Navigation away from home leaves the old articles in the SPA shell for
+    // a moment; clear the chips instead of letting them ride along.
+    if (!reciprocityInlineEnabled || !onHome) clearReciprocityMarks(root);
     return;
   }
   const me = getLoggedInHandle();
@@ -6208,6 +6253,9 @@ new MutationObserver(() => {
     lastUrl = location.href;
     dismissStickyToasts();
     clearLink();
+    // Drop chips when leaving home; the 2s tick would get there eventually,
+    // but a chip riding the reused SPA shell onto a status page is confusing.
+    paintReciprocityMarks();
     if (pendingLeaderboardJump?.tweetId) {
       waitForLeaderboardTarget(pendingLeaderboardJump.tweetId, pendingLeaderboardJump.itemEl);
     }

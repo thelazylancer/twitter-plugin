@@ -70,6 +70,40 @@ function loadScoring() {
   return ctx;
 }
 
+// Run the shipped reply-attribution helpers with a stubbed payload store, so
+// the "only my own post counts" rule is exercised, not just grepped for.
+function loadReplierObserver() {
+  const calls = [];
+  const ctx = {
+    getLoggedInHandle: () => 'me',
+    tweetDataStore: new Map(),
+    getStatusIdFromLocation: () => '',
+    isOwnStatusPage: () => false,
+    recordInteraction: (handle, kind, at) => calls.push([handle, kind, at]),
+  };
+  const sliceFunction = (name) => {
+    const start = contentJs.indexOf(`function ${name}(`);
+    expect(start, `${name} should exist`).toBeGreaterThan(-1);
+    let depth = 0;
+    let end = start;
+    for (let i = contentJs.indexOf('{', start); i < contentJs.length; i += 1) {
+      if (contentJs[i] === '{') depth += 1;
+      else if (contentJs[i] === '}') {
+        depth -= 1;
+        if (depth === 0) { end = i + 1; break; }
+      }
+    }
+    return contentJs.slice(start, end);
+  };
+  vm.runInNewContext(`
+    ${sliceFunction('isReplyUnderMyOwnPost')}
+    ${sliceFunction('observeReplierFromPayload')}
+    this.observe = observeReplierFromPayload;
+  `, ctx);
+  ctx.calls = calls;
+  return ctx;
+}
+
 describe('comment board scope', () => {
   it('ranks every mounted tweet, not just replies', () => {
     // The feed side of the panel is "which post drew the most replies", so a
@@ -430,8 +464,42 @@ describe('people who interacted with your own posts', () => {
     // timeline needs no reader of its own — and no testid is guessed at.
     expect(contentJs).toContain('observeReplierFromPayload(data)');
     expect(contentJs).toContain('if (!me || data.inReplyToScreenName.toLowerCase() !== me) return;');
+    // The immediate parent being mine is not enough: a reply under the other
+    // person's post is still their thread.
+    expect(contentJs).toContain('if (!isReplyUnderMyOwnPost(data)) return;');
     // The guard keeps the DOM lookup out of the hot path for non-replies.
     expect(contentJs).toContain('if (!data?.inReplyToScreenName || !data.screenName) return;');
+  });
+
+  it('ignores a reply to my reply inside someone else’s thread', () => {
+    const ctx = loadReplierObserver();
+    ctx.tweetDataStore.set('alice-root', { id: 'alice-root', screenName: 'alice' });
+    ctx.tweetDataStore.set('my-reply', {
+      id: 'my-reply', screenName: 'me', inReplyToStatusId: 'alice-root',
+    });
+    ctx.observe({
+      id: 'alice-answer',
+      screenName: 'alice',
+      inReplyToScreenName: 'me',
+      inReplyToStatusId: 'my-reply',
+      conversationId: 'alice-root',
+      createdAt: '2026-01-01T00:00:00Z',
+    });
+    expect(ctx.calls).toEqual([]);
+  });
+
+  it('records a reply under my own post', () => {
+    const ctx = loadReplierObserver();
+    ctx.tweetDataStore.set('my-root', { id: 'my-root', screenName: 'me' });
+    ctx.observe({
+      id: 'alice-answer',
+      screenName: 'alice',
+      inReplyToScreenName: 'me',
+      inReplyToStatusId: 'my-root',
+      conversationId: 'my-root',
+      createdAt: '2026-01-01T00:00:00Z',
+    });
+    expect(ctx.calls).toEqual([['alice', 'reply', Date.parse('2026-01-01T00:00:00Z')]]);
   });
 
   it('timestamps the reply, not the moment it was seen', () => {

@@ -1182,7 +1182,7 @@
         <div class="feature-row">
           <div class="ft-body">
             <label for="recip-inline-toggle" id="recip-inline-title"><div class="ft-title" data-i18n="recipInlineTitle">Show on posts</div></label>
-            <div class="ft-desc" data-i18n="recipInlineDesc">Adds the ratio to the top-right of posts from accounts with a local record. Only appears when this browser has one.</div>
+            <div class="ft-desc" data-i18n="recipInlineDesc">Adds the ratio to the top-right of home-timeline posts from followed accounts with a local record. Accounts you do not follow keep the unfollowed mark.</div>
           </div>
           <label class="switch" for="recip-inline-toggle" aria-labelledby="recip-inline-title">
             <input id="recip-inline-toggle" type="checkbox" checked>
@@ -1204,7 +1204,7 @@
               <button type="button" id="recip-clear" class="recip-clear" data-i18n="recipClear">Clear</button>
             </div>
             <p class="recip-hint">
-              <span data-i18n="recipHint">Only interactions seen while browsing are counted.</span>
+              <span data-i18n="recipHint">Counts interactions this browser has seen; inbound replies count only under your own posts.</span>
               <a href="https://x.com/notifications" target="_blank" rel="noopener" data-i18n="recipSync">Open notifications</a>
             </p>
             <ul id="recip-list" class="recip-list"></ul>
