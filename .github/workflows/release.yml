@@ -29,11 +29,9 @@ jobs:
         with:
           files: x-viral-monitor-${{ github.ref_name }}-community-dev.zip
           body: |
-            ## X Viral Monitor ${{ github.ref_name }}
+            ## 蓝V特工 ${{ github.ref_name }}
 
-            This GitHub release ships the **Community DEV** build. Local Pro features are enabled by default for sideloaded community installs.
-
-            Use the Chrome Web Store build if you want automatic updates, official license activation, and the supported Pro subscription path.
+            This GitHub release ships the **community-dev** build: every Pro gate is open, with no trial countdown and no license. This fork has no Chrome Web Store or Edge listing.
 
             ### Install
 

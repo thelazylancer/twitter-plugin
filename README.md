@@ -4,7 +4,7 @@
 
 流速徽章、排行榜、星图、Markdown 复制和广告裁剪默认关闭。弹窗打开就是「AI 评论」。默认走 OpenAI 兼容接口（DeepSeek / OpenRouter / 自建中转都行），也可以换成不需要 Key 的本机 Ollama。
 
-这份本地构建走官方的 community-dev 通道，Pro 闸门全部打开，没有试用倒计时，也不需要 License。流速过滤默认仍是关的，要在弹窗「过滤」里自己打开。
+这是个人 fork，**没有 Chrome Web Store / Edge 商店版本**；上游商店里叫「X Viral Monitor」的扩展是另一个项目，不要从那里安装。本仓库默认走 community-dev 通道，Pro 闸门全部打开，没有试用倒计时，也不需要 License。流速过滤默认仍是关的，要在弹窗「过滤」里自己打开。
 
 加载：Chrome 打开 `chrome://extensions/`，打开开发者模式，加载已解压的扩展程序，选这个仓库根目录。改完代码后在扩展页点重新加载，再刷新 x.com。
 
@@ -16,12 +16,12 @@
 
 在 X (Twitter) 时间线上实时显示每条推文的**浏览量流速**，并附带一整套阅读 / 创作辅助工具。
 
-[![Chrome Extension](https://img.shields.io/badge/Chrome-扩展-blue?logo=googlechrome)](https://chromewebstore.google.com/detail/x-viral-monitor/dkplofpecmjmbhgjgleeflcnfgfkdfpd)
-[![Manifest V3](https://img.shields.io/badge/Manifest-V3-green)](https://chromewebstore.google.com/detail/x-viral-monitor/dkplofpecmjmbhgjgleeflcnfgfkdfpd)
+[![Chrome Extension](https://img.shields.io/badge/Chrome-自行构建-blue?logo=googlechrome)](#安装)
+[![Manifest V3](https://img.shields.io/badge/Manifest-V3-green)](manifest.json)
 [![Tampermonkey](https://img.shields.io/badge/Tampermonkey-精简版-orange?logo=tampermonkey)](userscript/x-viral-monitor.user.js)
 [![iOS Userscripts](https://img.shields.io/badge/iOS_Safari-Userscripts-lightgrey?logo=safari)](userscript/x-viral-monitor.mobile.user.js)
 
-> 同一套核心逻辑覆盖 **Chrome 扩展 / Tampermonkey 油猴脚本 / iOS Safari Userscripts App / 安卓 Quetta App** 四种宿主环境，详见[安装](#安装)章节。
+> 主体是 Chrome / Edge 扩展；`userscript/` 里附带上游的精简油猴脚本，只有徽章和排行榜，可以在 Tampermonkey、iOS Safari 的 Userscripts App 或安卓 Quetta 里用，详见[安装](#安装)章节。
 
 ---
 
@@ -41,22 +41,22 @@
 
 ---
 
-## 开源与官方版本
+## 版本说明
 
-本仓库包含 X Viral Monitor 的完整源码，包括 Pro 功能闸门和 license 逻辑。源码按 MIT 协议开放，你可以自行审计、修改和构建。
+这是从上游 X Viral Monitor 分出来的个人版本，不发布商店版本，也不销售 Pro License。仓库里保留 Pro 闸门和 store 构建通道，只是为了跟上游保持结构一致；日常使用的 community-dev 构建会把闸门全部打开。
 
-Chrome Web Store 版本是**官方发行版**：提供一键安装、自动更新、license 激活和维护支持。自行从 GitHub 构建或通过开发者模式加载的版本属于 community/self-built build，按 MIT 协议以 "as-is" 方式提供，不包含 Chrome Web Store 自动更新和官方支持承诺。
+本仓库包含完整源码（MIT），可以自行审计、修改和构建。商店里那个「X Viral Monitor」是上游项目，和这个 fork 无关。
 
-### 免费 / Pro 功能边界
+### 上游的免费 / Pro 边界
 
-| 免费功能 | Pro / 试用可用的进阶能力 |
+下表说明上游把哪些能力放在 Pro 后面；在本 fork 的 community-dev 构建里，这些能力都直接可用。
+
+| 上游免费功能 | 上游 Pro / 试用能力 |
 |---|---|
 | 流速徽章、流速排行榜、书签数显示 | 流速过滤：按 views/min 和总浏览量隐藏低流速推文 |
 | 图片查看增强、长图阅读 | 短推文 / 长文独立阈值 |
 | 内容过滤、远程规则更新、自定义规则 | Home / Lists / Profile / Tweet detail 分范围启用 |
 | AI 评论候选、Markdown 复制、感谢星图 | 后续高级监控、通知和自动化能力 |
-
-Pro License 只用于解锁官方版本里的 Pro 功能。客户端代码本身不是 DRM 边界；真正的付费价值来自官方构建、自动更新、License 服务、支持和持续维护。
 
 ---
 
@@ -148,21 +148,30 @@ Pro License 只用于解锁官方版本里的 Pro 功能。客户端代码本身
 
 ### Chrome / Edge 扩展（推荐）
 
-**Chrome 应用商店：**
-[安装 X Viral Monitor](https://chromewebstore.google.com/detail/x-viral-monitor/dkplofpecmjmbhgjgleeflcnfgfkdfpd)
+本 fork 不发布商店版本，用开发者模式加载：
 
-**手动安装（最新未上架版本）：**
+1. 打开 Chrome 或 Edge，访问 `chrome://extensions/`
+2. 右上角打开**开发者模式**
+3. 左上角点**加载已解压的扩展程序**
+4. 选择这个仓库的根目录（或下一节构建出的 `dist/`）
+5. 刷新 x.com
 
-1. 从 [Releases](../../releases) 页面下载最新版本的 zip
-2. 解压
-3. 打开 Chrome，访问 `chrome://extensions/`
-4. 右上角打开**开发者模式**
-5. 左上角点**加载已解压的扩展程序**
-6. 选择解压后的文件夹
+### 先构建再加载
+
+```bash
+npm install
+npm run build:community   # 同步规则并输出 dist/，Pro 闸门全开
+```
+
+构建完成后在扩展页加载 `dist/` 目录。`npm run build:dist` 构建的是 store 渠道（保留 Pro 闸门），仅用于和上游保持一致，这个 fork 不上架。
+
+### 从 Release 安装
+
+推送 `v*` 标签会触发 Release workflow，生成 community-dev 的 zip；解压后按上面的开发者模式步骤加载。
 
 ### 油猴脚本 / Tampermonkey（桌面精简版）
 
-只想要徽章 + 排行榜，不要 Pro 功能？使用独立油猴脚本：
+这是上游附带的精简脚本，只有徽章和排行榜，不包含 AI 回复、内容过滤等扩展功能：
 
 1. 安装 [Tampermonkey](https://www.tampermonkey.net/) 浏览器扩展
 2. 打开 [`userscript/x-viral-monitor.user.js`](userscript/x-viral-monitor.user.js)，点 "Raw" 安装
@@ -246,9 +255,10 @@ iOS Safari 用户使用 [**Userscripts**](https://apps.apple.com/app/userscripts
 
 ```bash
 npm install
-npm test            # vitest run
-npm run build:dist  # 同步 rules.js + 输出到 dist/
-npm run sync:rules  # 只同步 rules.json → rules.js
+npm test               # vitest run
+npm run build:community # 同步 rules.js + 输出 community 构建到 dist/
+npm run build:dist     # 同上，但用 store 渠道（保留 Pro 闸门）
+npm run sync:rules     # 只同步 rules.json → rules.js
 ```
 
 `dist/` 用于 `chrome://extensions/` 的"加载已解压"入口，改完源码运行 `npm run build:dist` 后到扩展页面点 🔄 即可。

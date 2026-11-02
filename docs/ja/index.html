@@ -26,36 +26,20 @@
   <script type="application/ld+json">{
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  "name": "X Viral Monitor",
+  "name": "蓝V特工 (X Viral Monitor fork)",
   "applicationCategory": "BrowserApplication",
   "operatingSystem": "Chrome, Edge",
-  "softwareVersion": "1.18.16",
-  "description": "X Viral Monitor adds velocity badges and a floating hot-post panel to X, helping creators find posts that are starting to take off and join the conversation earlier.",
+  "softwareVersion": "1.18.18",
+  "description": "A personal fork of X Viral Monitor. It adds AI reply drafts, a comment hot board, and velocity badges to X. This fork has no store release and sells no Pro license.",
   "url": "https://xvm.icy-cat.com/ja/",
-  "installUrl": "https://chromewebstore.google.com/detail/x-viral-monitor/dkplofpecmjmbhgjgleeflcnfgfkdfpd",
-  "codeRepository": "https://github.com/Icy-Cat/x-viral-monitor",
-  "license": "https://github.com/Icy-Cat/x-viral-monitor/blob/main/LICENSE",
+  "installUrl": "https://github.com/thelazylancer/twitter-plugin",
+  "codeRepository": "https://github.com/thelazylancer/twitter-plugin",
+  "license": "https://github.com/thelazylancer/twitter-plugin/blob/main/LICENSE",
   "author": {
     "@type": "Person",
-    "name": "IcyCat",
-    "url": "https://github.com/Icy-Cat"
+    "name": "thelazylancer",
+    "url": "https://github.com/thelazylancer"
   },
-  "offers": [
-    {
-      "@type": "Offer",
-      "name": "Monthly Pro subscription",
-      "price": "2.9",
-      "priceCurrency": "USD",
-      "url": "https://www.creem.io/payment/prod_7f7t9EHK3RJlOK37DWr7J"
-    },
-    {
-      "@type": "Offer",
-      "name": "Annual Pro subscription",
-      "price": "29",
-      "priceCurrency": "USD",
-      "url": "https://www.creem.io/payment/prod_69yTiXGXb04DKm46DNVbN9"
-    }
-  ],
   "inLanguage": "ja"
 }</script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -66,6 +50,9 @@
   <script src="/analytics.js" defer=""></script>
 </head>
 <body class="ic-root" data-lang="mac">
+  <div role="note" style="padding:8px 16px;border-bottom:1px solid #e8d9c3;background:#fdf6ec;color:#5b4a36;font:12px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;text-align:center;">
+    This page is an archive of the upstream X Viral Monitor site, kept for feature reference. This fork has no store release and sells no Pro license. Install from the <a href="https://github.com/thelazylancer/twitter-plugin" style="color:#8a4b25;">GitHub repository</a>.
+  </div>
   <nav class="nav">
     <div class="wrap nav-inner">
       <a class="brand" href="#top" aria-label="X Viral Monitor home">
@@ -117,8 +104,7 @@
           <h1>X Viral Monitor</h1>
           <p class="lead">投稿が伸び切る前に、先に気づく。X Viral Monitor は流速バッジと注目投稿パネルで、高流量の投稿を早く見つけ、よいコメントで会話に入りやすくします。</p>
           <div class="cta-row">
-            <a class="btn primary ic-btn ic-btn--primary" href="https://chromewebstore.google.com/detail/x-viral-monitor/dkplofpecmjmbhgjgleeflcnfgfkdfpd">Chrome 拡張を入れる</a>
-            <a class="btn ic-btn" href="https://microsoftedge.microsoft.com/addons/detail/cefdokfllohmgiccdbjokdagbgegpghd">Edge 拡張を入れる</a>
+            <a class="btn primary ic-btn ic-btn--primary" href="https://github.com/thelazylancer/twitter-plugin">GitHub からインストール</a>
             <a class="btn ic-btn" href="#features">主な機能を見る</a>
             <a class="btn ic-btn" href="#pro">Pro を見る</a>
           </div>
@@ -128,18 +114,17 @@
 
     <section id="install">
       <div class="wrap">
-        <h2>公式 Chrome / Edge 拡張をインストール</h2>
-        <p class="section-lead">Chrome Web Store または Edge Add-ons からインストールできます。完全な機能、自動更新、今後の Pro 有効化に対応します。</p>
+        <h2>GitHub からこの fork を読み込む</h2>
+        <p class="section-lead">ストア版はありません。chrome://extensions で開発者モードを有効にし、リポジトリのルートまたはビルドした dist/ を読み込みます。</p>
         <div class="install-grid primary-install">
           <article class="install-card">
             <div>
               <span class="tag ic-badge ic-badge--ok">おすすめ</span>
               <strong>Chrome / Edge 拡張</strong>
-              <p>流速バッジ、注目投稿パネル、長尺画像閲覧、コンテンツフィルター、Grok 返信補助を X に追加します。</p>
+              <p>AI 返信、コンテンツフィルター、流速バッジ、注目リスト、長尺画像閲覧を X に追加します。</p>
             </div>
             <div class="cta-row">
-              <a class="btn primary ic-btn ic-btn--primary" href="https://chromewebstore.google.com/detail/x-viral-monitor/dkplofpecmjmbhgjgleeflcnfgfkdfpd">ストアからインストール</a>
-              <a class="btn ic-btn edge-install" href="https://microsoftedge.microsoft.com/addons/detail/cefdokfllohmgiccdbjokdagbgegpghd">Edge 拡張を入れる</a>
+              <a class="btn primary ic-btn ic-btn--primary" href="https://github.com/thelazylancer/twitter-plugin">インストール手順</a>
             </div>
           </article>
         </div>
@@ -153,38 +138,20 @@
           <article class="feature-card"><strong>流速バッジ</strong><p>各投稿の横に views/hour を表示します。🚀 ロケット表示になった投稿は、伸び始めていて重点的に見る価値があります。</p></article>
           <article class="feature-card"><strong>注目投稿パネル</strong><p>現在ページの高流速投稿をまとめ、タイムラインを何度も更新しなくても温まり始めた話題を追えます。</p></article>
           <article class="feature-card"><strong>X クリエイターの成長補助</strong><p>高流量の投稿を早く見つけ、適切な場所で有益なコメントを残し、活発な会話に入りやすくします。</p></article>
-          <article class="feature-card"><strong>閲覧と投稿補助</strong><p>長尺画像閲覧、画像強化、コンテンツフィルター、Grok 返信補助で、X 利用時の手間を減らします。</p></article>
+          <article class="feature-card"><strong>閲覧と投稿補助</strong><p>長尺画像閲覧、画像強化、コンテンツフィルター、AI 返信補助で、X 利用時の手間を減らします。</p></article>
         </div>
       </div>
     </section>
 
     <section id="pro">
       <div class="wrap">
-        <h2>Pro サブスクリプション</h2>
-        <p class="section-lead">日常的な機能は無料で使えます。Pro は現在、主に高度な流速フィルター向けです。</p>
+        <h2>Pro 機能</h2>
+        <p class="section-lead">この fork は Pro を販売せず、License サービスもありません。community-dev ビルドでは上流の Pro 機能がすべて有効です。</p>
         <div class="pricing">
           <article class="price-card">
-            <strong>現在の価格</strong>
-            <p>購入後、Chrome 拡張の Pro タブで License Key を有効化します。最終価格は決済ページで確認できます。</p>
-            <div class="price-row">
-              <div class="price">
-                <b>$2.9</b>
-                <span>月額サブスク</span>
-                <p>短期間の試用向けです。</p>
-                <p><a class="btn ic-btn" href="https://www.creem.io/payment/prod_7f7t9EHK3RJlOK37DWr7J">月額で購入</a></p>
-              </div>
-              <div class="price">
-                <b>$29</b>
-                <span>年額サブスク、約 17% お得</span>
-                <p>長く使う人向けです。</p>
-                <p><a class="btn primary ic-btn ic-btn--primary" href="https://www.creem.io/payment/prod_69yTiXGXb04DKm46DNVbN9">年額で購入</a></p>
-              </div>
-            </div>
-          </article>
-          <article class="price-card">
-            <strong>ほとんどの機能は無料</strong>
-            <p>流速バッジ、ページ内注目リスト、ブックマーク数、画像強化、長尺画像閲覧、コンテンツフィルター、Markdown コピー、Thank-You Star Chart、Grok 返信補助は Pro なしで使えます。</p>
-            <p style="margin-top:16px">Pro License は公式 Chrome 拡張内の Pro 機能にのみ適用されます。ソースは公開され、課金部分は主に公式ビルド、自動更新、License サービス、継続保守を対象にしています。</p>
+            <strong>すべての機能をそのまま利用</strong>
+            <p>流速フィルターや範囲別しきい値はローカルビルドで有効になっており、有効化は不要です。</p>
+            <p style="margin-top:16px">上流と同じゲート動作が必要な場合は npm run build:dist で store チャネルをビルドします。この fork はストアに公開していません。</p>
           </article>
         </div>
       </div>
@@ -218,7 +185,7 @@
             no analytics<br>
             no tracking pixel<br>
             local settings in chrome.storage<br>
-            Pro License check via xvm-license Worker<br>
+            no license server<br>
             community build available
           </div>
         </div>
@@ -227,17 +194,17 @@
 
     <section id="versions">
       <div class="wrap">
-        <h2>コミュニティ版の補足</h2>
-        <p class="section-lead">普段使いには公式 Chrome 拡張をおすすめします。ソース確認、自分でのビルド、軽量 userscript が必要な場合のみ、下のコミュニティ経路を使えます。</p>
+        <h2>インストール方法</h2>
+        <p class="section-lead">この fork はソースからのみインストールします。軽量版が必要な場合は同梱の userscript（バッジとランキングのみ）を使えます。</p>
         <table class="matrix">
           <tbody>
             <tr>
-              <th>公式拡張</th>
-              <td>普段使い向け：ワンクリックインストール、自動更新、Pro 有効化、メンテナーサポートに対応します。</td>
+              <th>この fork（拡張）</th>
+              <td>GitHub から読み込みます。開発者モードでリポジトリのルートを選ぶか、先に dist/ をビルドします。自動更新はありません。</td>
             </tr>
             <tr>
               <th>Tampermonkey スクリプト</th>
-              <td>無料の軽量版です。流速バッジと現在ページの注目リストだけを使いたいデスクトップユーザー向けです。</td>
+              <td>上流の軽量版です。流速バッジと現在ページの注目リストだけで、AI 返信やフィルターは含みません。</td>
             </tr>
             <tr>
               <th>Safari UserScripts</th>
@@ -250,9 +217,9 @@
           </tbody>
         </table>
         <div class="cta-row community-links">
-          <a class="btn ic-btn" href="https://raw.githubusercontent.com/Icy-Cat/x-viral-monitor/main/userscript/x-viral-monitor.user.js">デスクトップ脚本</a>
-          <a class="btn ic-btn" href="https://raw.githubusercontent.com/Icy-Cat/x-viral-monitor/main/userscript/x-viral-monitor.mobile.user.js">モバイル脚本</a>
-          <a class="btn ic-btn" href="https://github.com/Icy-Cat/x-viral-monitor">ソースを見る</a>
+          <a class="btn ic-btn" href="https://raw.githubusercontent.com/thelazylancer/twitter-plugin/main/userscript/x-viral-monitor.user.js">デスクトップ脚本</a>
+          <a class="btn ic-btn" href="https://raw.githubusercontent.com/thelazylancer/twitter-plugin/main/userscript/x-viral-monitor.mobile.user.js">モバイル脚本</a>
+          <a class="btn ic-btn" href="https://github.com/thelazylancer/twitter-plugin">ソースを見る</a>
         </div>
       </div>
     </section>
@@ -260,13 +227,11 @@
 
   <footer>
     <div class="wrap">
-      <span>MIT Licensed. コミュニティ版は GitHub から利用できます。</span>
+      <span>MIT Licensed. 上流 X Viral Monitor の fork。GitHub から読み込んでください。</span>
       <div class="foot-links">
-        <a href="https://github.com/Icy-Cat/x-viral-monitor">GitHub</a>
-        <a href="https://chromewebstore.google.com/detail/x-viral-monitor/dkplofpecmjmbhgjgleeflcnfgfkdfpd">Chrome Web Store</a>
-        <a href="https://microsoftedge.microsoft.com/addons/detail/cefdokfllohmgiccdbjokdagbgegpghd">Edge Add-ons</a>
-        <a href="https://github.com/Icy-Cat/x-viral-monitor/issues">Issues</a>
-        <a href="https://xmdpaste.icy-cat.com/">X Article Markdown Paste</a>
+        <a href="https://github.com/thelazylancer/twitter-plugin">GitHub</a>
+        <a href="https://github.com/thelazylancer/twitter-plugin/blob/main/README.md">安装说明</a>
+        <a href="https://github.com/thelazylancer/twitter-plugin/issues">Issues</a>
       </div>
       <div class="foot-links foot-guides">
         <span>使い方ガイド：</span>
@@ -301,26 +266,22 @@
         kicker: 'X timeline intelligence',
         heroTitle: 'X Viral Monitor',
         heroLead: '在推文起爆前，先一步看到它。X Viral Monitor 为时间线添加流速徽章和热点悬浮面板，帮助创作者发现高流量内容，及时参与讨论，获取更多曝光。',
-        heroCtas: ['安装 Chrome 扩展', '安装 Edge 扩展', '看核心能力', '了解 Pro'],
-        installTitle: '安装官方 Chrome / Edge 扩展',
-        installLead: '从 Chrome Web Store 或 Edge Add-ons 安装，自动更新、功能完整，也支持后续 Pro 激活。',
+        heroCtas: ['从 GitHub 安装', '看核心能力', '了解 Pro'],
+        installTitle: '从 GitHub 加载这个 fork',
+        installLead: '没有商店版本。打开 chrome://extensions，开启开发者模式，加载仓库根目录或构建出的 dist/。',
         installCards: [
-          ['推荐', 'Chrome / Edge 扩展', '把流速徽章、热点悬浮面板、长图阅读、内容过滤和 Grok 回复辅助直接加到 X 时间线里。', [], '去应用商店安装'],
+          ['推荐', 'Chrome / Edge 扩展', '把 AI 回复、评论过滤、流速徽章、热点榜单和长图阅读直接加到 X 时间线里。', [], '查看安装说明'],
         ],
-        proTitle: 'Pro 订阅',
-        proLead: '常用功能可以免费用。Pro 目前主要面向更进阶的流速过滤。',
-        priceMainTitle: '购买 Pro',
-        priceMainText: '购买后在 Chrome 扩展的 Pro 页面激活 License Key。价格以支付页为准。',
-        priceMonthly: ['月度订阅', '适合短期试用。', '购买月度'],
-        priceAnnual: ['年度订阅，约省 17%', '适合长期使用。', '购买年度'],
-        freeTitle: '基础功能免费开放',
-        freeText1: '流速徽章、当前页热榜、书签数、图片增强、长图阅读、内容过滤、Markdown 复制、感谢星图和 Grok 回复辅助等常用能力，不需要开通 Pro。',
-        freeText2: 'Pro License 只用于官方 Chrome 扩展内的 Pro 功能。源码仍开放，付费主要覆盖官方构建、自动更新、License 服务和持续维护。',
-        versionsTitle: '社区版补充',
-        versionsLead: '主要推荐安装官方 Chrome 扩展。需要审计源码、自己构建，或只想使用轻量脚本时，可以走下面的社区路径。',
+        proTitle: 'Pro 功能',
+        proLead: '这个 fork 不销售 Pro，也没有 License 服务。community-dev 构建会把流速过滤等上游 Pro 能力全部打开。',
+        proCardTitle: '全部功能直接可用',
+        proText1: '流速过滤、分范围阈值等上游 Pro 能力，在本地构建里默认解锁，不需要激活。',
+        proText2: '需要和上游一致的闸门行为时，用 npm run build:dist 构建 store 渠道；这个 fork 不上架商店。',
+        versionsTitle: '安装方式',
+        versionsLead: '这个 fork 只能从源码加载。需要轻量版时再用下面的油猴脚本；它只覆盖徽章和排行榜。',
         matrix: [
-          ['官方扩展', '推荐日常使用：一键安装、自动更新，支持 Pro 激活和官方维护。'],
-          ['油猴脚本', '免费轻量，适合只需要流速徽章和当前页热榜的桌面用户。'],
+          ['本 fork（扩展）', '从 GitHub 加载：开发者模式选仓库根目录，或先构建 dist/。没有自动更新。'],
+          ['油猴脚本', '上游附带的轻量脚本，只有流速徽章和当前页热榜，不包含 AI 回复或内容过滤。'],
           ['Safari UserScripts', '移动端补充路径，默认保留徽章能力，弱化浮动热榜以适配小屏。'],
           ['源码', '按 MIT 协议开放，欢迎查看源码、提 issue 或提交 PR。'],
         ],
@@ -330,11 +291,11 @@
           ['流速徽章', '直接在推文旁显示 views/hour。看到 🚀 小火箭时，说明这条推文正在起爆，值得重点关注。'],
           ['热点悬浮面板', '自动整理当前页面的高流速推文，不用反复刷时间线，也能抓住正在升温的话题。'],
           ['X 创作者增长辅助', '更早发现高流量内容，在合适的推文下留下有观点、有信息量的评论，让账号进入更多活跃讨论。'],
-          ['长图与内容增强', '长图阅读、图片增强、内容过滤和 Grok 回复辅助，减少刷 X 和参与讨论时的阻力。'],
+          ['长图与内容增强', '长图阅读、图片增强、评论过滤和 AI 回复辅助，减少刷 X 和参与讨论时的阻力。'],
         ],
         privacyTitle: '隐私边界',
         privacyLead: '扩展只在你打开的 X 页面内工作。数据处理尽量留在本地，不接入统计 SDK，也不放追踪像素。本官网使用 Google Analytics 统计访问量和安装按钮点击。',
-        footer: 'MIT Licensed. 社区版可在 GitHub 查看源码并自行构建。',
+        footer: 'MIT Licensed. 基于上游 X Viral Monitor 修改；从 GitHub 加载。',
       },
       en: {
         lang: 'en',
@@ -351,26 +312,22 @@
         kicker: 'X Viral Monitor',
         heroTitle: 'X views per hour, on every tweet',
         heroLead: 'Total tweet views tell you what already happened. Views per hour tell you what is taking off right now. X Viral Monitor puts that number beside every tweet and ranks the hottest posts on your timeline, so creators can find viral tweets early, join the right discussions, and earn more exposure.',
-        heroCtas: ['Install Chrome extension', 'Install Edge extension', 'See core features', 'Learn Pro'],
-        installTitle: 'Install the official Chrome / Edge extension',
-        installLead: 'Install from the Chrome Web Store or Edge Add-ons for the full feature set, automatic updates, and future Pro activation.',
+        heroCtas: ['Install from GitHub', 'See core features', 'Learn Pro'],
+        installTitle: 'Load this fork from GitHub',
+        installLead: 'No store release. Open chrome://extensions, enable Developer mode, and load the repository root or the built dist/ folder.',
         installCards: [
-          ['Recommended', 'Chrome / Edge extension', 'Add velocity badges, the floating hot-post panel, long-image reading, content filtering, and Grok reply help directly to X.', [], 'Install from Web Store'],
+          ['Recommended', 'Chrome / Edge extension', 'Adds AI reply drafts, comment filtering, velocity badges, the hot board, and long-image reading to X.', [], 'Read install steps'],
         ],
-        proTitle: 'Pro subscription',
-        proLead: 'Everyday features are free. Pro currently focuses on advanced velocity filtering.',
-        priceMainTitle: 'Current pricing',
-        priceMainText: 'After purchase, activate your License Key in the Chrome extension Pro tab. Checkout shows the final price.',
-        priceMonthly: ['Monthly subscription', 'Good for a short trial.', 'Buy monthly'],
-        priceAnnual: ['Annual subscription, about 17% off', 'Good for long-term use.', 'Buy annual'],
-        freeTitle: 'Most features are free',
-        freeText1: 'Velocity badges, page hot list, bookmark counts, image upgrades, long-image reading, content filtering, Markdown copy, Thank-You Star Chart, and Grok reply drafts do not require Pro.',
-        freeText2: 'The Pro License only applies to Pro features in the official Chrome extension. The source stays open; payment mainly covers the official build, auto-updates, License service, and ongoing maintenance.',
-        versionsTitle: 'Community options',
-        versionsLead: 'The official Chrome extension is the recommended path. Use community options only if you want to audit the source, build it yourself, or install a lightweight userscript.',
+        proTitle: 'Pro features',
+        proLead: 'This fork sells no Pro license and runs no license service. The community-dev build opens every upstream Pro gate.',
+        proCardTitle: 'Everything is available',
+        proText1: 'Velocity filtering and per-surface thresholds are unlocked in the local build; no activation is needed.',
+        proText2: 'Use npm run build:dist if you need the upstream gate behaviour. This fork is not listed in any store.',
+        versionsTitle: 'Install options',
+        versionsLead: 'This fork installs from source only. The bundled userscript is a lightweight extra covering badges and the leaderboard.',
         matrix: [
-          ['Official extension', 'Recommended for daily use: one-click install, auto-updates, Pro activation, and maintainer support.'],
-          ['Tampermonkey script', 'Free and lightweight, for desktop users who only need velocity badges and the current-page hot list.'],
+          ['This fork (extension)', 'Load from GitHub: pick the repository root in Developer mode, or build dist/ first. No auto-updates.'],
+          ['Tampermonkey script', 'The upstream lightweight script: velocity badges and the current-page hot list only, without AI replies or filtering.'],
           ['Safari UserScripts', 'A mobile fallback that keeps badges and tones down the floating hot list for small screens.'],
           ['Source code', 'MIT licensed. Read the source, file issues, or send PRs on GitHub.'],
         ],
@@ -380,11 +337,11 @@
           ['Tweet views per hour', 'Show views/hour beside each tweet. When the badge turns into a 🚀 rocket, the post is starting to take off and deserves attention.'],
           ['Find viral tweets', 'A floating leaderboard collects high-velocity posts from the current page, so you can catch warming topics without endlessly refreshing the timeline.'],
           ['Creator growth assist', 'Find high-traffic posts earlier, leave thoughtful comments in the right place, and enter more active conversations.'],
-          ['Reading and content upgrades', 'Long-image reading, image upgrades, content filtering, and Grok reply help reduce friction while browsing X.'],
+          ['Reading and content upgrades', 'Long-image reading, image upgrades, content filtering, and AI reply help reduce friction while browsing X.'],
         ],
         privacyTitle: 'Privacy boundary',
         privacyLead: 'The extension works only on X pages you open. Processing stays local where possible, with no analytics SDK and no tracking pixels. This website uses Google Analytics to count visits and install-button clicks.',
-        footer: 'MIT Licensed. Community builds are available from GitHub.',
+        footer: 'MIT Licensed. A fork of X Viral Monitor; load it from GitHub.',
       },
       ja: {
         lang: 'ja',
@@ -401,26 +358,22 @@
         kicker: 'X timeline intelligence',
         heroTitle: 'X Viral Monitor',
         heroLead: '投稿が伸び切る前に、先に気づく。X Viral Monitor は流速バッジと注目投稿パネルで、高流量の投稿を早く見つけ、よいコメントで会話に入りやすくします。',
-        heroCtas: ['Chrome 拡張を入れる', 'Edge 拡張を入れる', '主な機能を見る', 'Pro を見る'],
-        installTitle: '公式 Chrome / Edge 拡張をインストール',
-        installLead: 'Chrome Web Store または Edge Add-ons からインストールできます。完全な機能、自動更新、今後の Pro 有効化に対応します。',
+        heroCtas: ['GitHub からインストール', '主な機能を見る', 'Pro を見る'],
+        installTitle: 'GitHub からこの fork を読み込む',
+        installLead: 'ストア版はありません。chrome://extensions で開発者モードを有効にし、リポジトリのルートまたはビルドした dist/ を読み込みます。',
         installCards: [
-          ['おすすめ', 'Chrome / Edge 拡張', '流速バッジ、注目投稿パネル、長尺画像閲覧、コンテンツフィルター、Grok 返信補助を X に追加します。', [], 'ストアからインストール'],
+          ['おすすめ', 'Chrome / Edge 拡張', 'AI 返信、コンテンツフィルター、流速バッジ、注目リスト、長尺画像閲覧を X に追加します。', [], 'インストール手順'],
         ],
-        proTitle: 'Pro サブスクリプション',
-        proLead: '日常的な機能は無料で使えます。Pro は現在、主に高度な流速フィルター向けです。',
-        priceMainTitle: '現在の価格',
-        priceMainText: '購入後、Chrome 拡張の Pro タブで License Key を有効化します。最終価格は決済ページで確認できます。',
-        priceMonthly: ['月額サブスク', '短期間の試用向けです。', '月額で購入'],
-        priceAnnual: ['年額サブスク、約 17% お得', '長く使う人向けです。', '年額で購入'],
-        freeTitle: 'ほとんどの機能は無料',
-        freeText1: '流速バッジ、ページ内注目リスト、ブックマーク数、画像強化、長尺画像閲覧、コンテンツフィルター、Markdown コピー、Thank-You Star Chart、Grok 返信補助は Pro なしで使えます。',
-        freeText2: 'Pro License は公式 Chrome 拡張内の Pro 機能にのみ適用されます。ソースは公開され、課金部分は主に公式ビルド、自動更新、License サービス、継続保守を対象にしています。',
-        versionsTitle: 'コミュニティ版の補足',
-        versionsLead: '普段使いには公式 Chrome 拡張をおすすめします。ソース確認、自分でのビルド、軽量 userscript が必要な場合のみ、下のコミュニティ経路を使えます。',
+        proTitle: 'Pro 機能',
+        proLead: 'この fork は Pro を販売せず、License サービスもありません。community-dev ビルドでは上流の Pro 機能がすべて有効です。',
+        proCardTitle: 'すべての機能をそのまま利用',
+        proText1: '流速フィルターや範囲別しきい値はローカルビルドで有効になっており、有効化は不要です。',
+        proText2: '上流と同じゲート動作が必要な場合は npm run build:dist で store チャネルをビルドします。この fork はストアに公開していません。',
+        versionsTitle: 'インストール方法',
+        versionsLead: 'この fork はソースからのみインストールします。軽量版が必要な場合は同梱の userscript（バッジとランキングのみ）を使えます。',
         matrix: [
-          ['公式拡張', '普段使い向け：ワンクリックインストール、自動更新、Pro 有効化、メンテナーサポートに対応します。'],
-          ['Tampermonkey スクリプト', '無料の軽量版です。流速バッジと現在ページの注目リストだけを使いたいデスクトップユーザー向けです。'],
+          ['この fork（拡張）', 'GitHub から読み込みます。開発者モードでリポジトリのルートを選ぶか、先に dist/ をビルドします。自動更新はありません。'],
+          ['Tampermonkey スクリプト', '上流の軽量版です。流速バッジと現在ページの注目リストだけで、AI 返信やフィルターは含みません。'],
           ['Safari UserScripts', 'モバイル向けの補助経路です。バッジを残し、小画面向けに浮動パネルを控えめにします。'],
           ['ソースコード', 'MIT ライセンスで公開しています。GitHub でソース確認、issue 作成、PR 送信ができます。'],
         ],
@@ -430,11 +383,11 @@
           ['流速バッジ', '各投稿の横に views/hour を表示します。🚀 ロケット表示になった投稿は、伸び始めていて重点的に見る価値があります。'],
           ['注目投稿パネル', '現在ページの高流速投稿をまとめ、タイムラインを何度も更新しなくても温まり始めた話題を追えます。'],
           ['X クリエイターの成長補助', '高流量の投稿を早く見つけ、適切な場所で有益なコメントを残し、活発な会話に入りやすくします。'],
-          ['閲覧と投稿補助', '長尺画像閲覧、画像強化、コンテンツフィルター、Grok 返信補助で、X 利用時の手間を減らします。'],
+          ['閲覧と投稿補助', '長尺画像閲覧、画像強化、コンテンツフィルター、AI 返信補助で、X 利用時の手間を減らします。'],
         ],
         privacyTitle: 'プライバシー境界',
         privacyLead: '拡張は開いている X ページ上でのみ動作します。可能な限りローカルで処理し、分析 SDK やトラッキングピクセルは入れていません。このサイトでは訪問数とインストールボタンのクリック数の計測に Google Analytics を使用しています。',
-        footer: 'MIT Licensed. コミュニティ版は GitHub から利用できます。',
+        footer: 'MIT Licensed. 上流 X Viral Monitor の fork。GitHub から読み込んでください。',
       },
     };
 
@@ -470,7 +423,6 @@
       list('.hero .cta-row .btn', t.heroCtas);
       text('#install h2', t.installTitle);
       text('#install .section-lead', t.installLead);
-      text('#install .edge-install', t.heroCtas[1]);
       $$('.install-card').forEach((card, i) => {
         const item = t.installCards[i];
         if (!item) return;
@@ -482,19 +434,10 @@
       });
       text('#pro h2', t.proTitle);
       text('#pro .section-lead', t.proLead);
-      const priceCards = $$('#pro .price-card');
-      priceCards[0].querySelector('strong').textContent = t.priceMainTitle;
-      priceCards[0].querySelector('p').textContent = t.priceMainText;
-      const prices = $$('#pro .price');
-      prices[0].querySelector('span').textContent = t.priceMonthly[0];
-      prices[0].querySelector('p').textContent = t.priceMonthly[1];
-      prices[0].querySelector('.btn').textContent = t.priceMonthly[2];
-      prices[1].querySelector('span').textContent = t.priceAnnual[0];
-      prices[1].querySelector('p').textContent = t.priceAnnual[1];
-      prices[1].querySelector('.btn').textContent = t.priceAnnual[2];
-      priceCards[1].querySelector('strong').textContent = t.freeTitle;
-      priceCards[1].querySelectorAll('p')[0].textContent = t.freeText1;
-      priceCards[1].querySelectorAll('p')[1].textContent = t.freeText2;
+      const proCard = $('#pro .price-card');
+      proCard.querySelector('strong').textContent = t.proCardTitle;
+      proCard.querySelectorAll('p')[0].textContent = t.proText1;
+      proCard.querySelectorAll('p')[1].textContent = t.proText2;
       text('#versions h2', t.versionsTitle);
       text('#versions .section-lead', t.versionsLead);
       $$('#versions .matrix tr').forEach((row, i) => {

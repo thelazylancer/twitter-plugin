@@ -115,7 +115,8 @@ describe('#45 build:dist byte-level sync (Codex P0 fix follow-up)', () => {
   it('GitHub release uploads only the community-dev dist package', () => {
     expect(releaseWorkflow).toContain('npm run build:community');
     expect(releaseWorkflow).toContain('x-viral-monitor-${{ github.ref_name }}-community-dev.zip');
-    expect(releaseWorkflow).toContain('Local Pro features are enabled by default');
+    expect(releaseWorkflow).toContain('every Pro gate is open');
+    expect(releaseWorkflow).not.toContain('Chrome Web Store build');
     expect(releaseWorkflow).not.toContain('manifest.json content.js bridge.js');
   });
 });

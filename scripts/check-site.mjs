@@ -30,7 +30,8 @@ try {
           background: getComputedStyle(document.body).backgroundColor,
           primary: getComputedStyle(document.querySelector('.hero .primary')).backgroundColor,
           links: [...document.querySelectorAll('.btn')].map(a => a.getAttribute('href')),
-          edgeLinks: [...document.querySelectorAll('a[href^="https://microsoftedge.microsoft.com/addons/detail/cefdokfllohmgiccdbjokdagbgegpghd"]')].map(a => a.textContent),
+          installLinks: [...document.querySelectorAll('a[href^="https://github.com/thelazylancer/twitter-plugin"]')].map(a => a.textContent),
+          storeLinks: [...document.querySelectorAll('a[href*="chromewebstore.google.com"], a[href*="microsoftedge.microsoft.com"]')],
         }));
         assert.equal(state.width, width);
         assert.equal(state.scrollWidth, width, `${path} overflows at ${width}px`);
@@ -41,7 +42,8 @@ try {
         const guideLinks = await page.locator('.foot-guides a').evaluateAll(links => links.map(link => link.getAttribute('href')));
         assert.equal(guideLinks.length, 6);
         assert(guideLinks.every(href => href.startsWith(path) && existsSync(resolve(root, 'docs' + href))));
-        assert.deepEqual(state.edgeLinks, [lang === 'en' ? 'Install Edge extension' : lang === 'ja' ? 'Edge 拡張を入れる' : '安装 Edge 扩展', lang === 'en' ? 'Install Edge extension' : lang === 'ja' ? 'Edge 拡張を入れる' : '安装 Edge 扩展', 'Edge Add-ons']);
+        assert(state.installLinks.length >= 2);
+        assert.deepEqual(state.storeLinks, []);
         if (width !== 768) await page.screenshot({ path: `/tmp/xvm-checked-${lang}-${width}-${colorScheme}.png`, fullPage: true });
         console.log(`PASS ${path} ${width}px ${colorScheme}`);
       }

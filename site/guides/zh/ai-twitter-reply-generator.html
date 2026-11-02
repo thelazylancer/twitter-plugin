@@ -1,4 +1,4 @@
-<article data-description="直接在 X 回复框生成 AI 回复草稿。使用 Grok、自选云端服务或本地模型，读取上下文、自定义模板，再由你审核发送。">
+<article data-description="直接在 X 回复框生成 AI 回复草稿。使用 OpenAI 兼容服务或本地 Ollama，读取上下文、自定义模板，再由你审核发送。">
 <span class="kicker">使用指南</span>
 <h1>直接在 X 回复框里使用 AI 回复生成器</h1>
 <p class="lead">多数 AI 回复工具需要把推文复制到另一个标签页，向聊天机器人提问，再把答案粘回来。X Viral Monitor 将生成器放进回复框，自动读取推文，并把最终选择留给你。</p>
@@ -10,11 +10,10 @@
 <p>长帖子和 X 长文使用独立模板，因为回复一篇 2,000 词的文章，与回复一句话，需要不同的写法。</p>
 <h2>选择 AI 服务</h2>
 <table><thead><tr><th>服务</th><th>需要什么</th><th>文本发送到哪里</th></tr></thead><tbody>
-<tr><td><strong>X Grok</strong>（默认）</td><td>登录 X 即可，不需要 API 密钥。</td><td>通过当前会话使用 X 自己的 Grok 服务</td></tr>
-<tr><td><strong>OpenAI 兼容服务：</strong>OpenAI、DeepSeek、OpenRouter、Kimi / Moonshot、Qwen / DashScope、SiliconFlow</td><td>该服务的个人 API 密钥</td><td>你所选择的服务商</td></tr>
+<tr><td><strong>OpenAI 兼容服务（默认）：</strong>OpenAI、DeepSeek、OpenRouter、Kimi / Moonshot、Qwen / DashScope、SiliconFlow 或自建中转</td><td>该服务的个人 API 密钥</td><td>你所选择的服务商</td></tr>
 <tr><td><strong>本地模型：</strong>Ollama 或 LM Studio</td><td>在电脑上运行应用，并下载模型</td><td>保留在本机</td></tr>
 </tbody></table>
-<p>使用 Grok 时，请求从浏览器通过现有 X 会话发出。默认开启的临时聊天选项，会让这些请求不进入 Grok 历史记录。可用额度取决于 X 对你的账号设置的限制。使用云端服务时，推文和回复上下文会通过你的密钥发送给该服务商。设置中的<strong>测试连接</strong>按钮可帮你提前确认配置是否正常。</p>
+<p>使用 OpenAI 兼容服务时，推文和回复上下文会通过你的密钥发送给该服务商。使用 Ollama 时，请求留在本机，不需要密钥。设置中的<strong>测试连接</strong>按钮可帮你提前确认配置是否正常。</p>
 <h2>把模板改成自己的</h2>
 <p>默认模板覆盖自然回复风格和几种替代写法。所有模板都可以在扩展弹窗的 AI 回复标签页编辑，也可以新增自己的模板。需要注意：</p>
 <ul><li>推文模板和长文模板分别保存。</li><li>占位符标记原推文的插入位置；如果没有写占位符，原推文会自动追加。</li><li>候选数量可设为 1 至 20 条，默认 10 条。</li><li>可选设置支持直接按 Enter 发送回复，不必使用 Command 或 Ctrl + Enter。</li></ul>
@@ -23,7 +22,7 @@
 <p>AI 草稿是起点。有价值的回复通常会增加事实、数字、反例或个人经历。把候选回复当作供你判断的选项，而不是直接粘贴的成品。</p>
 <ul><li><strong>选择值得参与的帖子。</strong>尽早回复正在起量的帖子，通常比回复昨天已过高峰的帖子更容易被看见。流速徽章可以帮助区分，见<a href="/find-viral-tweets.html">如何发现正在起量的推文</a>。</li><li><strong>发送前编辑。</strong>至少修改一个短语，让它更像你自己的表达。</li><li><strong>不要批量刷回复。</strong>短时间发布大量相似回复，对读者和 X 系统来说都像垃圾信息。这个工具用于挑选一条好草稿，而不是追求数量。</li></ul>
 <h2>常见问题</h2>
-<h3>AI 回复生成器免费吗？</h3><p>是的，它属于扩展的免费功能。使用 Grok 时消耗你的 X 账号所拥有的 Grok 权限；使用其他服务时，API 用量费用由你向对应服务商支付。</p>
+<h3>AI 回复生成器免费吗？</h3><p>是的，它属于这个 fork。云端服务的 API 用量费用由你向对应服务商支付；Ollama 在本机运行，不产生费用。</p>
 <h3>它会自动发布回复吗？</h3><p>不会。它只将你点击的候选内容填入回复框，由你审核并点击回复发送。</p>
-<h3>需要 API 密钥吗？</h3><p>Grok 使用已登录的 X 会话，不需要密钥。选择 OpenAI 兼容服务时才需要对应密钥。通过 Ollama 或 LM Studio 使用本地模型也不需要密钥。</p>
+<h3>需要 API 密钥吗？</h3><p>Ollama 在本机运行，不需要密钥。只有选择 OpenAI 兼容的云端服务时才需要对应密钥。</p>
 </article>
