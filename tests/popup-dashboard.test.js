@@ -395,11 +395,12 @@ describe('#45 popup-dashboard.js tab router', () => {
     expect(/xvm-pro-nav/.test(dashJs)).toBe(true);
     expect(/['"]activate['"]/.test(dashJs)).toBe(true);
   });
-  it('tier-chip updates via MutationObserver on body data-tier', () => {
+  it('hides the tier chip on community builds instead of showing a DEV badge', () => {
     expect(/MutationObserver/.test(dashJs)).toBe(true);
     expect(/data-tier/.test(dashJs)).toBe(true);
     expect(/data-build-channel/.test(dashJs)).toBe(true);
-    expect(/label\s*=\s*['"]DEV['"]/.test(dashJs)).toBe(true);
+    expect(/label\s*=\s*['"]DEV['"]/.test(dashJs)).toBe(false);
+    expect(html).toContain('body[data-build-channel="community-dev"] #tier-chip { display: none; }');
   });
 });
 

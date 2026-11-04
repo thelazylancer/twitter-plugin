@@ -142,6 +142,9 @@
     body[data-tier="pro"]   #tier-chip { color: var(--ok); border-color: rgba(42, 127, 63, 0.45); background: rgba(42, 127, 63, 0.10); }
     body[data-theme="dark"][data-tier="trial"] #tier-chip { color: var(--orange); border-color: rgba(249, 115, 22, 0.45); background: rgba(249, 115, 22, 0.10); }
     body[data-theme="dark"][data-tier="pro"]   #tier-chip { color: var(--ok); border-color: rgba(74, 222, 128, 0.45); background: rgba(74, 222, 128, 0.10); }
+    /* Community builds unlock every Pro feature; a tier chip would only repeat
+       that, so keep the header space for the controls. */
+    body[data-build-channel="community-dev"] #tier-chip { display: none; }
 
     .theme-toggle {
       width: 28px; height: 28px; padding: 0;

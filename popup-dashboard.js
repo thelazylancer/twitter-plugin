@@ -205,8 +205,7 @@
     const refresh = () => {
       const tier = document.body.dataset.tier || 'free';
       let label, sub;
-      if (document.body.dataset.buildChannel === 'community-dev') label = 'DEV';
-      else if (tier === 'pro') label = t('chipTierPro');
+      if (tier === 'pro') label = t('chipTierPro');
       else if (tier === 'trial') label = t('chipTierTrial');
       else label = t('chipTierFree');
       // Trial: show days-left in chip if available via popup-pro state.
