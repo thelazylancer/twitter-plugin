@@ -31,6 +31,7 @@ function loadCapture({ onOwnPage = true } = {}) {
   const state = { dirty: 0 };
   const ctx = {
     followingIndex: new Map(),
+    followingOrderSeq: 0,
     markFollowingDirty: () => { state.dirty += 1; },
     getLoggedInHandle: () => 'me',
     isOwnFollowingPage: () => onOwnPage,
@@ -93,6 +94,22 @@ describe('capturing the Following timeline', () => {
     ctx.captureFollowingUsers(page({ screen_name: 'me', name: 'Me', followed_by: false }));
 
     expect(ctx.followingIndex.size).toBe(0);
+  });
+
+  it('numbers rows in the order X serves them and keeps that number', () => {
+    const { ctx } = loadCapture();
+
+    ctx.captureFollowingUsers(page(
+      { screen_name: 'Zoe', name: 'Zoe Z', followed_by: false },
+      { screen_name: 'Alice', name: 'Alice A', followed_by: false },
+    ));
+    expect(ctx.followingIndex.get('zoe').order).toBe(1);
+    expect(ctx.followingIndex.get('alice').order).toBe(2);
+
+    // Re-observing a row refreshes seenAt but must not move it to the end.
+    ctx.captureFollowingUsers(page({ screen_name: 'Zoe', name: 'Zoe Z', followed_by: false }));
+    expect(ctx.followingIndex.get('zoe').order).toBe(1);
+    expect(ctx.followingIndex.get('alice').order).toBe(2);
   });
 
   it('keeps the last known answer when a later page omits followed_by', () => {
@@ -173,6 +190,14 @@ describe('the following panel', () => {
   it('separates the three states instead of treating unknown as no', () => {
     expect(loadRows(index, 'yes').map(([handle]) => handle)).toEqual(['bob']);
     expect(loadRows(index, 'all').map(([handle]) => handle)).toEqual(['alice', 'bob', 'carol']);
+  });
+
+  it('keeps the served order instead of sorting by handle', () => {
+    const ordered = new Map([
+      ['zoe', { name: 'Zoe Z', followsMe: false, seenAt: 1, order: 1 }],
+      ['alice', { name: 'Alice A', followsMe: false, seenAt: 2, order: 2 }],
+    ]);
+    expect(loadRows(ordered).map(([handle]) => handle)).toEqual(['zoe', 'alice']);
   });
 
   it('searches handle and display name, case-insensitively', () => {
@@ -274,6 +299,7 @@ describe('rebuilding on scan', () => {
   function loadRebuild() {
     const ctx = {
       followingIndex: new Map([['alice', { name: 'Alice A', followsMe: false, seenAt: 1 }]]),
+      followingOrderSeq: 7,
       followingSaveTimer: 0,
       followingHydrationBlocked: false,
       window: { postMessage: (msg) => ctx.sent.push(msg) },
@@ -290,6 +316,7 @@ describe('rebuilding on scan', () => {
     ctx.followingSaveTimer = 1;
     ctx.beginFollowingRebuild();
     expect(ctx.followingIndex.size).toBe(0);
+    expect(ctx.followingOrderSeq).toBe(0);
     expect(ctx.followingHydrationBlocked).toBe(true);
     expect(ctx.followingSaveTimer).toBe(0);
     expect(ctx.sent).toHaveLength(1);
@@ -300,6 +327,7 @@ describe('rebuilding on scan', () => {
   it('ignores the load reply that was already in flight', () => {
     const ctx = {
       followingIndex: new Map(),
+      followingOrderSeq: 0,
       followingHydrationBlocked: true,
       markFollowingDirty: () => {},
     };
@@ -307,6 +335,24 @@ describe('rebuilding on scan', () => {
     vm.runInContext(`${sliceFunction('hydrateFollowingIndex')}; this.hydrateFollowingIndex = hydrateFollowingIndex;`, ctx);
     ctx.hydrateFollowingIndex({ alice: { name: 'Alice A', followsMe: false, seenAt: 1 } });
     expect(ctx.followingIndex.size).toBe(0);
+  });
+
+  it('keeps stored positions and numbers legacy rows after them', () => {
+    const ctx = {
+      followingIndex: new Map(),
+      followingOrderSeq: 0,
+      followingHydrationBlocked: false,
+      markFollowingDirty: () => {},
+    };
+    vm.createContext(ctx);
+    vm.runInContext(`${sliceFunction('hydrateFollowingIndex')}; this.hydrateFollowingIndex = hydrateFollowingIndex;`, ctx);
+    ctx.hydrateFollowingIndex({
+      bob: { name: 'Bob B', followsMe: true, seenAt: 1, order: 5 },
+      alice: { name: 'Alice A', followsMe: false, seenAt: 2 },
+    });
+    expect(ctx.followingIndex.get('bob').order).toBe(5);
+    expect(ctx.followingIndex.get('alice').order).toBe(6);
+    expect(ctx.followingOrderSeq).toBe(6);
   });
 });
 

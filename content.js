@@ -55,6 +55,11 @@ const reciprocityPending = [];
 // Following timeline. Same reason for living up here: the Following response
 // hook can fire while the script is still executing.
 const followingIndex = new Map();
+// Monotonic position for the panel. A scan appends rows in the order X serves
+// the list, which lets the user read follow age from the row order instead of
+// the alphabet. Stored on the entry: object keys do not reliably preserve
+// insertion order, and the bridge resorts the snapshot by last-seen.
+let followingOrderSeq = 0;
 let followingSaveTimer = 0;
 let followingPanelEl = null;
 let followingLauncherEl = null;
@@ -4514,8 +4519,11 @@ function captureFollowingUsers(json) {
           ? (prev?.followsMe ?? null)   // a later page may omit the field
           : relation.followedBy;
         const name = String(user.legacy?.name || user.core?.name || prev?.name || '');
-        if (!prev || prev.followsMe !== followsMe || prev.name !== name) changed += 1;
-        followingIndex.set(handle, { name, followsMe, seenAt: Date.now() });
+        let order = Math.floor(Number(prev?.order));
+        if (!Number.isFinite(order) || order <= 0) order = ++followingOrderSeq;
+        else if (order > followingOrderSeq) followingOrderSeq = order;
+        if (!prev || prev.followsMe !== followsMe || prev.name !== name || prev.order !== order) changed += 1;
+        followingIndex.set(handle, { name, followsMe, seenAt: Date.now(), order });
       }
       return; // a user result carries nothing else worth walking
     }
@@ -4568,16 +4576,29 @@ window.addEventListener('pagehide', () => {
 function hydrateFollowingIndex(raw) {
   if (followingHydrationBlocked) return;
   let changed = 0;
+  let maxOrder = followingOrderSeq;
+  const loaded = [];
   for (const [handle, entry] of Object.entries(raw || {})) {
     const key = String(handle || '').toLowerCase();
     if (!key || !entry || typeof entry !== 'object') continue;
-    followingIndex.set(key, {
+    const order = Math.max(0, Math.floor(Number(entry.order) || 0));
+    if (order > maxOrder) maxOrder = order;
+    loaded.push([key, {
       name: String(entry.name || ''),
       followsMe: entry.followsMe === true || entry.followsMe === false ? entry.followsMe : null,
       seenAt: Number.isFinite(entry.seenAt) ? entry.seenAt : 0,
-    });
+      order,
+    }]);
     changed += 1;
   }
+  // Entries saved before row order existed, or dropped by the bridge's cap,
+  // have no position. Give them one after everything that already has it, in
+  // the order they were stored, so new captures stay at the end.
+  for (const [key, entry] of loaded) {
+    if (!entry.order) entry.order = ++maxOrder;
+    followingIndex.set(key, entry);
+  }
+  followingOrderSeq = maxOrder;
   if (changed) markFollowingDirty();
 }
 
@@ -4602,7 +4623,12 @@ function followingRows() {
     if (q && !handle.includes(q) && !String(entry.name || '').toLowerCase().includes(q)) continue;
     rows.push([handle, entry]);
   }
-  return rows.sort((a, b) => a[0].localeCompare(b[0]));
+  // Follow order, not the alphabet: the scan appends accounts in the order X
+  // serves the Following list, so position is the only cue to how long the
+  // user has followed someone. Ties keep rows stable across re-renders.
+  return rows.sort((a, b) => (
+    (a[1].order || 0) - (b[1].order || 0) || a[0].localeCompare(b[0])
+  ));
 }
 
 function ensureFollowingPanel() {
@@ -4924,6 +4950,7 @@ function beginFollowingRebuild() {
     clearTimeout(followingSaveTimer);
     followingSaveTimer = 0;
   }
+  followingOrderSeq = 0;
   followingIndex.clear();
   followingHydrationBlocked = true;
   // Clear the stored copy now as well: a tab that never reloads would otherwise
