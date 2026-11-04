@@ -738,6 +738,9 @@
   "contentFollowingScan": {
     "message": "Scan"
   },
+  "contentFollowingScanHint": {
+    "message": "Clears the old list and rescans from the top"
+  },
   "contentFollowingPause": {
     "message": "Pause"
   },

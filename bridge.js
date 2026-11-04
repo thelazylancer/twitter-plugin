@@ -149,6 +149,7 @@ const CONTENT_MESSAGE_KEYS = [
   'contentCommentBoardRepostedYou',
   'contentFollowingTitle',
   'contentFollowingScan',
+  'contentFollowingScanHint',
   'contentFollowingPause',
   'contentFollowingResume',
   'contentFollowingStop',
@@ -382,6 +383,10 @@ const INTERACTIONS_MAX_ENTRIES = 2000;
 // X caps following at 10,000, so this never bites in practice. It exists so a
 // runaway writer cannot fill the 10 MB local quota.
 const FOLLOWING_MAX_ENTRIES = 20000;
+// Timestamp of the last rebuild clear. A scan replaces the list rather than
+// extending it, so a save that was already in flight when the rebuild started
+// must not put the old rows back.
+let followingClearedAt = 0;
 // The give-and-take ledger is cumulative, so it is capped rather than aged out.
 // 5,000 handles is far beyond the number of people one account can invest in
 // within a year; the post map is what actually needs room, because every entry
@@ -1551,7 +1556,16 @@ window.addEventListener('message', (event) => {
     return;
   }
 
+  if (type === 'XVM_FOLLOWING_CLEAR') {
+    followingClearedAt = Number(event.data.clearedAt) || Date.now();
+    safeChromeCall(() => {
+      chrome.storage.local.remove('xvmFollowingIndex');
+    });
+    return;
+  }
+
   if (type === 'XVM_FOLLOWING_SAVE' && event.data.following) {
+    if ((Number(event.data.savedAt) || 0) < followingClearedAt) return;
     const entries = Object.entries(event.data.following)
       .filter(([, entry]) => entry && typeof entry === 'object')
       .sort((a, b) => (Number(b[1].seenAt) || 0) - (Number(a[1].seenAt) || 0))

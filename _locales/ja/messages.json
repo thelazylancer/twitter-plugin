@@ -736,6 +736,9 @@
   "contentFollowingScan": {
     "message": "スキャン"
   },
+  "contentFollowingScanHint": {
+    "message": "古い記録を消して先頭から再スキャンします"
+  },
   "contentFollowingPause": {
     "message": "一時停止"
   },

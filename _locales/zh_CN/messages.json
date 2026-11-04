@@ -736,6 +736,9 @@
   "contentFollowingScan": {
     "message": "扫描"
   },
+  "contentFollowingScanHint": {
+    "message": "会清空旧记录，并从列表顶部重新扫描"
+  },
   "contentFollowingPause": {
     "message": "暂停"
   },

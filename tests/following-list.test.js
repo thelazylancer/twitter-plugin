@@ -270,6 +270,46 @@ describe('panel states', () => {
   });
 });
 
+describe('rebuilding on scan', () => {
+  function loadRebuild() {
+    const ctx = {
+      followingIndex: new Map([['alice', { name: 'Alice A', followsMe: false, seenAt: 1 }]]),
+      followingSaveTimer: 0,
+      followingHydrationBlocked: false,
+      window: { postMessage: (msg) => ctx.sent.push(msg) },
+      clearTimeout,
+    };
+    ctx.sent = [];
+    vm.createContext(ctx);
+    vm.runInContext(`${sliceFunction('beginFollowingRebuild')}; this.beginFollowingRebuild = beginFollowingRebuild;`, ctx);
+    return ctx;
+  }
+
+  it('empties the list and asks the bridge to drop the stored copy', () => {
+    const ctx = loadRebuild();
+    ctx.followingSaveTimer = 1;
+    ctx.beginFollowingRebuild();
+    expect(ctx.followingIndex.size).toBe(0);
+    expect(ctx.followingHydrationBlocked).toBe(true);
+    expect(ctx.followingSaveTimer).toBe(0);
+    expect(ctx.sent).toHaveLength(1);
+    expect(ctx.sent[0]).toMatchObject({ type: 'XVM_FOLLOWING_CLEAR' });
+    expect(typeof ctx.sent[0].clearedAt).toBe('number');
+  });
+
+  it('ignores the load reply that was already in flight', () => {
+    const ctx = {
+      followingIndex: new Map(),
+      followingHydrationBlocked: true,
+      markFollowingDirty: () => {},
+    };
+    vm.createContext(ctx);
+    vm.runInContext(`${sliceFunction('hydrateFollowingIndex')}; this.hydrateFollowingIndex = hydrateFollowingIndex;`, ctx);
+    ctx.hydrateFollowingIndex({ alice: { name: 'Alice A', followsMe: false, seenAt: 1 } });
+    expect(ctx.followingIndex.size).toBe(0);
+  });
+});
+
 describe('scan safety rails', () => {
   it('paces the scroll instead of hammering the endpoint', () => {
     expect(contentJs).toContain('await sleep(1500 + Math.random() * 900);');
@@ -287,6 +327,27 @@ describe('scan safety rails', () => {
     expect(contentJs).toContain("const FOLLOWING_SCAN_PENDING_KEY = 'xvmFollowingScanPending';");
     expect(contentJs).toContain("sessionStorage.setItem(FOLLOWING_SCAN_PENDING_KEY, '1')");
     expect(contentJs).toContain("if (isOwnFollowingPage()) runFollowingScan();");
+  });
+
+  it('rebuilds from an empty index on every scan instead of extending the old one', () => {
+    const start = contentJs.indexOf('function startFollowingScan(');
+    expect(start).toBeGreaterThan(-1);
+    const scan = contentJs.slice(start, contentJs.indexOf('function beginFollowingRebuild(', start));
+    expect(scan).toContain('beginFollowingRebuild();');
+    expect(scan).toContain('window.location.reload();');
+
+    const rebuildStart = contentJs.indexOf('function beginFollowingRebuild(');
+    const rebuild = contentJs.slice(rebuildStart, contentJs.indexOf('// A scan spans a full page navigation', rebuildStart));
+    expect(rebuild).toContain('followingIndex.clear();');
+    expect(rebuild).toContain('followingHydrationBlocked = true;');
+    expect(rebuild).toContain("type: 'XVM_FOLLOWING_CLEAR'");
+    // A delayed load reply must not put the replaced rows back.
+    expect(contentJs).toContain('if (followingHydrationBlocked) return;');
+    // The rebuild starts at the top because X may restore the old scroll.
+    expect(contentJs).toContain('window.scrollTo(0, 0);');
+    expect(bridgeJs).toContain("type === 'XVM_FOLLOWING_CLEAR'");
+    expect(bridgeJs).toContain("chrome.storage.local.remove('xvmFollowingIndex')");
+    expect(bridgeJs).toContain('if ((Number(event.data.savedAt) || 0) < followingClearedAt) return;');
   });
 
   it('never touches unfollow', () => {

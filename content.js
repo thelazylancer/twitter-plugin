@@ -62,6 +62,9 @@ let followingOpen = false;
 let followingAutoOpenedPath = '';
 let followingScanRunning = false;
 let followingScanPaused = false;
+// Set while a scan rebuilds the list. The old index must not arrive late and
+// put back the records the rebuild just removed.
+let followingHydrationBlocked = false;
 let followingDirty = true;
 let followingFilter = 'no';
 let followingQuery = '';
@@ -4547,6 +4550,9 @@ function flushFollowingIndex() {
   window.postMessage({
     type: 'XVM_FOLLOWING_SAVE',
     following: Object.fromEntries(followingIndex),
+    // The bridge drops a save that predates a rebuild's clear. A page that was
+    // already mid-save when the rebuild started must not resurrect the old list.
+    savedAt: Date.now(),
   }, '*');
 }
 
@@ -4560,6 +4566,7 @@ window.addEventListener('pagehide', () => {
 });
 
 function hydrateFollowingIndex(raw) {
+  if (followingHydrationBlocked) return;
   let changed = 0;
   for (const [handle, entry] of Object.entries(raw || {})) {
     const key = String(handle || '').toLowerCase();
@@ -4751,6 +4758,9 @@ function renderFollowingPanel() {
     const spinning = followingScanRunning && !followingScanPaused;
     scanBtn.classList.toggle('is-scanning', spinning);
     scanBtn.setAttribute('aria-busy', spinning ? 'true' : 'false');
+    // Pausing/resuming does not clear anything, so the hint only applies to
+    // starting a rebuild.
+    scanBtn.title = followingScanRunning ? '' : i18n('contentFollowingScanHint');
     const label = scanBtn.querySelector('.xvm-fp-scan-label');
     if (label) label.textContent = followingScanRunning
       ? (followingScanPaused
@@ -4838,6 +4848,12 @@ async function runFollowingScan() {
   let idle = 0;
   let last = followingIndex.size;
   try {
+    // A rebuild reads the list from its beginning. Chrome may restore the
+    // previous scroll position after the reload, and this loop only ever moves
+    // down, so start at the top and let the first page settle before counting
+    // idle rounds.
+    window.scrollTo(0, 0);
+    await sleep(1200);
     // Leaving the Following page ends the run: the loop's scrolls would land
     // on a different timeline and the hook only files pages from this URL.
     while (Date.now() < deadline && followingScanRunning && isOwnFollowingPage()) {
@@ -4887,20 +4903,44 @@ function startFollowingScan() {
     renderFollowingPanel();
     return;
   }
-  if (isOwnFollowingPage()) {
-    runFollowingScan();
-    return;
-  }
   const me = getLoggedInHandle();
   if (!me) return;
+  // A scan is a rebuild, not an incremental refresh. A missing handle only
+  // proves that the pages X served did not include it, never that the user
+  // unfollowed it — so the only way to drop an unfollowed person is to replace
+  // the list. Clear first, then let the page load from the top so X serves its
+  // first page again instead of continuing from wherever the viewport was.
+  beginFollowingRebuild();
   try { sessionStorage.setItem(FOLLOWING_SCAN_PENDING_KEY, '1'); } catch (_) {}
+  if (isOwnFollowingPage()) {
+    window.location.reload();
+    return;
+  }
   window.location.href = `https://x.com/${encodeURIComponent(me)}/following`;
 }
 
-// A scan spans a full page navigation, so the intent has to survive it.
+function beginFollowingRebuild() {
+  if (followingSaveTimer) {
+    clearTimeout(followingSaveTimer);
+    followingSaveTimer = 0;
+  }
+  followingIndex.clear();
+  followingHydrationBlocked = true;
+  // Clear the stored copy now as well: a tab that never reloads would otherwise
+  // keep reading — and could later rewrite — the list this rebuild replaces.
+  window.postMessage({ type: 'XVM_FOLLOWING_CLEAR', clearedAt: Date.now() }, '*');
+}
+
+// A scan spans a full page navigation, so the intent has to survive it. Every
+// scan starts from a cleared index, which is why the load reply must be ignored
+// here: it may still carry the list the rebuild just replaced.
 try {
   if (sessionStorage.getItem(FOLLOWING_SCAN_PENDING_KEY) === '1') {
     sessionStorage.removeItem(FOLLOWING_SCAN_PENDING_KEY);
+    followingHydrationBlocked = true;
+    // Repeat the clear: the navigation can outrun the message the old page
+    // posted, and an empty read here is preferable to reviving old rows.
+    window.postMessage({ type: 'XVM_FOLLOWING_CLEAR', clearedAt: Date.now() }, '*');
     setTimeout(() => { if (isOwnFollowingPage()) runFollowingScan(); }, 2500);
   }
 } catch (_) {}
