@@ -4,8 +4,8 @@
 // Everything here runs real code through node:vm (no jsdom, no new deps).
 // Regression guards at the bottom re-run the untouched baseline suites by
 // pointing vitest at them; the "zero-change" claim is verified by checking
-// those files' git state against HEAD where applicable and by asserting the
-// exact test counts.
+// those files' git state against the pinned pre-refactor baseline where
+// applicable and by asserting the exact test counts.
 
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
@@ -17,6 +17,10 @@ import { execFileSync } from 'node:child_process';
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '..');
 const read = (rel) => readFileSync(resolve(repo, rel), 'utf8');
+
+// 重构前的固定基线提交；不能用 HEAD，否则重构提交后「零改动护栏」会拿改后
+// 文件当基线而误判。详见 wp-b-ai-defaults.test.js 顶部注释。
+const BASELINE_REF = 'c65a035';
 
 const guardLibSrc = read('lib/scroll-restore-guard.js');
 const boundedStoreSrc = read('lib/bounded-store.js');
@@ -543,8 +547,9 @@ describe('WP-C / bootstrap-rules version 2 + generated rules.js', () => {
 
 // ---------------------------------------------------------------------------
 // Regression guards: untouched baseline suites must still pass, zero-change.
-// We assert they exist, are byte-identical to HEAD (where tracked), and that
-// running them through vitest yields their exact expected counts.
+// We assert they exist, are byte-identical to the pinned pre-refactor baseline
+// c65a035 (where tracked), and that running them through vitest yields their
+// exact expected counts.
 // ---------------------------------------------------------------------------
 describe('WP-C / regression guards (zero-change baseline suites)', () => {
   const suites = [
@@ -561,12 +566,12 @@ describe('WP-C / regression guards (zero-change baseline suites)', () => {
     for (const [rel] of suites) expect(existsSync(resolve(repo, rel)), rel).toBe(true);
   });
 
-  it('guard suites other than back-scroll-restore.test.js are byte-identical to HEAD (zero change)', () => {
+  it('guard suites other than back-scroll-restore.test.js are byte-identical to pinned baseline c65a035 (zero change)', () => {
     for (const [rel] of suites) {
       if (rel === 'tests/back-scroll-restore.test.js') continue; // WP-C owns its read path
       if (rel === 'tests/refactor-baseline.test.js') continue;   // untracked WP-E baseline file
       let head;
-      try { head = execFileSync('git', ['show', `HEAD:${rel}`], { cwd: repo, encoding: 'utf8' }); }
+      try { head = execFileSync('git', ['show', `${BASELINE_REF}:${rel}`], { cwd: repo, encoding: 'utf8' }); }
       catch (_) { head = null; }
       if (head === null) continue; // untracked baseline file, nothing to compare
       expect(read(rel), `${rel} must be unchanged`).toBe(head);

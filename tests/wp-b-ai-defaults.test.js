@@ -21,6 +21,11 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '..');
 const read = (rel) => readFileSync(resolve(repo, rel), 'utf8');
 
+// 重构前的固定基线提交。绝不能用 HEAD：一旦本重构被提交，HEAD 就会包含本次
+// 改动，所有「与改动前对比」的断言会拿改后源码当基线，导致误报（例如 manifest
+// 增量契约把 2 个新 lib 重复插入期望数组）。锁死到父提交可保证提交前后都稳定。
+const BASELINE_REF = 'c65a035';
+
 const START = '// --- ai-defaults:generated:start ---';
 const END = '// --- ai-defaults:generated:end ---';
 
@@ -229,9 +234,9 @@ describe('3 / 数据 == 消费者 == 改动前基线（真换行语义）', () =
     bgPresets: evalConst(backgroundJs, 'OPENAI_COMPAT_PLATFORMS'),
   };
 
-  // 用 git show HEAD:<file> 取改动前源码，求值作为「基线原值」。
+  // 用 git show <BASELINE_REF>:<file> 取改动前源码，求值作为「基线原值」。
   function gitShow(rel) {
-    return execFileSync('git', ['show', `HEAD:${rel}`], { cwd: repo, encoding: 'utf8' });
+    return execFileSync('git', ['show', `${BASELINE_REF}:${rel}`], { cwd: repo, encoding: 'utf8' });
   }
   const headContent = gitShow('content.js');
   const headPopup = gitShow('popup.js');
@@ -250,7 +255,7 @@ describe('3 / 数据 == 消费者 == 改动前基线（真换行语义）', () =
   // 跨 vm realm 的对象原型不同，用 JSON.stringify 做逐字节比较。
   const J = JSON.stringify;
 
-  it('5 处消费者求值结果与改动前 HEAD 逐字节相等', () => {
+  it('5 处消费者求值结果与改动前基线提交 c65a035 逐字节相等', () => {
     for (const k of Object.keys(base)) {
       expect(J(now[k]), `${k} 与改动前不一致`).toBe(J(base[k]));
     }
@@ -421,8 +426,8 @@ describe('7 / 构建配置与未越界契约', () => {
     expect(packageJson.scripts['package:edge']).toContain('--channel store');
   });
 
-  it('package.json 除 scripts 外其它字段未变（与 HEAD 比对）', () => {
-    const head = JSON.parse(execFileSync('git', ['show', 'HEAD:package.json'], { cwd: repo, encoding: 'utf8' }));
+  it('package.json 除 scripts 外其它字段未变（与基线提交 c65a035 比对）', () => {
+    const head = JSON.parse(execFileSync('git', ['show', `${BASELINE_REF}:package.json`], { cwd: repo, encoding: 'utf8' }));
     for (const k of Object.keys(head)) {
       if (k === 'scripts') continue;
       expect(packageJson[k], `字段 ${k} 不应改动`).toEqual(head[k]);
@@ -446,11 +451,11 @@ describe('7 / 构建配置与未越界契约', () => {
   });
 
   // 精确增量契约（总指挥官 2026-11-07 裁决）：WP-C 在 MAIN world js 数组按
-  // 相对顺序新增了 2 个 lib，manifest 其余字段必须与 HEAD 逐字/逐项一致。
-  // 不弱化为「只检查新 lib 存在」，也不回退 manifest（那会让新 lib 不被加载）。
-  it('manifest 仅 MAIN world js 数组按裁决新增 2 个 lib，其余与 HEAD 一致', () => {
+  // 相对顺序新增了 2 个 lib，manifest 其余字段必须与基线提交 c65a035 逐字/逐项
+  // 一致。不弱化为「只检查新 lib 存在」，也不回退 manifest（那会让新 lib 不被加载）。
+  it('manifest 仅 MAIN world js 数组按裁决新增 2 个 lib，其余与基线提交 c65a035 一致', () => {
     const head = JSON.parse(
-      execFileSync('git', ['show', 'HEAD:manifest.json'], { cwd: repo, encoding: 'utf8' }),
+      execFileSync('git', ['show', `${BASELINE_REF}:manifest.json`], { cwd: repo, encoding: 'utf8' }),
     );
     const cur = JSON.parse(read('manifest.json'));
 
@@ -467,9 +472,13 @@ describe('7 / 构建配置与未越界契约', () => {
     const hMainJs = head.content_scripts[hMainIdx].js;
     const cMainJs = cur.content_scripts[mainIdx].js;
     const contentAt = hMainJs.indexOf('content.js');
-    expect(contentAt, 'HEAD MAIN js 应含 content.js').toBeGreaterThan(-1);
+    expect(contentAt, '基线提交 MAIN js 应含 content.js').toBeGreaterThan(-1);
+    // 锚定「基线确实是改动前」：固定提交里不应有本次新增的两个 lib。否则说明
+    // BASELINE_REF 指错了提交，整个增量契约会退化成同义反复。
+    expect(hMainJs, `${BASELINE_REF} 不应含本次新增的 lib`).not.toContain('lib/bounded-store.js');
+    expect(hMainJs, `${BASELINE_REF} 不应含本次新增的 lib`).not.toContain('lib/scroll-restore-guard.js');
 
-    // 2) MAIN world js == HEAD + 恰好两个新条目，其余条目相对顺序不变：
+    // 2) MAIN world js == 基线提交 + 恰好两个新条目，其余条目相对顺序不变：
     //    bounded-store 在 content.js 之前；scroll-restore-guard 在 content.js
     //    之后、starchart.js 之前。逐项 toEqual 保证无第三条增删或重排。
     const expectedMainJs = [
@@ -488,10 +497,10 @@ describe('7 / 构建配置与未越界契约', () => {
       'lib/bounded-store.js', 'content.js', 'lib/scroll-restore-guard.js', 'starchart.js',
     ]);
 
-    // 3) ISOLATED world 的 js 数组与 HEAD 逐字相等。
+    // 3) ISOLATED world 的 js 数组与基线提交 c65a035 逐字相等。
     expect(cur.content_scripts[isoIdx].js).toEqual(head.content_scripts[hIsoIdx].js);
 
-    // 4) 除 content_scripts[MAIN].js 之外的所有字段与 HEAD 深度相等
+    // 4) 除 content_scripts[MAIN].js 之外的所有字段与基线提交 c65a035 深度相等
     //    （version / background / action / host_permissions / icons / CSS 数组 /
     //     world / matches / run_at …），守住 WP-B「本包不改 manifest」的护栏意图。
     const stripMainJs = (m) => {
