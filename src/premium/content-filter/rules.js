@@ -5,7 +5,7 @@
 // XVM_CONTENT_FILTER_RULES_UPDATE.
 (function () {
   window.__xvmContentFilterBuiltinRules = {
-  "version": 1,
+  "version": 2,
   "levels": {
     "light": [
       "hard-telegram-group-funnel"

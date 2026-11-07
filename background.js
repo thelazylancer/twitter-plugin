@@ -5,50 +5,18 @@ const DEFAULT_REPLY_COUNT = 3;
 const LICENSE_PROXY_URL = 'https://xvm-license.lengkuxiaomao.workers.dev';
 const LICENSE_PROXY_ACTIONS = new Set(['activate', 'validate', 'deactivate']);
 
+// --- ai-defaults:generated:start ---
 const OPENAI_COMPAT_PLATFORMS = {
-  openai: {
-    label: 'OpenAI',
-    baseUrl: 'https://api.openai.com/v1',
-    model: 'gpt-4o-mini',
-  },
-  deepseek: {
-    label: 'DeepSeek',
-    baseUrl: 'https://api.deepseek.com',
-    model: 'deepseek-chat',
-  },
-  openrouter: {
-    label: 'OpenRouter',
-    baseUrl: 'https://openrouter.ai/api/v1',
-    model: 'openai/gpt-4o-mini',
-  },
-  kimi: {
-    label: 'Kimi / Moonshot',
-    baseUrl: 'https://api.moonshot.ai/v1',
-    model: 'moonshot-v1-8k',
-  },
-  qwen: {
-    label: 'Qwen / DashScope',
-    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    model: 'qwen-plus',
-  },
-  siliconflow: {
-    label: 'SiliconFlow',
-    baseUrl: 'https://api.siliconflow.cn/v1',
-    model: 'Pro/zai-org/GLM-4.7',
-  },
-  lmstudio: {
-    label: 'LM Studio',
-    baseUrl: 'http://localhost:1234/v1',
-    model: 'local-model',
-    local: true,
-  },
-  ollamaOpenAI: {
-    label: 'Ollama (OpenAI compatible)',
-    baseUrl: 'http://localhost:11434/v1',
-    model: 'llama3.1',
-    local: true,
-  },
+  openai: { label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
+  deepseek: { label: 'DeepSeek', baseUrl: 'https://api.deepseek.com', model: 'deepseek-chat' },
+  openrouter: { label: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', model: 'openai/gpt-4o-mini' },
+  kimi: { label: 'Kimi / Moonshot', baseUrl: 'https://api.moonshot.ai/v1', model: 'moonshot-v1-8k' },
+  qwen: { label: 'Qwen / DashScope', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus' },
+  siliconflow: { label: 'SiliconFlow', baseUrl: 'https://api.siliconflow.cn/v1', model: 'Pro/zai-org/GLM-4.7' },
+  lmstudio: { label: 'LM Studio', baseUrl: 'http://localhost:1234/v1', model: 'local-model', local: true },
+  ollamaOpenAI: { label: 'Ollama (OpenAI compatible)', baseUrl: 'http://localhost:11434/v1', model: 'llama3.1', local: true },
 };
+// --- ai-defaults:generated:end ---
 
 
 

@@ -1,15 +1,16 @@
 #!/usr/bin/env node
-// Package the current channel build into ./release for manual upload.
+// Zip the current channel build from ./dist into ./release for local use.
 //
 // Usage: node scripts/package-zip.mjs --channel store|community-dev [--target chrome|edge]
 //
-// Chrome and Edge get byte-identical archives — this extension carries no
-// store-specific manifest keys, and Edge is Chromium. The target only names the
-// file, so the two uploads cannot be confused on disk.
+// This fork ships community-dev builds only through GitHub Releases; it has no
+// Chrome Web Store or Edge listing and no License Worker. The `store` channel
+// and the `--target edge` naming branch are kept solely for structural parity
+// with upstream — their archives are byte-identical community/store builds and
+// are never uploaded to a store.
 //
-// What Edge does NOT share is the extension ID: the Edge listing gets its own,
-// and the license Worker allows activation by extension origin. Until that new
-// ID is in ALLOWED_ORIGIN, every activation from the Edge build fails CORS.
+// Both targets get the same archive; the target only names the file so two
+// local builds cannot be confused on disk.
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync, readFileSync, readdirSync } from 'node:fs';
@@ -44,6 +45,9 @@ function readTarget(argv) {
 
 function zipName(channel, target) {
   const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
+  // `community-dev` is the only channel this fork actually ships. The two
+  // store-side suffixes remain for upstream structural parity; nothing here
+  // implies a store upload.
   const suffix = channel === 'community-dev'
     ? 'community-dev'
     : (target === 'edge' ? 'edge-addons' : 'chrome-web-store');
@@ -65,8 +69,10 @@ function checkManifest() {
 }
 
 
-// Edge certification rejects an extension whose name or description says
-// "Chrome" — https://learn.microsoft.com/microsoft-edge/extensions/developer-guide/port-chrome-extension
+// Upstream-parity guard, retained from the store-era script: it rejects an
+// extension whose name/description says "Chrome" when --target edge is used.
+// This fork never submits to Edge, but keeping the check costs nothing and
+// prevents an accidentally mislabeled local archive.
 function checkEdgeBranding(manifest) {
   const hits = [];
   const look = (where, text) => {
@@ -117,11 +123,7 @@ function main() {
   }
   console.log(`\n[package-zip] wrote ${out}`);
   if (target === 'edge') {
-    console.log(
-      '[package-zip] 上架 Edge 后，把它分配的扩展 ID 加进 License Worker：\n'
-      + '  在 license-worker 仓库 worker/wrangler.toml 的 ALLOWED_ORIGIN 追加 chrome-extension://<EDGE_ID>，然后 npx wrangler deploy\n'
-      + '  否则 Edge 版用户激活会被 CORS 挡掉。',
-    );
+    console.log('[package-zip] `--target edge` only names the archive for upstream parity; this fork has no Edge listing or License Worker.');
   }
 }
 

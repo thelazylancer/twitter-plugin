@@ -5,15 +5,16 @@
   "type": "module",
   "scripts": {
     "debug:grok": "node scripts/debug-grok.mjs",
-    "build:dist": "node scripts/sync-rules.mjs && node scripts/build-dist.mjs --channel store",
-    "build:store": "node scripts/sync-rules.mjs && node scripts/build-dist.mjs --channel store",
-    "build:community": "node scripts/sync-rules.mjs && node scripts/build-dist.mjs --channel community-dev",
-    "package:store": "node scripts/sync-rules.mjs && node scripts/build-dist.mjs --channel store && node scripts/package-zip.mjs --channel store",
-    "package:community": "node scripts/sync-rules.mjs && node scripts/build-dist.mjs --channel community-dev && node scripts/package-zip.mjs --channel community-dev",
+    "build:dist": "node scripts/sync-ai-defaults.mjs && node scripts/sync-rules.mjs && node scripts/build-dist.mjs --channel store",
+    "build:store": "node scripts/sync-ai-defaults.mjs && node scripts/sync-rules.mjs && node scripts/build-dist.mjs --channel store",
+    "build:community": "node scripts/sync-ai-defaults.mjs && node scripts/sync-rules.mjs && node scripts/build-dist.mjs --channel community-dev",
+    "package:store": "node scripts/sync-ai-defaults.mjs && node scripts/sync-rules.mjs && node scripts/build-dist.mjs --channel store && node scripts/package-zip.mjs --channel store",
+    "package:community": "node scripts/sync-ai-defaults.mjs && node scripts/sync-rules.mjs && node scripts/build-dist.mjs --channel community-dev && node scripts/package-zip.mjs --channel community-dev",
     "sync:rules": "node scripts/sync-rules.mjs",
+    "sync:ai-defaults": "node scripts/sync-ai-defaults.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "package:edge": "node scripts/sync-rules.mjs && node scripts/build-dist.mjs --channel store && node scripts/package-zip.mjs --channel store --target edge",
+    "package:edge": "node scripts/sync-ai-defaults.mjs && node scripts/sync-rules.mjs && node scripts/build-dist.mjs --channel store && node scripts/package-zip.mjs --channel store --target edge",
     "build:site": "node scripts/build-site.mjs"
   },
   "devDependencies": {

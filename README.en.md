@@ -36,10 +36,13 @@ Then open `chrome://extensions/`, turn on **Developer mode**, click **Load unpac
 ## Development
 
 ```bash
-npm test               # vitest
+npm test                # vitest
 npm run build:community
-npm run sync:rules     # rules.json -> rules.js only
+npm run sync:rules      # generate rules.js from bootstrap-rules.json (minimal cold-start fallback)
+npm run sync:ai-defaults # regenerate AI defaults from src/ai-defaults.data.json
 ```
+
+AI prompt templates and platform presets have a single source of truth in `src/ai-defaults.data.json`. `scripts/sync-ai-defaults.mjs` writes the same literal into marked regions of `content.js` / `popup.js` / `bridge.js` / `background.js` at build time. Edit the JSON only; every build command runs the generator first.
 
 ## Upstream and license
 

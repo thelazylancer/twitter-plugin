@@ -35,7 +35,7 @@
 | 图片查看增强 | X 原生灯箱 | 触控板捏合 / Ctrl+滚轮缩放、双指 / 拖拽平移、双击切换；长图（h/w > 3）自动切到固定宽度纵向滚动 |
 | 内容过滤 | 推文回复区 | 多级规则过滤 spam/色情/电报漏斗，**规则远程拉取**自动更新 |
 | 流速过滤 | 时间线 | 按 views/min 阈值隐藏低流速推文，文章和短推文独立阈值 |
-| AI 评论候选 | 回复框 ✦ 按钮 | OpenAI 兼容接口 / 本机 Ollama，4 套提示词模板 + 文章长文模板 |
+| AI 评论候选 | 回复框 ✦ 按钮 | OpenAI 兼容接口 / 本机 Ollama，一套多语言提示词模板列表 |
 | Markdown 复制 | 分享菜单 | 把推文复制成 Markdown 格式 |
 | 感谢星图 | 分享菜单 | 把转推/引用用户做成动画粒子可视化 |
 | 互惠榜 | Popup → 标记 → 互惠排行；首页帖子右上角 | 对比「我给对方的回复/点赞」和「对方给我的回复/点赞/转推」，按投入差排序，可筛出单向互动；同一帖子、同一方向只算 1 次（回复 + 点赞仍算 1）；有记录的人的首页帖子右上角也会直接显示 `我 N : 对方 N` 小标；对方给你的回复只算你帖子下的；只统计本机浏览时看到的事件 |
@@ -86,15 +86,15 @@
 
 在任意推文回复框右下会出现 **✦ AI 生成** 按钮，点击：
 
-1. 弹出提示词模板选择（推文 / 文章自动判定，≥600 字走文章模板组）
+1. 弹出提示词模板选择：一套多语言模板列表（中文 6 条 / 英文、日文各 5 条），模板以胶囊展示，点击切换、`×` 删除、`+` 新增，编辑自动保存；短推文与长文共用这一套，不再按字数自动切换模板组
 2. 候选评论流式渲染（第一条出来就能选，不用等全部生成完）
 3. 点中一条 → 直接填进 X 的回复编辑器，回复按钮自动激活
 
-生成走扩展弹窗里选定的服务来源：**OpenAI 兼容接口**（OpenAI / DeepSeek / OpenRouter / 自建中转，需要 Base URL、模型名和 API Key）或**本机 Ollama**（不用 Key，但要在本机跑起来并下好模型）。推文文本和回复上下文会发给所选服务。
+生成走扩展弹窗里选定的服务来源：**OpenAI 兼容接口**（可填任意 Base URL：OpenAI / DeepSeek / OpenRouter / 自建中转 / Ollama 都行，需要模型名；远程接口要 API Key）或**本机 Ollama**（不用 Key，但要在本机跑起来并下好模型）。推文文本和回复上下文会发给所选服务。
 
-支持嵌套场景：回复某条推文下的回复时，提示词会自动拼装「原推文 + 被回复内容」两层上下文。
+支持嵌套场景：回复某条推文下的回复时，提示词会自动拼装「原推文 + 被回复内容」两层上下文。长文（X Article）没有独立模板组，其 Markdown 正文通过 `articleMd` 并入推文正文一起送进同一套模板。
 
-模板可在扩展弹窗里编辑——**推文模板**和**文章模板**分开存储。`{推文内容}` 占位符会被替换成源推文文本；模板里没有这个占位符时，源文本自动前置追加。
+模板可在扩展弹窗里编辑——**单一模板列表**（短推文和长文共用一套）。`{推文内容}` 占位符会被替换成源推文文本；模板里没有这个占位符时，源文本自动前置追加。
 
 除了整块的 `{推文内容}`，模板还可以用命名槽位单独摆放每一段上下文：
 
@@ -126,10 +126,10 @@
 
 ### 远程规则自动更新
 
-规则源于本仓库 `src/premium/content-filter/rules.json`，扩展会：
+远程规则来自本仓库 `src/premium/content-filter/rules.json`，扩展会：
 
-1. **冷启动**使用打包内置的 `rules.js`（永远可用）
-2. 后台从 `raw.githubusercontent.com` 拉取最新 `rules.json`（6 小时 TTL，缓存在 `chrome.storage.local`）
+1. **冷启动**使用打包内置的 `src/premium/content-filter/rules.js`（由 `bootstrap-rules.json` 生成的最小兜底规则集，永远可用）
+2. 后台从 `raw.githubusercontent.com` 拉取最新 `rules.json`（完整规则集，6 小时 TTL，缓存在 `chrome.storage.local`）
 3. 拉取成功后**热替换**，无需 reload 扩展
 4. 弹窗"过滤"Tab 内显示当前规则来源 + 上次更新时间，可点 **「立即检查更新」** 手动刷新
 
@@ -256,13 +256,16 @@ iOS Safari 用户使用 [**Userscripts**](https://apps.apple.com/app/userscripts
 
 ```bash
 npm install
-npm test               # vitest run
-npm run build:community # 同步 rules.js + 输出 community 构建到 dist/
-npm run build:dist     # 同上，但用 store 渠道（保留 Pro 闸门）
-npm run sync:rules     # 只同步 rules.json → rules.js
+npm test                 # vitest run
+npm run build:community  # 同步 rules.js / AI 默认值 + 输出 community-dev 构建到 dist/（Pro 闸门全开）
+npm run build:dist       # 同上，但用 store 渠道（保留 Pro 闸门），仅用于和上游保持一致
+npm run sync:rules       # 从 src/premium/content-filter/bootstrap-rules.json 生成 rules.js（最小冷启动兜底）
+npm run sync:ai-defaults # 从 src/ai-defaults.data.json 重新生成 4 个消费者文件里的 AI 默认值
 ```
 
-`dist/` 用于 `chrome://extensions/` 的"加载已解压"入口，改完源码运行 `npm run build:dist` 后到扩展页面点 🔄 即可。
+AI 默认提示词模板和平台预设只有一份权威数据 `src/ai-defaults.data.json`；`scripts/sync-ai-defaults.mjs` 在构建期把同一份字面量写入 `content.js` / `popup.js` / `bridge.js` / `background.js` 的标记区。要改默认值**只改 JSON** 再跑任意 build 命令（它们都已前置生成器），不要手改这 4 个文件的生成区。
+
+`dist/` 用于 `chrome://extensions/` 的"加载已解压"入口，改完源码运行 `npm run build:community` 后到扩展页面点 🔄 即可。日常开发请用 `build:community`；`build:dist` / `build:store` 是 store 渠道（闸门关闭），仅用于和上游保持结构一致，这个 fork 不上架。`dist/` 与 `release/` 都被 .gitignore，不要提交。
 
 ---
 

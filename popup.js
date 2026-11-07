@@ -73,6 +73,7 @@ if (overrideMessages && nativeGetMessage) {
   } catch (_) {}
 }
 
+// --- ai-defaults:generated:start ---
 const GROK_DEFAULTS_BY_LANGUAGE = {
   zh_CN: {
     promptTemplates: [
@@ -103,6 +104,7 @@ const GROK_DEFAULTS_BY_LANGUAGE = {
     ],
   },
 };
+// --- ai-defaults:generated:end ---
 
 function getLocalizedGrokDefaults(languageId = initialLanguageId) {
   const lang = GROK_DEFAULTS_BY_LANGUAGE[languageId] ? languageId : 'en';
@@ -201,6 +203,7 @@ const DEFAULT_FEATURES = {
   reciprocityInlineEnabled: true,
 };
 const STORAGE_DEFAULTS = { ...DEFAULT_THRESHOLDS, ...DEFAULT_FEATURES };
+// --- ai-defaults:generated:start ---
 const AI_PLATFORM_PRESETS = {
   openai: { label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
   deepseek: { label: 'DeepSeek', baseUrl: 'https://api.deepseek.com', model: 'deepseek-chat' },
@@ -211,6 +214,7 @@ const AI_PLATFORM_PRESETS = {
   lmstudio: { label: 'LM Studio', baseUrl: 'http://localhost:1234/v1', model: 'local-model', local: true },
   ollamaOpenAI: { label: 'Ollama (OpenAI compatible)', baseUrl: 'http://localhost:11434/v1', model: 'llama3.1', local: true },
 };
+// --- ai-defaults:generated:end ---
 
 // Apply chrome.i18n translations to any element marked with data-i18n.
 // Falls back to the hardcoded English text in the HTML if a key is missing.

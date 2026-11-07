@@ -29,7 +29,7 @@ import vm from 'node:vm';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '..');
-const content = readFileSync(resolve(repo, 'content.js'), 'utf8');
+const content = readFileSync(resolve(repo, 'lib/scroll-restore-guard.js'), 'utf8');
 const MARKER = '// Back-navigation scroll-restore guard.';
 const guardSrc = content.slice(content.indexOf(MARKER));
 

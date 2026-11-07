@@ -84,6 +84,7 @@ async function loadLocaleBundle(languageId) {
   }
 }
 
+// --- ai-defaults:generated:start ---
 const GROK_DEFAULTS_BY_LANGUAGE = {
   zh_CN: {
     promptTemplates: [
@@ -114,6 +115,7 @@ const GROK_DEFAULTS_BY_LANGUAGE = {
     ],
   },
 };
+// --- ai-defaults:generated:end ---
 
 function getLocalizedGrokDefaults(languageId = getBrowserLocaleId()) {
   const lang = GROK_DEFAULTS_BY_LANGUAGE[languageId] ? languageId : 'en';

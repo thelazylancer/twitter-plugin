@@ -114,6 +114,13 @@
 
   // ─── Creem proxy ────────────────────────────────────────────────────
   async function callProxy(action, body) {
+    // Community-dev builds unlock every Pro gate locally. There is no license
+    // to activate/validate, so never emit XVM_LICENSE_PROXY to the service
+    // worker and never hit the license Worker. Store builds keep the flag
+    // false, so the full activation/validation chain below stays intact.
+    if (globalThis.__xvmIsCommunityDevBuild === true) {
+      throw new Error('community_dev');
+    }
     if (LICENSE_PROXY_URL === '__XVM_LICENSE_WORKER__') {
       throw new Error('worker_url_unset');
     }
@@ -274,9 +281,13 @@
     const stored = await safeStorageGet(STORAGE_KEY, null);
     const status = licenseStatusFrom(stored, Date.now());
     // Stale-cache side-effect: kick off background revalidate. The pure
-    // helper just reports the verdict; we own the I/O.
+    // helper just reports the verdict; we own the I/O. Community-dev builds
+    // have no license to revalidate; the callProxy guard also covers this,
+    // but skip here too so the side-effect is never scheduled at all.
     if (shouldRevalidate(status, stored)) {
-      revalidateInBackground(stored).catch(() => {});
+      if (globalThis.__xvmIsCommunityDevBuild !== true) {
+        revalidateInBackground(stored).catch(() => {});
+      }
     }
     return status;
   }
@@ -310,11 +321,32 @@
   window.addEventListener('message', async (event) => {
     if (event.source !== window) return;
     const t = event.data?.type;
+    // Community-dev builds have every Pro gate open locally. None of the
+    // license flows below should reach the Worker (via XVM_LICENSE_PROXY to
+    // the service worker or a direct fetch), so reject them up front. Store
+    // builds keep this flag false and run the full chain unchanged.
+    const isCommunity = globalThis.__xvmIsCommunityDevBuild === true;
     if (t === 'XVM_TIER_REQUEST') {
       pushTier();
       return;
     }
     if (t === 'XVM_LICENSE_STATUS_REQUEST') {
+      // getLicenseStatus() may kick off a background revalidate that calls
+      // callProxy('validate'). In community builds we skip that side-effect
+      // entirely and answer with the local Pro verdict — no storage record,
+      // no network. (getLicenseStatus also guards internally as a backstop.)
+      if (isCommunity) {
+        window.postMessage({
+          type: 'XVM_LICENSE_STATUS',
+          record: null,
+          tier: 'pro',
+          daysLeft: 0,
+          source: 'community-dev',
+          ok: false,
+          error: 'community_dev',
+        }, '*');
+        return;
+      }
       const lic = await getLicenseStatus();
       const r = await resolveTier();
       window.postMessage({
@@ -327,6 +359,10 @@
       return;
     }
     if (t === 'XVM_LICENSE_ACTIVATE' && typeof event.data.key === 'string') {
+      if (isCommunity) {
+        window.postMessage({ type: 'XVM_LICENSE_ACTIVATE_RESULT', ok: false, error: 'community_dev' }, '*');
+        return;
+      }
       const res = await activate(event.data.key);
       window.postMessage({
         type: 'XVM_LICENSE_ACTIVATE_RESULT',
@@ -336,6 +372,10 @@
       return;
     }
     if (t === 'XVM_LICENSE_DEACTIVATE') {
+      if (isCommunity) {
+        window.postMessage({ type: 'XVM_LICENSE_DEACTIVATE_RESULT', ok: false, error: 'community_dev' }, '*');
+        return;
+      }
       const res = await deactivate();
       window.postMessage({ type: 'XVM_LICENSE_DEACTIVATE_RESULT', ok: !!res.ok }, '*');
       return;

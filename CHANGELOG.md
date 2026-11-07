@@ -7,6 +7,25 @@ This project follows Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+### Fork changes (since v1.18.17)
+
+本 fork 自分叉点 `b1b896d`（v1.18.17，2026-10-13）以来自行演进，当前版本 `1.18.18`。以下按主题归纳这期间的提交；这不是上游商店版的更新记录。
+
+- **AI 回复**：改造成个人回复插件（快回 / 回评）；引入命名上下文槽位（`{作者}` / `{关注状态}` / `{主贴}` / `{当前评论}` / `{原推文}` / `{对该推文的回复}` / `{数据}`）并统一提示词形状；合并为单一模板列表、移除 600 字阈值与独立的文章模板组（长文正文通过 `articleMd` 并入推文正文）；移除 X Grok provider；OpenAI 兼容接口支持任意 Base URL 并可接本机 Ollama；回评独立提示词、邀关按钮、回复语言跟随 / 固定、关注关系注入、AI 消息来源与 requestId 加固；界面文案中英日本地化。
+- **互惠榜（give-and-take ledger）**：按人记录投入差并在其帖子显示 `我 N : 对方 N` 小标；每帖每方向只计 1 次；小标只在首页时间线显示。
+- **关注 / 回评热点面板**：新增回复热点面板；feed 与 thread 分别评分；关注回填评分加入蓝 V 权重；关注列表按扫描顺序排序、每次扫描重建；从 X 自带 Following 分页读取未回关记录、按记录时间标注；面板与 popup tab 补齐键盘可用性。
+- **配色与标记**：帖子 / 回复 freshness 配色；「未关注」标记限定蓝 V 账号；排行榜 tier 标记与日文文案补齐。
+- **性能**：2 秒 tick 跳过结果不可能变化的重绘。
+- **构建 / 文档**：默认 community-dev 通道（Pro 闸门全开）、community 构建隐藏 DEV tier chip；远程规则与文档链接指向本 fork；三处版本号同步到 `1.18.18`；dist 字节比较在 `dist/` 缺失时跳过。
+
+### Internal
+
+- **重构（可维护性，功能不变）**：AI 默认提示词模板与平台预设收敛为单一权威数据 `src/ai-defaults.data.json`，由 `scripts/sync-ai-defaults.mjs` 在构建期生成到 4 个消费者文件的标记区（幂等，生成值与改动前逐字节相等）。
+- `content.js` 尾部 805 行「返回导航滚动位置恢复」IIFE 拆为 `lib/scroll-restore-guard.js`，通过惰性解析缝复用 `getTweetIdFromArticle`；`lib/bounded-store.js` 为 4 个内存状态容器加 FIFO 5000 上限与 60 秒清扫（保留 Map/Set 类型）。
+- 主消息处理器补 `event.origin` 校验；community-dev 构建下在 `isolated.js` / `popup-pro.js` 两层对 license 激活/反激活/状态查询与 trial 播种加早返回（含 `callProxy` 兜底），使零网络请求；`background.js` 的 service worker 因上游不发消息而收不到，其 proxy handler 保持不动，store 通道完整保留；内容过滤冷启动规则版本标注 1→2。
+- 文档与发布流程修正：`README` / `README.en` / `.claude/skills/release/SKILL.md` 与真实代码、`.github/workflows/release.yml` 对齐；`scripts/build-dist.mjs` 缺省渠道保持 `store` 不变。
+- 回归护栏：新增行为基线与跨模块验收测试，重构前后 `XVM_*` 消息类型集合不变（77 项），所有既有测试逐项通过。
+
 ### Added
 
 - Added independent velocity badges and leaderboard navigation for tweets embedded inside X Articles.

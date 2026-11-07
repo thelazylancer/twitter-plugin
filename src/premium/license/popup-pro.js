@@ -135,6 +135,7 @@
   }
 
   async function revalidateStoredLicense(stored) {
+    if (isCommunityDev) return { ok: false, error: 'community_dev' };
     try {
       const envelope = await callProxy('validate', { key: stored.key, instance_id: stored.instanceId });
       if (envelope?.ok && !isXvmProduct(envelope.data?.product_id)) {
@@ -199,6 +200,7 @@
 
   // ─── Activate via Worker proxy ──────────────────────────────────────
   async function activate(rawKey) {
+    if (isCommunityDev) return { ok: false, error: 'community_dev' };
     const key = String(rawKey || '').trim();
     if (!KEY_RE.test(key)) return { ok: false, error: 'invalid_format' };
     if (LICENSE_PROXY_URL === '__XVM_LICENSE_WORKER__') {
@@ -218,6 +220,7 @@
   }
 
   async function deactivate() {
+    if (isCommunityDev) return { ok: false, error: 'community_dev' };
     const stored = await storageGet(STORAGE_KEY, null);
     if (!stored?.key) return { ok: true };
     if (LICENSE_PROXY_URL !== '__XVM_LICENSE_WORKER__' && stored.instanceId) {
@@ -417,11 +420,15 @@
 
   // Seed trial in popup context too (defensive — isolated.js does this on
   // any x.com page load, but popup may open before user visits x.com on a
-  // fresh install).
+  // fresh install). Community-dev builds skip seeding: there is no trial to
+  // track and we must not leave an xvm_trial_v1 record behind. refresh()
+  // stays outside the guard so the DEV badge still renders.
   (async () => {
-    const rec = await storageGet(TRIAL_KEY, null);
-    if (!rec || !Number.isFinite(rec.startAt)) {
-      await storageSet({ [TRIAL_KEY]: { startAt: Date.now() } });
+    if (!isCommunityDev) {
+      const rec = await storageGet(TRIAL_KEY, null);
+      if (!rec || !Number.isFinite(rec.startAt)) {
+        await storageSet({ [TRIAL_KEY]: { startAt: Date.now() } });
+      }
     }
     refresh();
   })();
